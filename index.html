@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>北交人生 · 校园地图</title>
+  <meta name="theme-color" content="#142b25">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="game-shell" aria-label="北交人生校园地图">
+    <section class="map-screen" id="mapScreen">
+      <div class="map-layer" id="mapLayer">
+        <img class="map-art" src="assets/campus-map-reference.png" alt="北交大主校区地点交互地图">
+        <div class="map-wash"></div>
+
+        <button class="map-hotspot hotspot-activity" data-place="activity" aria-label="进入学生活动中心">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">学生活动中心</span>
+        </button>
+        <button class="map-hotspot hotspot-think" data-place="think" aria-label="进入思源楼">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">思源楼</span>
+        </button>
+        <button class="map-hotspot hotspot-library" data-place="library" aria-label="进入图书馆">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">图书馆</span>
+        </button>
+        <button class="map-hotspot hotspot-hospital" data-place="hospital" aria-label="进入校医院">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">校医院</span>
+        </button>
+        <button class="map-hotspot hotspot-gate" data-place="gate" aria-label="进入南门">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">南门</span>
+        </button>
+        <button class="map-hotspot hotspot-track" data-place="track" aria-label="进入操场">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">操场</span>
+        </button>
+        <button class="map-hotspot hotspot-auditorium" data-place="auditorium" aria-label="进入天佑会堂">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">天佑会堂</span>
+        </button>
+        <button class="map-hotspot hotspot-ginkgo" data-place="ginkgo" aria-label="进入银杏大道">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">银杏大道</span>
+        </button>
+        <button class="map-hotspot hotspot-yifu" data-place="yifu" aria-label="进入逸夫楼">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">逸夫楼</span>
+        </button>
+        <button class="map-hotspot hotspot-dorm" data-place="dorm" aria-label="进入宿舍">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">宿舍</span>
+        </button>
+        <button class="map-hotspot hotspot-hotel" data-place="hotel" aria-label="进入红果园宾馆">
+          <span class="pin-ring"><span class="pin-core"></span></span>
+          <span class="pin-label">红果园宾馆</span>
+        </button>
+      </div>
+
+      <header class="hud-top">
+        <div class="brand-lockup">
+          <span class="brand-mark">北</span>
+          <div>
+            <p class="eyebrow">北交人生 · 主校区</p>
+            <h1>校园地图</h1>
+          </div>
+        </div>
+        <div class="term-chip"><span class="term-dot"></span>大一上 · 第 1 周</div>
+      </header>
+
+      <aside class="status-card" aria-label="当前状态">
+        <div class="status-head"><span>今日状态</span><span class="status-count">行动力 14 / 14</span></div>
+        <div class="status-line"><span class="status-icon">✦</span><span>天气晴 · 秋意初起</span></div>
+        <div class="mini-stats">
+          <span><b>50</b> 成绩</span><span><b>40</b> 社交</span><span><b>60</b> 体能</span>
+        </div>
+      </aside>
+
+      <div class="map-caption">
+        <span class="caption-line"></span>
+        <span>点击地点，开始今天的校园生活</span>
+      </div>
+    </section>
+
+    <section class="place-screen" id="placeScreen" aria-hidden="true">
+      <div class="place-backdrop" id="placeBackdrop"></div>
+      <div class="place-content">
+        <button class="back-button" id="backButton" type="button"><span aria-hidden="true">←</span> 返回地图</button>
+        <div class="place-kicker" id="placeKicker">主校区 · 地点</div>
+        <h2 id="placeTitle">思源楼</h2>
+        <p class="place-description" id="placeDescription">这里是你的课程与自习日常。</p>
+        <div class="place-divider"></div>
+        <div class="place-meta">
+          <span class="meta-label">可进行的行动</span>
+          <span class="meta-value" id="placeAction">上课自习 · 消耗 1 点行动力</span>
+          <span class="meta-label">当前事件</span>
+          <span class="meta-value" id="placeEvent">地点事件占位 · 后续接入</span>
+        </div>
+        <button class="continue-button" id="continueButton" type="button">查看地点详情 <span aria-hidden="true">→</span></button>
+      </div>
+      <div class="place-stamp" aria-hidden="true">CAMPUS<br><span>北交人生</span></div>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
