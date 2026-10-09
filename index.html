@@ -68,44 +68,45 @@
             <h1>校园地图</h1>
           </div>
         </div>
-        <div class="term-chip"><span class="term-dot"></span>大一上 · 第 1 周</div>
+        <div class="term-chip"><span class="term-dot"></span><span id="termLabel">大一上 · 第 1 学期</span></div>
       </header>
 
-      <aside class="status-card" aria-label="当前状态">
-        <div class="status-head"><span>今日状态</span><span class="status-count">行动力 14 / 14</span></div>
-        <div class="status-line"><span class="status-icon">✦</span><span>天气晴 · 秋意初起</span></div>
-        <div class="mini-stats">
-          <span><b>50</b> 成绩</span><span><b>40</b> 社交</span><span><b>60</b> 体能</span>
-        </div>
+      <aside class="status-card" aria-label="五项角色属性与当前资源">
+        <div class="status-head"><span>角色状态</span><div class="resource-labels"><span class="status-count" id="timeLabel">时间 12 / 12</span><span class="status-count" id="energyLabel">精力 80 / 100</span></div></div>
+        <div class="status-grid" id="mapStats"></div>
+        <div class="preparation-row"><label for="preparationMeter">本学期课程准备 <b id="preparationValue">0 / 100</b></label><progress id="preparationMeter" max="100" value="0"></progress><span>期末形成成绩</span></div>
+        <div class="status-controls"><button class="end-term-button" id="endTermButton" type="button">结束学期</button><button class="history-button" id="historyButton" type="button">查看成长记录</button><p class="session-note">进度暂不保存，刷新会重新开始。</p></div>
       </aside>
 
       <div class="map-caption">
         <span class="caption-line"></span>
-        <span>点击地点，开始今天的校园生活</span>
+        <span>学习 · 兼职 · 休息 · 锻炼 · 散步</span>
       </div>
     </section>
 
-    <section class="place-screen" id="placeScreen" aria-hidden="true">
+    <section class="place-screen" id="placeScreen" aria-hidden="true" inert>
       <div class="place-backdrop" id="placeBackdrop"></div>
       <div class="place-content">
         <button class="back-button" id="backButton" type="button"><span aria-hidden="true">←</span> 返回地图</button>
         <div class="place-kicker" id="placeKicker">主校区 · 地点</div>
         <h2 id="placeTitle">思源楼</h2>
         <p class="place-description" id="placeDescription">这里是你的课程与自习日常。</p>
-        <div class="place-divider"></div>
-        <div class="place-meta">
-          <span class="meta-label">可进行的行动</span>
-          <span class="meta-value" id="placeAction">上课自习 · 消耗 1 点行动力</span>
-          <span class="meta-label">当前事件</span>
-          <span class="meta-value" id="placeEvent">地点事件占位 · 后续接入</span>
-        </div>
-        <button class="continue-button" id="continueButton" type="button">查看地点详情 <span aria-hidden="true">→</span></button>
+        <div class="place-status" id="placeStats" aria-label="当前资源"></div>
+        <div class="action-feedback" id="actionFeedback" role="status" aria-live="polite"></div>
+        <div class="action-list" id="actionList"></div>
       </div>
       <div class="place-stamp" aria-hidden="true">CAMPUS<br><span>北交人生</span></div>
     </section>
 
+    <dialog class="term-dialog" id="termDialog" aria-labelledby="dialogTitle">
+      <div class="dialog-kicker">北交人生 · 学期回顾</div>
+      <h2 id="dialogTitle"></h2>
+      <div id="dialogBody"></div>
+      <div class="dialog-buttons" id="dialogButtons"></div>
+    </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </main>
+  <script src="game.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
