@@ -3,6 +3,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const game = require('./game.js');
 
+function actionableState(id) {
+  const state = game.createGame();
+  const action = game.ACTIONS[id];
+  state.term = 5;
+  state.preparation = action.minPreparation || 0;
+  if (action.minAverage) state.courses = [{ grade: 80 }];
+  if (action.kind === 'work') state.chains[action.chain] = { status: 'active', progress: 0, startedTerm: 4, deadline: 6, nextEligibleTerm: 1, reviewAfter: 4 };
+  return state;
+}
 test('未知行动不会修改状态，包括对象原型上的名字', () => {
   const state = game.createGame();
   const before = structuredClone(state);
@@ -28,8 +37,10 @@ test('固定收益与实际扣费：不同精力获得相同课程准备，不�
   }
 });
 test('每个行动的资源边界：刚好满足可执行，任一资源不足不扣费', () => {
-  for (const [id, action] of Object.entries(game.ACTIONS)) {
-    const state = { ...game.createGame(), time: action.time, energy: action.energy, money: action.money };
+  for (const id of Object.keys(game.ACTIONS)) {
+    const initial = actionableState(id);
+    const action = game.getAction(initial, id);
+    const state = { ...initial, time: action.time, energy: action.energy, money: action.money };
     assert.equal(game.executeAction(state, id).ok, true, id);
     for (const [key, cost] of [['time', action.time], ['energy', action.energy], ['money', action.money]]) {
       if (!cost) continue;
@@ -57,7 +68,7 @@ test('收益上限和已满状态，休息不能增加学期时间', () => {
 test('各行动次数限制阻止刷取，学期切换后清空', () => {
   for (const [id, action] of Object.entries(game.ACTIONS)) {
     if (!action.limit) continue;
-    const state = { ...game.createGame(), counts: { [id]: action.limit } };
+    const state = { ...actionableState(id), counts: { [id]: action.limit } };
     assert.equal(game.executeAction(state, id).ok, false);
     const next = game.continueGame(game.endTerm(state).state).state;
     assert.equal(game.executeAction(next, id).ok, true);
@@ -127,7 +138,10 @@ test('连续八学期完整流程，第八学期只结算一次，不创建第�
     state = game.continueGame(state).state;
   }
   assert.equal(state.term, 8);
-  assert.equal(state.phase, 'graduated');
+  assert.equal(state.phase, 'endingChoice');
+  assert.equal(game.chooseEnding(state, 'furtherStudy').ok, false);
+  state = game.chooseEnding(state, 'ordinary').state;
+  assert.equal(state.phase, 'finished');
   assert.equal(state.courses.length, 8);
   assert.equal(state.social, 76);
   assert.equal(state.fitness, 98);
@@ -217,7 +231,7 @@ test('事件选项资源不足不扣费，零时间有免费选项可继续结�
   const next = game.continueGame(game.endTerm(declined.state).state).state;
   assert.equal(next.term, 2);
   assert.equal(next.pendingEvent.id, 'roommateCare');
-  assert.equal(next.eventFlags['1:roommateCare'], true);
+  assert.equal(next.eventFlags['daily:roommateCare:1'], true);
 });
 
 test('同一低心情事件每学期至多一次，变化与历史没有重复奖励', () => {

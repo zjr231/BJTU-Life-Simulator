@@ -1,0 +1,923 @@
+{
+  "appVersion": "0.3.0",
+  "rulesVersion": 3,
+  "nickname": "浏览器测试",
+  "seed": "mvp-test",
+  "commands": [
+    {
+      "operation": "executeAction",
+      "id": "applyClub",
+      "commandId": "ui:mv55q0dy:1"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "accept",
+      "eventInstanceId": "club:clubOffer:1",
+      "commandId": "ui:mv55r9io:1"
+    },
+    {
+      "operation": "executeAction",
+      "id": "clubWork",
+      "commandId": "ui:mv55r9io:2"
+    },
+    {
+      "operation": "executeAction",
+      "id": "clubWork",
+      "commandId": "ui:mv55r9io:3"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mv55r9io:4"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mv55r9io:5"
+    },
+    {
+      "operation": "endTerm",
+      "commandId": "ui:mv55r9io:6"
+    },
+    {
+      "operation": "continueGame",
+      "commandId": "ui:mv55vw4f:1"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "complete",
+      "eventInstanceId": "club:clubReview:2",
+      "commandId": "ui:mv55vw4f:2"
+    }
+  ],
+  "operations": [
+    {
+      "action": "applyClub",
+      "title": "参与社团招新",
+      "changes": {
+        "time": -1,
+        "energy": -5,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 1,
+      "revision": 1,
+      "commandId": "ui:mv55q0dy:1",
+      "command": {
+        "operation": "executeAction",
+        "id": "applyClub"
+      },
+      "before": {
+        "term": 1,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 1000,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 11,
+        "energy": 75,
+        "money": 1000,
+        "preparation": 0,
+        "pendingEvent": "club:clubOffer:1",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 1,
+      "event": "clubOffer",
+      "instanceId": "club:clubOffer:1",
+      "choice": "accept",
+      "title": "加入社团",
+      "changes": {
+        "time": 0,
+        "energy": 0,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 2,
+      "commandId": "ui:mv55r9io:1",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "accept",
+        "eventInstanceId": "club:clubOffer:1"
+      },
+      "before": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 11,
+        "energy": 75,
+        "money": 1000,
+        "preparation": 0,
+        "pendingEvent": "club:clubOffer:1",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "playing",
+        "time": 11,
+        "energy": 75,
+        "money": 1000,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "clubWork",
+      "title": "社团投入",
+      "changes": {
+        "time": -1,
+        "energy": -8,
+        "money": 0,
+        "preparation": 0,
+        "social": 8,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 1,
+      "revision": 3,
+      "commandId": "ui:mv55r9io:2",
+      "command": {
+        "operation": "executeAction",
+        "id": "clubWork"
+      },
+      "before": {
+        "term": 1,
+        "phase": "playing",
+        "time": 11,
+        "energy": 75,
+        "money": 1000,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "playing",
+        "time": 10,
+        "energy": 67,
+        "money": 1000,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "clubWork",
+      "title": "社团投入",
+      "changes": {
+        "time": -1,
+        "energy": -8,
+        "money": 0,
+        "preparation": 0,
+        "social": 8,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 1,
+      "revision": 4,
+      "commandId": "ui:mv55r9io:3",
+      "command": {
+        "operation": "executeAction",
+        "id": "clubWork"
+      },
+      "before": {
+        "term": 1,
+        "phase": "playing",
+        "time": 10,
+        "energy": 67,
+        "money": 1000,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "playing",
+        "time": 9,
+        "energy": 59,
+        "money": 1000,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 1,
+      "revision": 5,
+      "commandId": "ui:mv55r9io:4",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 1,
+        "phase": "playing",
+        "time": 9,
+        "energy": 59,
+        "money": 1000,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "playing",
+        "time": 7,
+        "energy": 44,
+        "money": 1000,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 1,
+      "revision": 6,
+      "commandId": "ui:mv55r9io:5",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 1,
+        "phase": "playing",
+        "time": 7,
+        "energy": 44,
+        "money": 1000,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "playing",
+        "time": 5,
+        "energy": 29,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "endTerm",
+      "title": "学期结算",
+      "term": 1,
+      "revision": 7,
+      "commandId": "ui:mv55r9io:6",
+      "command": {
+        "operation": "endTerm"
+      },
+      "before": {
+        "term": 1,
+        "phase": "playing",
+        "time": 5,
+        "energy": 29,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "summary",
+        "time": 5,
+        "energy": 29,
+        "money": 700,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "continueGame",
+      "title": "进入下一学期",
+      "term": 1,
+      "revision": 8,
+      "commandId": "ui:mv55vw4f:1",
+      "command": {
+        "operation": "continueGame"
+      },
+      "before": {
+        "term": 1,
+        "phase": "summary",
+        "time": 5,
+        "energy": 29,
+        "money": 700,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 2,
+        "phase": "eventPending",
+        "time": 12,
+        "energy": 80,
+        "money": 700,
+        "preparation": 0,
+        "pendingEvent": "club:clubReview:2",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 2,
+      "event": "clubReview",
+      "instanceId": "club:clubReview:2",
+      "choice": "complete",
+      "title": "完成参与记录",
+      "changes": {
+        "time": 0,
+        "energy": 0,
+        "money": 0,
+        "preparation": 0,
+        "social": 5,
+        "fitness": 0,
+        "mood": 5,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 9,
+      "commandId": "ui:mv55vw4f:2",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "complete",
+        "eventInstanceId": "club:clubReview:2"
+      },
+      "before": {
+        "term": 2,
+        "phase": "eventPending",
+        "time": 12,
+        "energy": 80,
+        "money": 700,
+        "preparation": 0,
+        "pendingEvent": "club:clubReview:2",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 2,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 700,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    }
+  ],
+  "failures": [],
+  "finalState": {
+    "version": 3,
+    "rulesVersion": 3,
+    "saveFormatVersion": 1,
+    "appVersion": "0.3.0",
+    "nickname": "浏览器测试",
+    "background": {
+      "id": "information",
+      "college": "信息类学院",
+      "major": "软件方向"
+    },
+    "rng": {
+      "algorithm": "mulberry32-v1",
+      "seed": "mvp-test",
+      "value": 396071323,
+      "calls": 2
+    },
+    "term": 2,
+    "phase": "playing",
+    "revision": 9,
+    "processedCommands": [
+      "ui:mv55q0dy:1",
+      "ui:mv55r9io:1",
+      "ui:mv55r9io:2",
+      "ui:mv55r9io:3",
+      "ui:mv55r9io:4",
+      "ui:mv55r9io:5",
+      "ui:mv55r9io:6",
+      "ui:mv55vw4f:1",
+      "ui:mv55vw4f:2"
+    ],
+    "time": 12,
+    "energy": 80,
+    "money": 700,
+    "social": 41,
+    "fitness": 50,
+    "mood": 69,
+    "preparation": 0,
+    "furtherStudy": 0,
+    "jobPreparation": 0,
+    "counts": {},
+    "courses": [
+      {
+        "term": 1,
+        "name": "大一上",
+        "preparation": 40,
+        "grade": 64,
+        "passed": true,
+        "livingCost": 300,
+        "aid": 0,
+        "moneyAfter": 700,
+        "unusedTime": 5,
+        "counts": {
+          "applyClub": 1,
+          "clubWork": 2,
+          "study": 2
+        },
+        "attributes": {
+          "social": 36,
+          "fitness": 50,
+          "mood": 64
+        },
+        "notices": []
+      }
+    ],
+    "history": [
+      {
+        "action": "applyClub",
+        "title": "参与社团招新",
+        "changes": {
+          "time": -1,
+          "energy": -5,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 1,
+        "revision": 1,
+        "commandId": "ui:mv55q0dy:1",
+        "command": {
+          "operation": "executeAction",
+          "id": "applyClub"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 11,
+          "energy": 75,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": "club:clubOffer:1",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 1,
+        "event": "clubOffer",
+        "instanceId": "club:clubOffer:1",
+        "choice": "accept",
+        "title": "加入社团",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 2,
+        "commandId": "ui:mv55r9io:1",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "accept",
+          "eventInstanceId": "club:clubOffer:1"
+        },
+        "before": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 11,
+          "energy": 75,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": "club:clubOffer:1",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "playing",
+          "time": 11,
+          "energy": 75,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "clubWork",
+        "title": "社团投入",
+        "changes": {
+          "time": -1,
+          "energy": -8,
+          "money": 0,
+          "preparation": 0,
+          "social": 8,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 1,
+        "revision": 3,
+        "commandId": "ui:mv55r9io:2",
+        "command": {
+          "operation": "executeAction",
+          "id": "clubWork"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 11,
+          "energy": 75,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "playing",
+          "time": 10,
+          "energy": 67,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "clubWork",
+        "title": "社团投入",
+        "changes": {
+          "time": -1,
+          "energy": -8,
+          "money": 0,
+          "preparation": 0,
+          "social": 8,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 1,
+        "revision": 4,
+        "commandId": "ui:mv55r9io:3",
+        "command": {
+          "operation": "executeAction",
+          "id": "clubWork"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 10,
+          "energy": 67,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "playing",
+          "time": 9,
+          "energy": 59,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 1,
+        "revision": 5,
+        "commandId": "ui:mv55r9io:4",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 9,
+          "energy": 59,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "playing",
+          "time": 7,
+          "energy": 44,
+          "money": 1000,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 1,
+        "revision": 6,
+        "commandId": "ui:mv55r9io:5",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 7,
+          "energy": 44,
+          "money": 1000,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "playing",
+          "time": 5,
+          "energy": 29,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 1,
+        "revision": 7,
+        "commandId": "ui:mv55r9io:6",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 5,
+          "energy": 29,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "summary",
+          "time": 5,
+          "energy": 29,
+          "money": 700,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "进入下一学期",
+        "term": 1,
+        "revision": 8,
+        "commandId": "ui:mv55vw4f:1",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 1,
+          "phase": "summary",
+          "time": 5,
+          "energy": 29,
+          "money": 700,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 2,
+          "phase": "eventPending",
+          "time": 12,
+          "energy": 80,
+          "money": 700,
+          "preparation": 0,
+          "pendingEvent": "club:clubReview:2",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 2,
+        "event": "clubReview",
+        "instanceId": "club:clubReview:2",
+        "choice": "complete",
+        "title": "完成参与记录",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 5,
+          "fitness": 0,
+          "mood": 5,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 9,
+        "commandId": "ui:mv55vw4f:2",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "complete",
+          "eventInstanceId": "club:clubReview:2"
+        },
+        "before": {
+          "term": 2,
+          "phase": "eventPending",
+          "time": 12,
+          "energy": 80,
+          "money": 700,
+          "preparation": 0,
+          "pendingEvent": "club:clubReview:2",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 2,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 700,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      }
+    ],
+    "summary": null,
+    "pendingEvent": null,
+    "eventQueue": [],
+    "eventFlags": {
+      "club:clubOffer:1": true,
+      "club:clubReview:2": true
+    },
+    "eventHistory": [
+      {
+        "term": 1,
+        "event": "clubOffer",
+        "instanceId": "club:clubOffer:1",
+        "choice": "accept",
+        "title": "加入社团",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 2,
+        "event": "clubReview",
+        "instanceId": "club:clubReview:2",
+        "choice": "complete",
+        "title": "完成参与记录",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 5,
+          "fitness": 0,
+          "mood": 5,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      }
+    ],
+    "experiences": [
+      {
+        "term": 2,
+        "type": "club"
+      }
+    ],
+    "chains": {
+      "project": {
+        "status": "idle",
+        "progress": 0,
+        "startedTerm": 0,
+        "deadline": 0,
+        "nextEligibleTerm": 1,
+        "reviewAfter": 0
+      },
+      "club": {
+        "status": "completed",
+        "progress": 2,
+        "startedTerm": 1,
+        "deadline": 2,
+        "nextEligibleTerm": 1,
+        "reviewAfter": 1
+      },
+      "internship": {
+        "status": "idle",
+        "progress": 0,
+        "startedTerm": 0,
+        "deadline": 0,
+        "nextEligibleTerm": 1,
+        "reviewAfter": 0
+      }
+    },
+    "endingOptions": null,
+    "result": null
+  }
+}
