@@ -46,7 +46,11 @@ const ACTION_FLAVOR = {
   applyClub: '报名表交了出去，招新群里已经热闹起来。',
   clubWork: '海报贴完，签到表也理好了。',
   applyInternship: '材料交了上去，接下来是等。',
-  internshipWork: '打卡下班，通勤路上天还没黑透。'
+  internshipWork: '打卡下班，通勤路上天还没黑透。',
+  checkup: '体检单打印出来，各项指标正常。你把单子折好，塞进口袋。',
+  sickVisit: '药片就着温水吞下去。校医说，三天内别熬夜。',
+  alumniVolunteer: '散场时，一位老校友塞给你一瓶水：辛苦了，小校友。',
+  show: '谢幕的时候，你跟着人群鼓掌，掌心拍得发红。'
 };
 const EVENT_CHOICE_FLAVOR = {
   'roommateCare:talk': '烤串摊的灯很亮。你把最近的破事倒了一桌子，说到最后，自己先笑了。',
@@ -115,7 +119,21 @@ const EVENT_CHOICE_FLAVOR = {
   'parcel:find': '最底层的纸箱就是你的。抱回宿舍，拆开，一样没少。',
   'parcel:later': '让它先躺着。你的快递比你有耐心。',
   'night:join': '聊到最后，谁也没看时间。有些话，只有熄了灯才说得出口。',
-  'night:later': '你翻了个身。他们还在小声说，你慢慢睡着了。'
+  'night:later': '你翻了个身。他们还在小声说，你慢慢睡着了。',
+  'injury:treat': '冰袋压着脚踝，凉得你倒吸气。校医说，幸好没伤到骨头。',
+  'injury:later': '膏药贴上了。你一瘸一拐地往教室走，速度慢了，没缺课。',
+  'flu:clinic': '药袋拎回宿舍，室友说，把病毒和作业一起隔离了。',
+  'flu:later': '热水灌下去三杯。你缩进被子里，决定和这场感冒谈判。',
+  'insomnia:clinic': '药盒放在床头。今晚的事，交给今晚。',
+  'insomnia:later': '数到三百又从头数。天快亮的时候，你终于睡着了。',
+  'lecture:listen': '散场后你在门口站了会儿。笔记上的关键词，后来真的用上了。',
+  'lecture:later': '海报拍糊了。你发给同学，对面回：怎么不进去。',
+  'drama:buy': '谢幕的掌声响了很久。回宿舍的路上，你还在想那句台词。',
+  'drama:later': '你记下了剧名，也记下了下次开票的时间。',
+  'alumniStory:listen': '学长递来名片。你说，先加个微信。',
+  'alumniStory:later': '你从人群边上走过。杯盘碰撞声里，混着几句旧日里的校名。',
+  'frontDesk:apply': '结账的时候手有点抖。回家的路上，你给自己买了瓶汽水。',
+  'frontDesk:later': '你盯着启事看了两秒，最后被床的召唤打败了。'
 };
 function statsMarkup() {
   const latest = state.courses.at(-1);
@@ -168,7 +186,7 @@ function renderActions() {
     const action = game.getAction(state, id);
     const check = game.availability(state, id);
     return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div><p>' + h(action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景加成：' + h(action.backgroundBonus) + '</p>' : '') + '<div class="action-cost">' + h(costs(action)) + '</div><div class="action-gain">' + h(gains(action)) + '</div><button type="button" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>执行' + h(action.title) + '</button>' + (!check.ok ? '<div class="action-reason">' + h(check.reason) + '</div>' : '') + '</article>';
-  }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>可以行动的地点：思源楼、图书馆、逸夫楼、学生活动中心、宿舍、南门、操场、银杏大道。</p></div>';
+  }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
 }
 function openPlace(key, hotspot) {
   if (!state) return;
