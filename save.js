@@ -45,12 +45,13 @@
     function load(slot = 'primary') {
       if (!['primary', 'backup'].includes(slot)) return { ok: false, reason: '未知存档位置' };
       try {
-        const result = parse(read(KEYS[slot]));
+        // Bind conflict detection to the exact primary snapshot read here.
+        const main = read(KEYS.primary);
+        const result = parse(slot === 'primary' ? main : read(KEYS.backup));
         if (result.ok) {
-          const main = read(KEYS.primary);
           const primary = parse(main);
           observedMain = main;
-          observedSequence = Math.max(result.saveSequence, primary.ok ? primary.saveSequence : 0);
+          observedSequence = Math.max(observedSequence, result.saveSequence, primary.ok ? primary.saveSequence : 0);
           return { ...result, state: JSON.parse(JSON.stringify(result.state)) };
         }
         return result;
@@ -76,16 +77,21 @@
         storage.setItem(KEYS.temporary, encoded);
         const temporary = read(KEYS.temporary);
         if (temporary !== encoded || !parse(temporary).ok) throw new Error('临时档回读校验失败');
+        // Do not replace a newer backup when the primary changed during staging.
+        if (read(KEYS.primary) !== previousRaw) return { ok: false, conflict: true, reason: '保存期间发现其他标签页更新，请读取最新存档' };
         if (previous.ok) {
           stage = '备份有效主档';
           storage.setItem(KEYS.backup, previousRaw);
-          if (read(KEYS.backup) !== previousRaw || !parse(read(KEYS.backup)).ok) throw new Error('备份回读校验失败');
+          const backup = read(KEYS.backup);
+          if (backup !== previousRaw || !parse(backup).ok) throw new Error('备份回读校验失败');
         }
         if (read(KEYS.primary) !== previousRaw) return { ok: false, conflict: true, reason: '保存期间发现其他标签页更新，请读取最新存档' };
         stage = '替换主档';
         storage.setItem(KEYS.primary, encoded);
         stage = '确认主档';
-        if (read(KEYS.primary) !== encoded || !parse(read(KEYS.primary)).ok) throw new Error('主档回读校验失败');
+        const confirmed = read(KEYS.primary);
+        if (confirmed !== encoded) return { ok: false, conflict: true, reason: '确认保存时发现存档已变化，请读取最新存档；当前内存进度保留' };
+        if (!parse(confirmed).ok) throw new Error('主档回读校验失败');
         observedMain = encoded;
         observedSequence = envelope.saveSequence;
         let warning = '';

@@ -50,13 +50,14 @@
 
 ## 测试与复现
 
-    node --test game.test.js mvp.test.js
+    node --test game.test.js mvp.test.js save.test.js
+    node scripts/check-release.js
 
 地址添加 ?debug=1 进入测试模式：新局可设置种子，地图显示阶段、规则版本、revision、随机调用数，并可下载复现日志。普通页面不显示内部字段。
 
 日志包含初始昵称与种子、成功操作序列、失败原因、操作前后摘要和最终状态。将日志中的 nickname、seed、commands 传给 CampusGame.replay()，可复现成功操作后的完整状态。失败操作不改变规则状态，单独列入 failures。
 
-41 项自动测试和浏览器记录见 qa/MVP验证记录.md。尚未开展真实用户时长测量、正式线上回归和多浏览器兼容验收。
+原有 41 项自动测试和历史浏览器记录见 qa/MVP验证记录.md。M4 新增 14 项存档专项回归，当前合计 55 项通过；本轮验证范围见 [M4 验证记录](qa/M4验证记录.md)，职责和依赖见 [M4 模块交付说明](docs/M4模块交付说明.md)，发布操作见 [M4 部署说明](docs/M4部署说明.md)。尚未开展真实用户时长测量、正式线上完整回归和多浏览器兼容验收。
 
 ## 代码
 
@@ -70,5 +71,8 @@
 | app.js | 唯一当前状态、界面、命令、保存协调与日志导出 |
 | index.html / styles.css | 页面、移动布局与原地图交互 |
 | game.test.js / mvp.test.js | 原规则回归和新增集成场景 |
+| save.test.js | M4 并发读档、备份保护、序号与存储异常回归 |
+| scripts/check-release.js | 发布文件、大小写、脚本顺序及可选线上资源一致性检查 |
+| .github/workflows/m4-checks.yml | 提交与 PR 的自动测试和静态资源检查 |
 
 玩法参考《中国式人生》《人生重开模拟器》，地图复用项目既有素材。本轮未新增图片、音乐或外部服务；既有素材来源和授权仍需团队在发布前整理。
