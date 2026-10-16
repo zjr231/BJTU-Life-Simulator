@@ -2,13 +2,13 @@
   'use strict';
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
-  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS } = config;
+  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL } = config;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const clamp = (value, max) => Math.max(0, Math.min(max, value));
   function validateNickname(value) {
-    if (typeof value !== 'string' || !value.trim()) return { ok: false, reason: '请填写游戏昵称' };
+    if (typeof value !== 'string' || !value.trim()) return { ok: false, reason: '先填一个昵称吧' };
     if ([...value.trim()].length > 12 || /[\u0000-\u001f\u007f]/.test(value)) return { ok: false, reason: '昵称最多 12 个字符，不能包含控制字符' };
     return { ok: true, value: value.trim() };
   }
@@ -55,7 +55,7 @@
   }
   function resourceCheck(state, effect) {
     for (const [key, label] of [['time', '时间'], ['energy', '精力'], ['money', '钱包']]) {
-      if (state[key] < (effect[key] || 0)) return { ok: false, reason: label + '不足：需要 ' + effect[key] + '，剩余 ' + state[key] };
+      if (state[key] < (effect[key] || 0)) return { ok: false, reason: label + '不够：需要 ' + effect[key] + '，现在剩 ' + state[key] };
     }
     if (effect.minFitness && state.fitness < effect.minFitness) return { ok: false, reason: '体能需要达到 ' + effect.minFitness };
     return { ok: true, reason: '' };
@@ -63,12 +63,12 @@
   function availability(state, id) {
     if (!own(ACTIONS, id)) return { ok: false, reason: '未知行动' };
     if (state.phase === 'eventPending') return { ok: false, reason: '请先处理当前事件' };
-    if (state.phase !== 'playing') return { ok: false, reason: '当前阶段不能执行行动' };
+    if (state.phase !== 'playing') return { ok: false, reason: '现在这个阶段还不能行动' };
     const action = getAction(state, id);
     if (action.minTerm && state.term < action.minTerm) return { ok: false, reason: '第 ' + action.minTerm + ' 学期开始开放' };
-    if (action.maxTerm && state.term > action.maxTerm) return { ok: false, reason: '已错过本轮申请时间' };
+    if (action.maxTerm && state.term > action.maxTerm) return { ok: false, reason: '这一轮的申请时间已经过了' };
     if (action.autumnOnly && state.term % 2 === 0) return { ok: false, reason: '社团招新在秋季学期开放' };
-    if (action.limit && (state.counts[id] || 0) >= action.limit) return { ok: false, reason: '已达本学期次数上限' };
+    if (action.limit && (state.counts[id] || 0) >= action.limit) return { ok: false, reason: '这学期已经安排满这么多次了' };
     if (action.minPreparation && state.preparation < action.minPreparation) return { ok: false, reason: '本学期学习进度需要达到 ' + action.minPreparation };
     if (action.minAverage && averageGrade(state) < action.minAverage) return { ok: false, reason: '已结算平均成绩需要达到 ' + action.minAverage };
     if (action.chain) {
@@ -76,12 +76,12 @@
       if (action.kind === 'apply' && !['idle', 'deferred'].includes(chain.status)) return { ok: false, reason: chain.status === 'completed' ? '这条事件链已完成' : '当前不能再次申请' };
       if (action.kind === 'apply' && state.term < chain.nextEligibleTerm) return { ok: false, reason: '第 ' + chain.nextEligibleTerm + ' 学期可再次申请' };
       if (action.kind === 'work' && chain.status !== 'active') return { ok: false, reason: '请先申请并接受邀请' };
-      if (action.kind === 'work' && chain.progress >= 2) return { ok: false, reason: '两次投入已完成，等待成果确认事件' };
+      if (action.kind === 'work' && chain.progress >= 2) return { ok: false, reason: '两次投入都完成了，等成果确认' };
     }
     if (action.preparation && !action.chain && state.preparation >= 100) return { ok: false, reason: '本学期学习进度已满' };
     const check = resourceCheck(state, action);
     if (!check.ok) return check;
-    if (!action.chain && !Object.values(previewChanges(state, action)).some((value) => value > 0)) return { ok: false, reason: '这项行动的收益属性已满' };
+    if (!action.chain && !Object.values(previewChanges(state, action)).some((value) => value > 0)) return { ok: false, reason: '这项行动的收益已经到头了' };
     return { ok: true, reason: '' };
   }
   function applyChanges(state, changes) {
@@ -97,17 +97,38 @@
       const instance = instanceFor(next, id);
       if (!next.eventFlags[instance.instanceId] && next.pendingEvent?.instanceId !== instance.instanceId && !next.eventQueue.some((item) => item.instanceId === instance.instanceId)) next.eventQueue.push(instance);
     };
+    const did = (event, choice, termsAgo) => next.eventHistory.some((entry) => entry.event === event && (choice === undefined || entry.choice === choice) && (termsAgo === undefined || entry.term === next.term - termsAgo));
+    const termActions = next.history.filter((entry) => entry.command.operation === 'executeAction' && entry.term === next.term).length;
     if (next.mood < RULES.lowMood) enqueue('roommateCare');
     if (triggerAction === 'exercise' && next.term % 2 === 0 && next.fitness >= RULES.fitnessThreshold) enqueue('fitnessTest');
     for (const [id, chain] of Object.entries(next.chains)) {
       if (triggerAction === 'apply' + id[0].toUpperCase() + id.slice(1)) enqueue(id + 'Offer');
       if (chain.status === 'active' && chain.progress === 2 && next.term >= chain.reviewAfter && (id === 'internship' || next.term > chain.startedTerm)) enqueue(id + 'Review');
     }
+    if (next.term === 1 && termActions >= 1) {
+      enqueue('military1');
+      if (did('military1', 'join', 0)) enqueue('military2');
+    }
+    if ([1, 3, 5, 7].includes(next.term) && termActions >= 1 && !did('singer3')) enqueue('singer1');
+    if (did('singer1', 'signup', 0)) enqueue('singer2');
+    if (did('singer2', 'advance', 0)) enqueue('singer3');
+    if ([1, 3, 5].includes(next.term) && termActions >= 1 && !did('ticket3')) enqueue('ticket1');
+    if ([2, 4, 6].includes(next.term) && did('ticket1', 'buy', 1)) enqueue('ticket2');
+    if ([3, 5, 7].includes(next.term) && did('ticket2', undefined, 1)) enqueue('ticket3');
+    if (next.term === 5 && termActions >= 1 && !did('contest2')) enqueue('contest1');
+    if (did('contest1', 'join', 0)) enqueue('contest2');
+    if (next.term === 3 && termActions >= 1) enqueue('transfer');
+    if (next.term === 6 && termActions >= 1) enqueue('seminar');
+    if (next.term === 8 && termActions >= 1) enqueue('graduation');
+    if (next.term >= 2 && next.courses.length && next.courses.at(-1).term === next.term - 1 && !next.courses.at(-1).passed) enqueue('retake');
     const rollKey = 'randomCampusRoll:' + next.term;
     if (triggerAction === 'selfStudy' && !next.eventFlags[rollKey]) {
       const rolled = random.draw(next.rng);
       next = { ...next, rng: rolled.rng, eventFlags: { ...next.eventFlags, [rollKey]: true } };
-      if (rolled.number < 0.35) enqueue('campusDiscussion');
+      if (rolled.number < 0.35) {
+        const pool = RANDOM_POOL.filter((id) => !EVENTS[id].season || (EVENTS[id].season === 'autumn' && next.term % 2 === 1));
+        enqueue(pool[Math.min(pool.length - 1, Math.floor((rolled.number / 0.35) * pool.length))]);
+      }
     }
     next.eventQueue.sort((a, b) => EVENTS[a.id].priority - EVENTS[b.id].priority || a.instanceId.localeCompare(b.instanceId));
     if (!next.pendingEvent && next.eventQueue.length) next = { ...next, pendingEvent: next.eventQueue[0], eventQueue: next.eventQueue.slice(1) };
@@ -145,7 +166,7 @@
     const event = EVENTS[state.pendingEvent.id];
     const choice = event && event.choices.find((item) => item.id === choiceId);
     if (!choice) return { ok: false, reason: '未知事件选项' };
-    if (choice.chainEffect === 'postpone' && state.term === 8) return { ok: false, reason: '最后一学期，请确认完成经历' };
+    if (choice.chainEffect === 'postpone' && state.term === 8) return { ok: false, reason: '最后一个学期了，把经历确认了吧' };
     return resourceCheck(state, choice);
   }
   function submitEventChoice(state, choiceId, options = {}) {
@@ -177,8 +198,8 @@
     const notices = [];
     for (const [id, chain] of Object.entries(chains)) {
       if (chain.status === 'active' && state.term >= chain.deadline) {
-        if (state.term === 8) { chain.status = 'missed'; notices.push(CHAIN_NAMES[id] + '未完成，毕业时保留 ' + chain.progress + '/2 次投入记录。'); }
-        else { chain.deadline = state.term + 1; notices.push(CHAIN_NAMES[id] + '延期到第 ' + chain.deadline + ' 学期，已有 ' + chain.progress + '/2 次投入保留。'); }
+        if (state.term === 8) { chain.status = 'missed'; notices.push(CHAIN_NAMES[id] + '未完成，已有的 ' + chain.progress + '/2 次投入保留在档案里。'); }
+        else { chain.deadline = state.term + 1; notices.push(CHAIN_NAMES[id] + '延期到第 ' + chain.deadline + ' 学期，已有的 ' + chain.progress + '/2 次投入保留。'); }
       }
     }
     return { chains, notices };
@@ -235,7 +256,7 @@
     if (!command.ok) return command;
     if (state.phase !== 'endingChoice') return { ok: false, reason: '当前不能选择毕业方向', state };
     const ending = state.endingOptions.options.find((item) => item.id === id && item.available);
-    if (!ending) return { ok: false, reason: '尚未满足该方向条件', state };
+    if (!ending) return { ok: false, reason: '这个方向的条件还差一点', state };
     const result = { direction: ending.id, title: ending.title, requirements: clone(ending.requirements), average: state.endingOptions.average, passed: state.endingOptions.passed, experiences: clone(state.experiences), courses: clone(state.courses) };
     return commit(state, { ...state, phase: 'finished', result }, { operation: 'chooseEnding', id }, { action: 'chooseEnding', title: ending.title }, command.commandId);
   }
