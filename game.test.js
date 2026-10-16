@@ -70,13 +70,17 @@ test('各行动次数限制阻止刷取，学期切换后清空', () => {
     if (!action.limit) continue;
     const state = { ...actionableState(id), counts: { [id]: action.limit } };
     assert.equal(game.executeAction(state, id).ok, false);
-    const next = game.continueGame(game.endTerm(state).state).state;
+    let next = game.continueGame(game.endTerm(state).state).state;
+    while (next.pendingEvent) next = game.submitEventChoice(next, 'later').state;
     assert.equal(game.executeAction(next, id).ok, true);
   }
 });
 test('结算预览不修改状态，成绩不跨学期累加，资源仅扣一次', () => {
   let state = game.createGame();
-  for (const id of ['study', 'study', 'work', 'chat']) state = game.executeAction(state, id).state;
+  for (const id of ['study', 'study', 'work', 'chat']) {
+    state = game.executeAction(state, id).state;
+    while (state.pendingEvent) state = game.submitEventChoice(state, 'later').state;
+  }
   const before = structuredClone(state);
   const preview = game.previewSettlement(state);
   assert.deepEqual(state, before);
@@ -107,7 +111,7 @@ test('零时间、零精力、无资金仍可结算：援助刚好补足支出',
     assert.equal(result.ok, true);
     assert.equal(result.summary.aid, Math.max(0, 300 - money));
     assert.equal(result.state.money, Math.max(0, money - 300));
-    assert.equal(game.continueGame(result.state).state.phase, 'playing');
+    assert.equal(game.continueGame(result.state).state.term, 2);
   }
 });
 test('成绩阈值及满准备', () => {
@@ -126,10 +130,11 @@ test('连续八学期完整流程，第八学期只结算一次，不创建第�
       const result = game.executeAction(state, id);
       assert.equal(result.ok, true, `term ${term}: ${id}`);
       state = result.state;
-      if (state.pendingEvent) {
-        assert.equal(state.pendingEvent.id, 'fitnessTest');
-        const eventResult = game.submitEventChoice(state, 'participate');
-        assert.equal(eventResult.ok, true);
+      while (state.pendingEvent) {
+        const eventId = state.pendingEvent.id;
+        const choice = eventId === 'fitnessTest' ? 'participate' : 'later';
+        const eventResult = game.submitEventChoice(state, choice);
+        assert.equal(eventResult.ok, true, `term ${term}: ${eventId}`);
         state = eventResult.state;
       }
     }
@@ -211,7 +216,7 @@ test('心情严格低于 30 才触发，事件阻止其他行动与结算', () =
   assert.equal(result.state.time, 9);
   assert.equal(result.state.mood, 44);
   assert.equal(result.state.social, 23);
-  assert.equal(result.state.pendingEvent, null);
+  assert.equal(result.state.pendingEvent.id, 'military1');
   assert.deepEqual(pending, before);
   assert.equal(game.submitEventChoice(result.state, 'talk').ok, false);
 });
@@ -227,8 +232,10 @@ test('事件选项资源不足不扣费，零时间有免费选项可继续结�
   const declined = game.submitEventChoice(pending, 'later');
   assert.equal(declined.ok, true);
   assert.equal(declined.state.mood, 29);
-  assert.equal(declined.state.pendingEvent, null);
-  const next = game.continueGame(game.endTerm(declined.state).state).state;
+  assert.equal(declined.state.pendingEvent.id, 'military1');
+  let cleared = declined.state;
+  while (cleared.pendingEvent) cleared = game.submitEventChoice(cleared, 'later').state;
+  const next = game.continueGame(game.endTerm(cleared).state).state;
   assert.equal(next.term, 2);
   assert.equal(next.pendingEvent.id, 'roommateCare');
   assert.equal(next.eventFlags['daily:roommateCare:1'], true);
@@ -236,13 +243,14 @@ test('事件选项资源不足不扣费，零时间有免费选项可继续结�
 
 test('同一低心情事件每学期至多一次，变化与历史没有重复奖励', () => {
   const pending = game.executeAction({ ...game.createGame(), mood: 32 }, 'study').state;
-  const resolved = game.submitEventChoice(pending, 'later').state;
+  let resolved = game.submitEventChoice(pending, 'later').state;
+  while (resolved.pendingEvent) resolved = game.submitEventChoice(resolved, 'later').state;
   const action = game.executeAction(resolved, 'study');
   assert.equal(action.ok, true);
   assert.equal(action.state.mood, 26);
   assert.equal(action.state.pendingEvent, null);
-  assert.equal(action.state.eventHistory.length, 1);
-  assert.equal(action.state.history.length, 3);
+  assert.equal(action.state.eventHistory.filter((entry) => entry.event === 'roommateCare').length, 1);
+  assert.equal(action.state.history.filter((entry) => entry.command.operation === 'executeAction').length, 2);
 });
 
 test('体测仅偶数学期锻炼达标后触发，参加会留下经历且不重复', () => {

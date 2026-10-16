@@ -2,7 +2,7 @@
   'use strict';
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
-  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS } = config;
+  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL } = config;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
   const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -97,17 +97,38 @@
       const instance = instanceFor(next, id);
       if (!next.eventFlags[instance.instanceId] && next.pendingEvent?.instanceId !== instance.instanceId && !next.eventQueue.some((item) => item.instanceId === instance.instanceId)) next.eventQueue.push(instance);
     };
+    const did = (event, choice, termsAgo) => next.eventHistory.some((entry) => entry.event === event && (choice === undefined || entry.choice === choice) && (termsAgo === undefined || entry.term === next.term - termsAgo));
+    const termActions = next.history.filter((entry) => entry.command.operation === 'executeAction' && entry.term === next.term).length;
     if (next.mood < RULES.lowMood) enqueue('roommateCare');
     if (triggerAction === 'exercise' && next.term % 2 === 0 && next.fitness >= RULES.fitnessThreshold) enqueue('fitnessTest');
     for (const [id, chain] of Object.entries(next.chains)) {
       if (triggerAction === 'apply' + id[0].toUpperCase() + id.slice(1)) enqueue(id + 'Offer');
       if (chain.status === 'active' && chain.progress === 2 && next.term >= chain.reviewAfter && (id === 'internship' || next.term > chain.startedTerm)) enqueue(id + 'Review');
     }
+    if (next.term === 1 && termActions >= 1) {
+      enqueue('military1');
+      if (did('military1', 'join', 0)) enqueue('military2');
+    }
+    if ([1, 3, 5, 7].includes(next.term) && termActions >= 1 && !did('singer3')) enqueue('singer1');
+    if (did('singer1', 'signup', 0)) enqueue('singer2');
+    if (did('singer2', 'advance', 0)) enqueue('singer3');
+    if ([1, 3, 5].includes(next.term) && termActions >= 1 && !did('ticket3')) enqueue('ticket1');
+    if ([2, 4, 6].includes(next.term) && did('ticket1', 'buy', 1)) enqueue('ticket2');
+    if ([3, 5, 7].includes(next.term) && did('ticket2', undefined, 1)) enqueue('ticket3');
+    if (next.term === 5 && termActions >= 1 && !did('contest2')) enqueue('contest1');
+    if (did('contest1', 'join', 0)) enqueue('contest2');
+    if (next.term === 3 && termActions >= 1) enqueue('transfer');
+    if (next.term === 6 && termActions >= 1) enqueue('seminar');
+    if (next.term === 8 && termActions >= 1) enqueue('graduation');
+    if (next.term >= 2 && next.courses.length && next.courses.at(-1).term === next.term - 1 && !next.courses.at(-1).passed) enqueue('retake');
     const rollKey = 'randomCampusRoll:' + next.term;
     if (triggerAction === 'selfStudy' && !next.eventFlags[rollKey]) {
       const rolled = random.draw(next.rng);
       next = { ...next, rng: rolled.rng, eventFlags: { ...next.eventFlags, [rollKey]: true } };
-      if (rolled.number < 0.35) enqueue('campusDiscussion');
+      if (rolled.number < 0.35) {
+        const pool = RANDOM_POOL.filter((id) => !EVENTS[id].season || (EVENTS[id].season === 'autumn' && next.term % 2 === 1));
+        enqueue(pool[Math.min(pool.length - 1, Math.floor((rolled.number / 0.35) * pool.length))]);
+      }
     }
     next.eventQueue.sort((a, b) => EVENTS[a.id].priority - EVENTS[b.id].priority || a.instanceId.localeCompare(b.instanceId));
     if (!next.pendingEvent && next.eventQueue.length) next = { ...next, pendingEvent: next.eventQueue[0], eventQueue: next.eventQueue.slice(1) };

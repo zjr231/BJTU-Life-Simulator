@@ -78,10 +78,101 @@
     campusDiscussion: { priority: 60, title: '图书馆里的偶遇', description: '旁边一桌压着声音讨论作业，你发现是同一门课。其中一个人抬头看见你，招了招手。', trigger: '你抬头，正好对上那桌人的目光', choices: [
       { id: 'discuss', title: '加入讨论', description: '拉开椅子坐过去。聊着聊着，卡住的点通了几处。', time: 1, energy: 5, preparation: 5, social: 3 },
       { id: 'later', title: '继续自己的计划', description: '点头笑笑，低头继续看自己的书。' }
+    ] },
+    military1: { priority: 11, title: '军训开训', description: '开学第二周，公告栏贴出军训安排。辅导员在群里说，这是大学的第一课。', trigger: '公告栏前围满了人', choices: [
+      { id: 'join', title: '换上迷彩服', description: '站进队列，太阳很晒，口号很响。', time: 1, energy: 10, fitness: 5, mood: -5 },
+      { id: 'later', title: '先请假', description: '跟辅导员磨了半天，批了半天的假。' }
+    ] },
+    military2: { priority: 12, title: '军训汇演', description: '两周过去，方阵走得有模有样。明天就是汇演，教官最后一遍喊了「稍息」。', trigger: '迷彩服洗了又洗，汇演要到了', choices: [
+      { id: 'perform', title: '认真走完汇演', description: '正步踩在跑道上，胳膊甩得生疼。', time: 1, energy: 8, mood: 6, social: 3, experience: 'military' },
+      { id: 'later', title: '混在队伍后面', description: '跟着走完，不抢镜，也不掉队。' }
+    ] },
+    transfer: { priority: 70, title: '转专业通知', description: '学院通知栏贴出转专业办法。室友路过时多看了你一眼：你不是一直嘀咕想换方向？', trigger: '通知栏又贴了新东西', choices: [
+      { id: 'apply', title: '递交转专业申请', description: '打印成绩单，填表，交到教务处。心里七上八下。', time: 2, energy: 10, mood: 4, social: 1 },
+      { id: 'later', title: '留在原专业', description: '想想又算了。现在这个方向，其实也没那么差。' }
+    ] },
+    seminar: { priority: 71, title: '深造宣讲会', description: '报告厅门口排起长队，海报写着：深造经验分享会。台上坐着几个去年上岸的学长学姐。', trigger: '报告厅门口排起了长队', choices: [
+      { id: 'attend', title: '进去听一听', description: '记了半页笔记，也记下了几个名字。', time: 1, energy: 3, furtherStudy: 8 },
+      { id: 'later', title: '路过，不进去', description: '人太多了。以后找同学要份笔记。' }
+    ] },
+    retake: { priority: 72, title: '补考通知', description: '新学期第一周，教务系统弹出一条提醒：你有一门课未通过，补考安排在下周。', trigger: '教务系统弹出一条提醒', choices: [
+      { id: 'retake', title: '报名补考', description: '报名费划走，教材重新翻开。这一次，不能再挂。', time: 2, energy: 10, money: 50, mood: -5 },
+      { id: 'later', title: '这次不考了', description: '关掉网页。以后的事，以后再说。' }
+    ] },
+    graduation: { priority: 73, title: '毕业季', description: '毕业季说来就来。学士服租借点排起长队，跳蚤市场在银杏大道边支起了摊。', trigger: '毕业季说来就来', choices: [
+      { id: 'photos', title: '拍一组毕业照', description: '学士帽抛起来的那一刻，快门声连成一片。', time: 1, money: 80, mood: 8, social: 3 },
+      { id: 'market', title: '摆摊卖旧书', description: '教材三块一本，学弟学妹边挑边问有没有笔记。', time: 1, energy: 5, income: 80, social: 3 },
+      { id: 'later', title: '这些都不弄了', description: '把该交的材料交齐，比什么都强。' }
+    ] },
+    singer1: { priority: 25, title: '歌手大赛报名', description: '学生活动中心门口拉起横幅：校园歌手大赛报名最后一天。门口的音箱放着一首谁都听过的歌。', trigger: '门口的音箱放着一首谁都听过的歌', choices: [
+      { id: 'signup', title: '报名试试', description: '填了报名表。上台这种事，总得试一次。', time: 1, energy: 3 },
+      { id: 'later', title: '在旁边看热闹', description: '看别人报名也挺好。' }
+    ] },
+    singer2: { priority: 26, title: '复赛', description: '复赛在活动中心小礼堂。灯光有点晃眼，主持人念到了你的名字。', trigger: '主持人念到了你的名字', choices: [
+      { id: 'advance', title: '认真唱完', description: '第一句有点抖，后来越唱越稳。', time: 1, energy: 8, mood: 3 },
+      { id: 'later', title: '弃赛', description: '想了想，把话筒还了回去。' }
+    ] },
+    singer3: { priority: 27, title: '决赛之夜', description: '决赛在操场搭了舞台。台下黑压压一片，室友举着手机在给你录像。', trigger: '台下黑压压一片', choices: [
+      { id: 'perform', title: '上台唱完', description: '唱到最后，台下有人跟着哼。这个晚上够记很久。', time: 2, energy: 10, social: 8, mood: 10, experience: 'singer' },
+      { id: 'later', title: '临时退出', description: '在后台站到散场，把演出看完了。' }
+    ] },
+    ticket1: { priority: 45, title: '春运抢票', description: '寒假将近，宿舍群里开始流传抢票攻略。室友说，你回家的票还没买吧。', trigger: '宿舍群里开始流传抢票攻略', choices: [
+      { id: 'buy', title: '定好闹钟抢票', description: '准点开抢，页面转了三圈，出票成功。', time: 1, energy: 3, mood: 2 },
+      { id: 'later', title: '寒假再说', description: '把群消息设成免打扰。' }
+    ] },
+    ticket2: { priority: 46, title: '回家的车', description: '车站人山人海。你的车次开始检票，广播里一遍遍重复着注意事项。', trigger: '广播里一遍遍重复着注意事项', choices: [
+      { id: 'board', title: '上车回家', description: '火车开动，窗外的城市慢慢退后。', time: 1, energy: 5, mood: 6 },
+      { id: 'later', title: '改签留校', description: '退了票。这个假期，先不回了。' }
+    ] },
+    ticket3: { priority: 47, title: '家乡特产', description: '假期结束返校，行李箱里塞满了家里塞给你的东西。你拎了一袋特产，分给宿舍。', trigger: '行李箱里塞满了家里塞给你的东西', choices: [
+      { id: 'share', title: '分给室友', description: '特产摆了一桌，大家边吃边聊起各自的家乡。', time: 1, energy: 3, social: 6, mood: 6, experience: 'trip' },
+      { id: 'later', title: '留着自己吃', description: '味道是家的味道，谁也分不走。' }
+    ] },
+    contest1: { priority: 55, title: '竞赛招募', description: '实验楼公告栏贴出全国竞赛校内选拔通知。上次的项目老师路过，朝你扬了扬下巴：组个队？', trigger: '公告栏贴出竞赛选拔通知', choices: [
+      { id: 'join', title: '组队报名', description: '队伍拉起来了，队名想了一晚上。', time: 2, energy: 8 },
+      { id: 'later', title: '这学期太忙', description: '和老师道了谢，摆摆手。' }
+    ] },
+    contest2: { priority: 56, title: '决赛答辩', description: '决赛在周末，四个小时闭卷设计加现场答辩。开赛前，队友把笔分到你手里。', trigger: '队友把笔分到你手里', choices: [
+      { id: 'compete', title: '全力以赴', description: '答辩结束，评委多问了一句：你们是哪个学校的。', time: 2, energy: 12, preparation: 8, social: 5, mood: 6, experience: 'contest' },
+      { id: 'later', title: '弃权', description: '交了半成品。下次再来。' }
+    ] },
+    cat: { priority: 61, title: '台阶上的猫', description: '图书馆门口的台阶上卧着一只橘猫，尾巴慢慢扫。它抬头看了你一眼，又趴下了。', trigger: '一只橘猫卧在台阶上', choices: [
+      { id: 'feed', title: '买根火腿肠喂它', description: '它凑过来，吃完蹭了蹭你的裤脚。', time: 1, money: 10, mood: 5 },
+      { id: 'later', title: '赶时间，先走了', description: '你绕开它。它也不恼，继续晒太阳。' }
+    ] },
+    canteen: { priority: 62, title: '食堂新窗口', description: '食堂三楼开了新窗口，队伍拐了两个弯。前面的同学说，招牌菜每天都卖断货。', trigger: '新窗口的队伍拐了两个弯', choices: [
+      { id: 'queue', title: '排队尝一尝', description: '排到窗口，阿姨手一抖，多给了半勺。', time: 1, money: 20, mood: 6, energy: 3 },
+      { id: 'later', title: '人太多，改天', description: '拍了张菜单照片，发给室友。' }
+    ] },
+    card: { priority: 63, title: '地上的校园卡', description: '路上躺着一张校园卡，照片上的面孔有点眼熟，可能是隔壁班的。卡里余额还不少。', trigger: '地上躺着一张校园卡', choices: [
+      { id: 'return', title: '交到失物招领', description: '登记的时候，失主在群里正好喊了一嗓子：卡丢了，急。', time: 1, social: 3, mood: 5 },
+      { id: 'later', title: '放回原处', description: '你把它放回原地。' },
+      { id: 'pocket', title: '装进口袋', description: '揣进兜里。晚上睡觉前，你把卡塞到了枕头下面。', income: 50, mood: -8 }
+    ] },
+    wall: { priority: 64, title: '表白墙点名', description: '表白墙上有人发了你：今天在图书馆遇到的穿灰卫衣的同学。室友把截图甩进群里，连发三个问号。', trigger: '室友把截图甩进了群里', choices: [
+      { id: 'reply', title: '在群里否认', description: '群里闹了一晚上，最后也没人猜出是谁发的。', time: 1, social: 4, mood: 4 },
+      { id: 'later', title: '装没看见', description: '你退出群聊，过了一会儿又点进来。' }
+    ] },
+    seat: { priority: 65, title: '占座之争', description: '你常坐的位子上放着一本书，主人不在。旁边的人说，书从早上就摆着了。', trigger: '你常坐的位子上放着一本书', choices: [
+      { id: 'argue', title: '把书挪开坐下', description: '书的主人回来，瞪了你一眼。你没有让。', time: 1, energy: 3, mood: -4, social: 2 },
+      { id: 'later', title: '换个位子', description: '多走两步的事。' }
+    ] },
+    snow: { priority: 66, season: 'autumn', title: '北京初雪', description: '北京初雪，落在银杏叶还没扫尽的路上。宿舍楼下一片惊呼声。', trigger: '北京初雪', choices: [
+      { id: 'play', title: '下楼踩雪', description: '你在雪地里走了两圈，鞋湿了，心里很痛快。', time: 1, recovery: 2, mood: 8 },
+      { id: 'later', title: '隔窗看看', description: '窗户上哈了口气，画了个笑脸。' }
+    ] },
+    parcel: { priority: 67, season: 'autumn', title: '快递爆仓', description: '双十一的快递堆成了山。快递点的货架根本不够用，纸箱一路码到门口。', trigger: '快递点的纸箱码到了门口', choices: [
+      { id: 'find', title: '在纸箱堆里找快递', description: '翻了二十分钟，你的包裹在最底层。', time: 1, energy: 3, mood: -4, social: 2 },
+      { id: 'later', title: '过两天再说', description: '让它先躺着。' }
+    ] },
+    night: { priority: 68, title: '深夜卧谈', description: '熄灯后没人睡觉。不知道谁起了个头，宿舍开始聊起高考、志愿和那些差一点的选择。', trigger: '熄灯后没人睡觉', choices: [
+      { id: 'join', title: '加入话题', description: '聊到凌晨两点，谁也没看时间。', time: 1, social: 5, mood: 6 },
+      { id: 'later', title: '闭眼装睡', description: '你翻了个身，慢慢真的睡着了。' }
     ] }
   };
   const ENDINGS = { graduationAverage: 60, passedTerms: 6, furtherStudyAverage: 80, furtherStudyPreparation: 60, jobPreparation: 60 };
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS };
+  const RANDOM_POOL = ['campusDiscussion', 'cat', 'canteen', 'card', 'wall', 'seat', 'snow', 'parcel', 'night'];
+  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

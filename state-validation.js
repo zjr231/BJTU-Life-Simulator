@@ -60,7 +60,7 @@
       if (Object.keys(state.chains).length !== 3) return fail('未知事件链');
       const experienceIds = new Set();
       for (const item of state.experiences) {
-        if (!object(item) || !integer(item.term, 1, state.term) || !['fitnessTest', 'project', 'club', 'internship'].includes(item.type)) return fail('经历');
+        if (!object(item) || !integer(item.term, 1, state.term) || !['fitnessTest', 'project', 'club', 'internship', 'military', 'singer', 'trip', 'contest'].includes(item.type)) return fail('经历');
         const key = item.type === 'fitnessTest' ? item.type + ':' + item.term : item.type;
         if (experienceIds.has(key)) return fail('重复经历');
         experienceIds.add(key);

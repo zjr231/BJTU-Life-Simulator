@@ -224,7 +224,7 @@ test('两个同时满足的事件完整入队，读档后顺序和奖励一致',
   const afterFirst = game.submitEventChoice(restored, 'later').state;
   assert.equal(afterFirst.pendingEvent.id, 'fitnessTest');
   const afterSecond = game.submitEventChoice(roundtrip(afterFirst), 'participate').state;
-  assert.equal(afterSecond.eventHistory.length, 2);
+  assert.equal(afterSecond.eventHistory.filter((entry) => ['roommateCare', 'fitnessTest'].includes(entry.event)).length, 2);
   assert.equal(afterSecond.experiences.length, 1);
   assert.equal(game.submitEventChoice(afterSecond, 'participate').ok, false);
 });
@@ -345,6 +345,7 @@ test('成果确认可以免费延期或放弃；最后学期仍有免费放弃�
     state = game.submitEventChoice(state, 'later').state;
     assert.equal(state.chains.club.progress, 2);
     assert.equal(state.chains.club.reviewAfter, term + 1);
+    while (state.pendingEvent) state = game.submitEventChoice(state, 'later').state;
     state = game.continueGame(game.endTerm(state).state).state;
   }
   assert.equal(state.term, 8);
@@ -355,6 +356,7 @@ test('成果确认可以免费延期或放弃；最后学期仍有免费放弃�
   assert.equal(state.chains.club.status, 'missed');
   assert.equal(state.experiences.length, 0);
   assert.deepEqual({ time: state.time, energy: state.energy, money: state.money }, before);
+  while (state.pendingEvent) state = game.submitEventChoice(state, 'later').state;
   assert.equal(game.endTerm(state).ok, true);
   roundtrip(state);
 });
