@@ -224,3 +224,117 @@ test('解析按 UTF-8 字节限制大小，并拒绝过深结构和危险键', (
     assert.equal(save.parse(JSON.stringify(dangerous)).ok, false);
   }
 });
+
+test('三个栏位独立保存、读取和递增序号，旧版主档直接作为栏位 1', () => {
+  const storage = memory();
+  const service = save.createSlotService(storage);
+  assert.equal(save.SLOT_COUNT, 3);
+  assert.deepEqual(save.getSlotKeys(1), save.KEYS);
+  assert.deepEqual(service.load(1).state, initial());
+  for (const id of [1, 2, 3]) {
+    const state = game.createGame({ nickname: '玩家' + id, seed: 'slot-' + id });
+    assert.equal(service.save(state, id).ok, true);
+    assert.deepEqual(service.load(id).state, state);
+  }
+  assert.deepEqual(service.inspect().slots.map(slot => slot.primary.state.nickname), ['玩家1', '玩家2', '玩家3']);
+  assert.deepEqual(service.inspect().slots.map(slot => slot.primary.saveSequence), [2, 1, 1]);
+  assert.equal(service.save(advanced(), 2).saveSequence, 2);
+  assert.equal(service.load(3).state.nickname, '玩家3');
+});
+
+test('非法栏位、未指定栏位和非法读取源均被拒绝且不写存储', () => {
+  const storage = memory();
+  const service = save.createSlotService(storage);
+  const before = new Map(storage.data);
+  for (const id of [undefined, null, 0, 4, -1, 1.5, '1', '__proto__', NaN]) {
+    assert.equal(service.save(initial(), id).ok, false);
+    assert.equal(service.load(id).ok, false);
+    assert.equal(save.getSlotKeys(id), null);
+  }
+  assert.equal(service.load(1, 'temporary').ok, false);
+  assert.deepEqual(storage.data, before);
+});
+
+test('每个栏位独立备份；损坏栏位不妨碍读取其他栏位', () => {
+  const storage = memory(null);
+  const service = save.createSlotService(storage);
+  for (const id of [1, 2, 3]) {
+    assert.equal(service.save(initial(), id).ok, true);
+    assert.equal(service.save(advanced(), id).ok, true);
+  }
+  const other = storage.getItem(save.getSlotKeys(3).primary);
+  storage.data.set(save.getSlotKeys(2).primary, '{broken');
+  const fresh = save.createSlotService(storage);
+  const info = fresh.inspect();
+  assert.equal(info.slots[1].primary.ok, false);
+  assert.equal(info.slots[1].backup.ok, true);
+  assert.equal(fresh.load(2).ok, false);
+  assert.deepEqual(fresh.load(2, 'backup').state, initial());
+  assert.deepEqual(fresh.load(3).state, advanced());
+  assert.equal(fresh.save(initial(), 2).ok, true);
+  assert.equal(storage.getItem(save.getSlotKeys(3).primary), other);
+});
+
+test('两标签更新不同栏位互不冲突，同一栏位必须先重新读取', () => {
+  const storage = memory(null);
+  const a = save.createSlotService(storage);
+  const b = save.createSlotService(storage);
+  a.inspect(); b.inspect();
+  assert.equal(a.save(initial(), 2).ok, true);
+  assert.equal(b.save(initial(), 3).ok, true);
+  const raw = storage.getItem(save.getSlotKeys(2).primary);
+  assert.equal(b.save(advanced(), 2).conflict, true);
+  assert.equal(storage.getItem(save.getSlotKeys(2).primary), raw);
+  assert.equal(b.load(2).ok, true);
+  assert.equal(b.save(advanced(), 2).ok, true);
+  assert.equal(a.save(initial(), 2).conflict, true);
+  assert.equal(a.save(initial(), 1).ok, true);
+});
+
+test('各栏位读档竞态均阻止旧候选覆盖更新', () => {
+  for (const id of [1, 2, 3]) {
+    const storage = memory(null);
+    const keys = save.getSlotKeys(id);
+    storage.data.set(keys.primary, encode());
+    const newer = encode(advanced(), 2);
+    const read = storage.getItem;
+    let changed = false;
+    storage.getItem = key => {
+      const raw = read(key);
+      if (key === keys.primary && !changed) { changed = true; storage.data.set(key, newer); }
+      return raw;
+    };
+    const service = save.createSlotService(storage);
+    const loaded = service.load(id);
+    assert.equal(loaded.ok, true);
+    assert.equal(service.save(loaded.state, id).conflict, true);
+    assert.equal(storage.data.get(keys.primary), newer);
+  }
+});
+
+test('单栏位写入失败不修改其他栏位；恢复后可重试', () => {
+  const storage = memory(null);
+  const service = save.createSlotService(storage);
+  service.save(initial(), 1); service.save(initial(), 3);
+  const first = storage.getItem(save.getSlotKeys(1).primary);
+  const third = storage.getItem(save.getSlotKeys(3).primary);
+  const write = storage.setItem;
+  storage.setItem = (key, value) => { if (key === save.getSlotKeys(2).temporary) throw new Error('quota'); write(key, value); };
+  assert.equal(service.save(advanced(), 2).ok, false);
+  assert.equal(storage.getItem(save.getSlotKeys(1).primary), first);
+  assert.equal(storage.getItem(save.getSlotKeys(3).primary), third);
+  storage.setItem = write;
+  assert.equal(service.save(advanced(), 2).ok, true);
+});
+
+test('某栏位读取被拒绝时仍显示并允许使用其他可访问栏位', () => {
+  const storage = memory();
+  const read = storage.getItem;
+  storage.getItem = key => { if (key.startsWith('bjtu-life:mvp:slot:2:')) throw new Error('denied'); return read(key); };
+  const service = save.createSlotService(storage);
+  const info = service.inspect();
+  assert.equal(info.ok, true);
+  assert.deepEqual(info.slots.map(slot => slot.ok), [true, false, true]);
+  assert.equal(service.save(initial(), 2).ok, false);
+  assert.equal(service.save(initial(), 3).ok, true);
+});

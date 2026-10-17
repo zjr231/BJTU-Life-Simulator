@@ -17,6 +17,6 @@ jobs:
         with:
           node-version: '24'
       - name: Rules, integration and save regression
-        run: node --test game.test.js mvp.test.js save.test.js
+        run: node --test game.test.js mvp.test.js save.test.js app-save.test.js
       - name: Static release files
         run: node scripts/check-release.js
