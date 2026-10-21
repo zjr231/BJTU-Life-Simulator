@@ -1,0 +1,72 @@
+✔ 保存按钮打开三个栏位，选择空栏位后保存并标记为当前栏位 (18.2127ms)
+✔ 覆盖已有栏位先确认，可返回重选，确认后保留该栏原主档备份 (2.6782ms)
+✔ 切换栏位保存失败时，继续保留原当前栏位及内存进度 (1.824ms)
+✔ 新局未选栏位时结算保留内存，首次选栏后后续结算只自动保存到该栏 (4.0891ms)
+✔ 从栏位 2 恢复 playing 并另存到栏位 3，重新加载后仍可恢复 (5.0028ms)
+✔ 从栏位 2 恢复 eventPending 并另存到栏位 3，重新加载后仍可恢复 (5.1879ms)
+✔ 从栏位 2 恢复 summary 并另存到栏位 3，重新加载后仍可恢复 (5.2258ms)
+✔ 从栏位 2 恢复 endingChoice 并另存到栏位 3，重新加载后仍可恢复 (12.9345ms)
+✔ 从栏位 2 恢复 finished 并另存到栏位 3，重新加载后仍可恢复 (10.9363ms)
+✔ 事件中选择保存或取消选择，保留待选实例、随机位置和队列 (3.0008ms)
+✔ 读取备份使用所选栏位；重新开始后清除自动保存目标 (2.2983ms)
+✔ 其他栏位的 storage 变化不提示当前栏位冲突，当前栏位和清空存储会提示 (1.4673ms)
+✔ 旧档显示为栏位 1，昵称转义，存储不可用时仍可开始游戏 (2.8117ms)
+✔ 确认覆盖前其他标签更新目标栏位，覆盖失败且保留当前进度和目标新档 (1.7091ms)
+✖ 新增校园经历从存档恢复后显示中文名称，成长记录不出现 undefined (1.9569ms)
+✖ 背景音乐关闭后重新开启，恢复循环并保留声音偏好 (2.647ms)
+✔ 重启结束旧局后切换声音，不恢复已停止的旧局音乐 (0.8208ms)
+✔ 记住静音时新局不播放，玩家开启声音后开始背景循环 (0.7586ms)
+✔ 切到后台暂停音乐，返回后只保留一个循环任务 (0.9247ms)
+✔ 全部场景音效可调度，未知音效不产生声音 (1.7941ms)
+✔ 无 Web Audio 或浏览器拒绝偏好存储时，声音接口不影响游戏运行 (1.4473ms)
+✔ 军训和歌手多阶段链可经存档连续完成，经历与奖励不重复 (11.3784ms)
+✔ 返乡链跨三个学期推进，存档恢复后顺序与一次性经历保持正确 (11.5626ms)
+✔ 固定通知与竞赛在规定学期出现，八学期后可正常毕业 (33.2318ms)
+✔ 随机日常池的季节筛选和每学期单次抽取在各事件上均可用 (275.0297ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 23
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 502.4079
+
+✖ failing tests:
+
+test at app-save.test.js:259:1
+✖ 新增校园经历从存档恢复后显示中文名称，成长记录不出现 undefined (1.9569ms)
+  AssertionError [ERR_ASSERTION]: 军训
+      at TestContext.<anonymous> (C:\Users\Xiezz111\Desktop\homework\大三软件测试实训\tmp\github-upload\BJTU-Life-Simulator\app-save.test.js:268:57)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at audio.test.js:46:1
+✖ 背景音乐关闭后重新开启，恢复循环并保留声音偏好 (2.647ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  0 !== 1
+
+      at TestContext.<anonymous> (C:\Users\Xiezz111\Desktop\homework\大三软件测试实训\tmp\github-upload\BJTU-Life-Simulator\audio.test.js:56:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.start (node:internal/test_runner/test:1177:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

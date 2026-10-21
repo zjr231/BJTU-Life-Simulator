@@ -255,3 +255,16 @@ test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当�
   assert.equal(ui.evaluate('state.nickname'), '界面测试');
   assert.match(ui.element('#dialogNotice').textContent, /标签页/);
 });
+
+test('新增校园经历从存档恢复后显示中文名称，成长记录不出现 undefined', () => {
+  const state = game.createGame({ nickname: '经历显示' });
+  state.experiences = ['military', 'singer', 'trip', 'contest'].map(type => ({ type, term: 1 }));
+  const storage = memory();
+  assert.equal(saves.createSlotService(storage).save(state, 2).ok, true);
+  const ui = app(storage);
+  ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  ui.click('#historyButton');
+  const html = ui.element('#dialogBody').innerHTML;
+  for (const name of ['军训', '歌手大赛', '返乡', '竞赛']) assert.ok(html.includes(name), name);
+  assert.doesNotMatch(html, /undefined/);
+});

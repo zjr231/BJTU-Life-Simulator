@@ -181,7 +181,9 @@
       if (bgmRequested) startBgm();
     } else {
       if (master) master.gain.value = 0;
-      stopBgm();
+      // Muting pauses playback; only leaving the game cancels its music request.
+      bgmActive = false;
+      clearScheduled();
     }
   }
 

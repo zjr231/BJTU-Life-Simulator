@@ -1,0 +1,5959 @@
+{
+  "appVersion": "0.3.0",
+  "rulesVersion": 3,
+  "nickname": "分支集成验收",
+  "seed": "all-branches-qa",
+  "commands": [
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvhzt6lk:1"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvhzt6lk:2"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "join",
+      "eventInstanceId": "daily:military1:1",
+      "commandId": "ui:mvhzvqim:1"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "perform",
+      "eventInstanceId": "daily:military2:1",
+      "commandId": "ui:mvhzvqim:2"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "signup",
+      "eventInstanceId": "daily:singer1:1",
+      "commandId": "ui:mvhzvqim:3"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "advance",
+      "eventInstanceId": "daily:singer2:1",
+      "commandId": "ui:mvhzvqim:4"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "perform",
+      "eventInstanceId": "daily:singer3:1",
+      "commandId": "ui:mvhzvqim:5"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "buy",
+      "eventInstanceId": "daily:ticket1:1",
+      "commandId": "ui:mvhzvqim:6"
+    },
+    {
+      "operation": "executeAction",
+      "id": "rest",
+      "commandId": "ui:mvi03i6h:1"
+    },
+    {
+      "operation": "endTerm",
+      "commandId": "ui:mvi06hfx:1"
+    },
+    {
+      "operation": "continueGame",
+      "commandId": "ui:mvi06wtl:1"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "board",
+      "eventInstanceId": "daily:ticket2:2",
+      "commandId": "ui:mvi06wtl:2"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi06wtl:3"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi06wtl:4"
+    },
+    {
+      "operation": "endTerm",
+      "commandId": "ui:mvi06wtl:5"
+    },
+    {
+      "operation": "continueGame",
+      "commandId": "ui:mvi06wtl:6"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "share",
+      "eventInstanceId": "daily:ticket3:3",
+      "commandId": "ui:mvi06wtl:7"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi06wtl:8"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi06wtl:9"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "later",
+      "eventInstanceId": "daily:transfer:3",
+      "commandId": "ui:mvi06wtl:10"
+    },
+    {
+      "operation": "endTerm",
+      "commandId": "ui:mvi06wtl:11"
+    },
+    {
+      "operation": "continueGame",
+      "commandId": "ui:mvi06wtl:12"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi06wtl:13"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi06wtl:14"
+    },
+    {
+      "operation": "endTerm",
+      "commandId": "ui:mvi06wtl:15"
+    },
+    {
+      "operation": "continueGame",
+      "commandId": "ui:mvi06wtl:16"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi06wtl:17"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi06wtl:18"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "join",
+      "eventInstanceId": "daily:contest1:5",
+      "commandId": "ui:mvi06wtl:19"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "compete",
+      "eventInstanceId": "daily:contest2:5",
+      "commandId": "ui:mvi06wtl:20"
+    },
+    {
+      "operation": "endTerm",
+      "commandId": "ui:mvi06wtl:21"
+    },
+    {
+      "operation": "continueGame",
+      "commandId": "ui:mvi06wtl:22"
+    },
+    {
+      "operation": "executeAction",
+      "id": "work",
+      "commandId": "ui:mvi06wtl:23"
+    },
+    {
+      "operation": "executeAction",
+      "id": "checkup",
+      "commandId": "ui:mvi06wtl:24"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "later",
+      "eventInstanceId": "daily:seminar:6",
+      "commandId": "ui:mvi06wtl:25"
+    },
+    {
+      "operation": "executeAction",
+      "id": "sickVisit",
+      "commandId": "ui:mvi06wtl:26"
+    },
+    {
+      "operation": "executeAction",
+      "id": "alumniVolunteer",
+      "commandId": "ui:mvi06wtl:27"
+    },
+    {
+      "operation": "executeAction",
+      "id": "show",
+      "commandId": "ui:mvi06wtl:28"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi06wtl:29"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi06wtl:30"
+    },
+    {
+      "operation": "endTerm",
+      "commandId": "ui:mvi06wtl:31"
+    },
+    {
+      "operation": "continueGame",
+      "commandId": "ui:mvi0d003:1"
+    },
+    {
+      "operation": "executeAction",
+      "id": "applyInternship",
+      "commandId": "ui:mvi0d003:2"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "accept",
+      "eventInstanceId": "internship:internshipOffer:7",
+      "commandId": "ui:mvi0d003:3"
+    },
+    {
+      "operation": "executeAction",
+      "id": "internshipWork",
+      "commandId": "ui:mvi0d003:4"
+    },
+    {
+      "operation": "executeAction",
+      "id": "internshipWork",
+      "commandId": "ui:mvi0d003:5"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "complete",
+      "eventInstanceId": "internship:internshipReview:7",
+      "commandId": "ui:mvi0d003:6"
+    },
+    {
+      "operation": "executeAction",
+      "id": "furtherStudy",
+      "commandId": "ui:mvi0d003:7"
+    },
+    {
+      "operation": "executeAction",
+      "id": "jobPreparation",
+      "commandId": "ui:mvi0d003:8"
+    },
+    {
+      "operation": "executeAction",
+      "id": "rest",
+      "commandId": "ui:mvi0d003:9"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi0d003:10"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi0d003:11"
+    },
+    {
+      "operation": "endTerm",
+      "commandId": "ui:mvi0d003:12"
+    },
+    {
+      "operation": "continueGame",
+      "commandId": "ui:mvi0d003:13"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi0d003:14"
+    },
+    {
+      "operation": "executeAction",
+      "id": "study",
+      "commandId": "ui:mvi0d003:15"
+    },
+    {
+      "operation": "submitEventChoice",
+      "id": "later",
+      "eventInstanceId": "daily:graduation:8",
+      "commandId": "ui:mvi0d003:16"
+    },
+    {
+      "operation": "endTerm",
+      "commandId": "ui:mvi0d003:17"
+    },
+    {
+      "operation": "continueGame",
+      "commandId": "ui:mvi0d003:18"
+    },
+    {
+      "operation": "chooseEnding",
+      "id": "ordinary",
+      "commandId": "ui:mvi0eerz:1"
+    }
+  ],
+  "operations": [
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 1,
+      "revision": 1,
+      "commandId": "ui:mvhzt6lk:1",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 1,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 1000,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "playing",
+        "time": 10,
+        "energy": 65,
+        "money": 1000,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 1,
+      "revision": 2,
+      "commandId": "ui:mvhzt6lk:2",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 1,
+        "phase": "playing",
+        "time": 10,
+        "energy": 65,
+        "money": 1000,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 8,
+        "energy": 50,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:military1:1",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 1,
+      "event": "military1",
+      "instanceId": "daily:military1:1",
+      "choice": "join",
+      "title": "换上迷彩服",
+      "changes": {
+        "time": -1,
+        "energy": -10,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 5,
+        "mood": -5,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 3,
+      "commandId": "ui:mvhzvqim:1",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "join",
+        "eventInstanceId": "daily:military1:1"
+      },
+      "before": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 8,
+        "energy": 50,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:military1:1",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 7,
+        "energy": 40,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:military2:1",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 1,
+      "event": "military2",
+      "instanceId": "daily:military2:1",
+      "choice": "perform",
+      "title": "认真走完汇演",
+      "changes": {
+        "time": -1,
+        "energy": -8,
+        "money": 0,
+        "preparation": 0,
+        "social": 3,
+        "fitness": 0,
+        "mood": 6,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 4,
+      "commandId": "ui:mvhzvqim:2",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "perform",
+        "eventInstanceId": "daily:military2:1"
+      },
+      "before": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 7,
+        "energy": 40,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:military2:1",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 6,
+        "energy": 32,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:singer1:1",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 1,
+      "event": "singer1",
+      "instanceId": "daily:singer1:1",
+      "choice": "signup",
+      "title": "报名试试",
+      "changes": {
+        "time": -1,
+        "energy": -3,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 5,
+      "commandId": "ui:mvhzvqim:3",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "signup",
+        "eventInstanceId": "daily:singer1:1"
+      },
+      "before": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 6,
+        "energy": 32,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:singer1:1",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 5,
+        "energy": 29,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:singer2:1",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 1,
+      "event": "singer2",
+      "instanceId": "daily:singer2:1",
+      "choice": "advance",
+      "title": "认真唱完",
+      "changes": {
+        "time": -1,
+        "energy": -8,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 6,
+      "commandId": "ui:mvhzvqim:4",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "advance",
+        "eventInstanceId": "daily:singer2:1"
+      },
+      "before": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 5,
+        "energy": 29,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:singer2:1",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 4,
+        "energy": 21,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:singer3:1",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 1,
+      "event": "singer3",
+      "instanceId": "daily:singer3:1",
+      "choice": "perform",
+      "title": "上台唱完",
+      "changes": {
+        "time": -2,
+        "energy": -10,
+        "money": 0,
+        "preparation": 0,
+        "social": 8,
+        "fitness": 0,
+        "mood": 10,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 7,
+      "commandId": "ui:mvhzvqim:5",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "perform",
+        "eventInstanceId": "daily:singer3:1"
+      },
+      "before": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 4,
+        "energy": 21,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:singer3:1",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 2,
+        "energy": 11,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:ticket1:1",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 1,
+      "event": "ticket1",
+      "instanceId": "daily:ticket1:1",
+      "choice": "buy",
+      "title": "定好闹钟抢票",
+      "changes": {
+        "time": -1,
+        "energy": -3,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 2,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 8,
+      "commandId": "ui:mvhzvqim:6",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "buy",
+        "eventInstanceId": "daily:ticket1:1"
+      },
+      "before": {
+        "term": 1,
+        "phase": "eventPending",
+        "time": 2,
+        "energy": 11,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": "daily:ticket1:1",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "playing",
+        "time": 1,
+        "energy": 8,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "rest",
+      "title": "休息调整",
+      "changes": {
+        "time": -1,
+        "energy": 30,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 1,
+      "revision": 9,
+      "commandId": "ui:mvi03i6h:1",
+      "command": {
+        "operation": "executeAction",
+        "id": "rest"
+      },
+      "before": {
+        "term": 1,
+        "phase": "playing",
+        "time": 1,
+        "energy": 8,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "playing",
+        "time": 0,
+        "energy": 38,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "endTerm",
+      "title": "学期结算",
+      "term": 1,
+      "revision": 10,
+      "commandId": "ui:mvi06hfx:1",
+      "command": {
+        "operation": "endTerm"
+      },
+      "before": {
+        "term": 1,
+        "phase": "playing",
+        "time": 0,
+        "energy": 38,
+        "money": 1000,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 1,
+        "phase": "summary",
+        "time": 0,
+        "energy": 38,
+        "money": 700,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "continueGame",
+      "title": "进入下一学期",
+      "term": 1,
+      "revision": 11,
+      "commandId": "ui:mvi06wtl:1",
+      "command": {
+        "operation": "continueGame"
+      },
+      "before": {
+        "term": 1,
+        "phase": "summary",
+        "time": 0,
+        "energy": 38,
+        "money": 700,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 2,
+        "phase": "eventPending",
+        "time": 12,
+        "energy": 80,
+        "money": 700,
+        "preparation": 0,
+        "pendingEvent": "daily:ticket2:2",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 2,
+      "event": "ticket2",
+      "instanceId": "daily:ticket2:2",
+      "choice": "board",
+      "title": "上车回家",
+      "changes": {
+        "time": -1,
+        "energy": -5,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 6,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 12,
+      "commandId": "ui:mvi06wtl:2",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "board",
+        "eventInstanceId": "daily:ticket2:2"
+      },
+      "before": {
+        "term": 2,
+        "phase": "eventPending",
+        "time": 12,
+        "energy": 80,
+        "money": 700,
+        "preparation": 0,
+        "pendingEvent": "daily:ticket2:2",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 2,
+        "phase": "playing",
+        "time": 11,
+        "energy": 75,
+        "money": 700,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 2,
+      "revision": 13,
+      "commandId": "ui:mvi06wtl:3",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 2,
+        "phase": "playing",
+        "time": 11,
+        "energy": 75,
+        "money": 700,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 2,
+        "phase": "playing",
+        "time": 9,
+        "energy": 60,
+        "money": 700,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 2,
+      "revision": 14,
+      "commandId": "ui:mvi06wtl:4",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 2,
+        "phase": "playing",
+        "time": 9,
+        "energy": 60,
+        "money": 700,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 2,
+        "phase": "playing",
+        "time": 7,
+        "energy": 45,
+        "money": 700,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "endTerm",
+      "title": "学期结算",
+      "term": 2,
+      "revision": 15,
+      "commandId": "ui:mvi06wtl:5",
+      "command": {
+        "operation": "endTerm"
+      },
+      "before": {
+        "term": 2,
+        "phase": "playing",
+        "time": 7,
+        "energy": 45,
+        "money": 700,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 2,
+        "phase": "summary",
+        "time": 7,
+        "energy": 45,
+        "money": 400,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "continueGame",
+      "title": "进入下一学期",
+      "term": 2,
+      "revision": 16,
+      "commandId": "ui:mvi06wtl:6",
+      "command": {
+        "operation": "continueGame"
+      },
+      "before": {
+        "term": 2,
+        "phase": "summary",
+        "time": 7,
+        "energy": 45,
+        "money": 400,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 3,
+        "phase": "eventPending",
+        "time": 12,
+        "energy": 80,
+        "money": 400,
+        "preparation": 0,
+        "pendingEvent": "daily:ticket3:3",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 3,
+      "event": "ticket3",
+      "instanceId": "daily:ticket3:3",
+      "choice": "share",
+      "title": "分给室友",
+      "changes": {
+        "time": -1,
+        "energy": -3,
+        "money": 0,
+        "preparation": 0,
+        "social": 6,
+        "fitness": 0,
+        "mood": 6,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 17,
+      "commandId": "ui:mvi06wtl:7",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "share",
+        "eventInstanceId": "daily:ticket3:3"
+      },
+      "before": {
+        "term": 3,
+        "phase": "eventPending",
+        "time": 12,
+        "energy": 80,
+        "money": 400,
+        "preparation": 0,
+        "pendingEvent": "daily:ticket3:3",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 3,
+        "phase": "playing",
+        "time": 11,
+        "energy": 77,
+        "money": 400,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 3,
+      "revision": 18,
+      "commandId": "ui:mvi06wtl:8",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 3,
+        "phase": "playing",
+        "time": 11,
+        "energy": 77,
+        "money": 400,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 3,
+        "phase": "playing",
+        "time": 9,
+        "energy": 62,
+        "money": 400,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 3,
+      "revision": 19,
+      "commandId": "ui:mvi06wtl:9",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 3,
+        "phase": "playing",
+        "time": 9,
+        "energy": 62,
+        "money": 400,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 3,
+        "phase": "eventPending",
+        "time": 7,
+        "energy": 47,
+        "money": 400,
+        "preparation": 40,
+        "pendingEvent": "daily:transfer:3",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 3,
+      "event": "transfer",
+      "instanceId": "daily:transfer:3",
+      "choice": "later",
+      "title": "留在原专业",
+      "changes": {
+        "time": 0,
+        "energy": 0,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 20,
+      "commandId": "ui:mvi06wtl:10",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "later",
+        "eventInstanceId": "daily:transfer:3"
+      },
+      "before": {
+        "term": 3,
+        "phase": "eventPending",
+        "time": 7,
+        "energy": 47,
+        "money": 400,
+        "preparation": 40,
+        "pendingEvent": "daily:transfer:3",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 3,
+        "phase": "playing",
+        "time": 7,
+        "energy": 47,
+        "money": 400,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "endTerm",
+      "title": "学期结算",
+      "term": 3,
+      "revision": 21,
+      "commandId": "ui:mvi06wtl:11",
+      "command": {
+        "operation": "endTerm"
+      },
+      "before": {
+        "term": 3,
+        "phase": "playing",
+        "time": 7,
+        "energy": 47,
+        "money": 400,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 3,
+        "phase": "summary",
+        "time": 7,
+        "energy": 47,
+        "money": 100,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "continueGame",
+      "title": "进入下一学期",
+      "term": 3,
+      "revision": 22,
+      "commandId": "ui:mvi06wtl:12",
+      "command": {
+        "operation": "continueGame"
+      },
+      "before": {
+        "term": 3,
+        "phase": "summary",
+        "time": 7,
+        "energy": 47,
+        "money": 100,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 4,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 100,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 4,
+      "revision": 23,
+      "commandId": "ui:mvi06wtl:13",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 4,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 100,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 4,
+        "phase": "playing",
+        "time": 10,
+        "energy": 65,
+        "money": 100,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 4,
+      "revision": 24,
+      "commandId": "ui:mvi06wtl:14",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 4,
+        "phase": "playing",
+        "time": 10,
+        "energy": 65,
+        "money": 100,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 4,
+        "phase": "playing",
+        "time": 8,
+        "energy": 50,
+        "money": 100,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "endTerm",
+      "title": "学期结算",
+      "term": 4,
+      "revision": 25,
+      "commandId": "ui:mvi06wtl:15",
+      "command": {
+        "operation": "endTerm"
+      },
+      "before": {
+        "term": 4,
+        "phase": "playing",
+        "time": 8,
+        "energy": 50,
+        "money": 100,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 4,
+        "phase": "summary",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "continueGame",
+      "title": "进入下一学期",
+      "term": 4,
+      "revision": 26,
+      "commandId": "ui:mvi06wtl:16",
+      "command": {
+        "operation": "continueGame"
+      },
+      "before": {
+        "term": 4,
+        "phase": "summary",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 5,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 5,
+      "revision": 27,
+      "commandId": "ui:mvi06wtl:17",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 5,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 5,
+        "phase": "playing",
+        "time": 10,
+        "energy": 65,
+        "money": 0,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 5,
+      "revision": 28,
+      "commandId": "ui:mvi06wtl:18",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 5,
+        "phase": "playing",
+        "time": 10,
+        "energy": 65,
+        "money": 0,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 5,
+        "phase": "eventPending",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": "daily:contest1:5",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 5,
+      "event": "contest1",
+      "instanceId": "daily:contest1:5",
+      "choice": "join",
+      "title": "组队报名",
+      "changes": {
+        "time": -2,
+        "energy": -8,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 29,
+      "commandId": "ui:mvi06wtl:19",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "join",
+        "eventInstanceId": "daily:contest1:5"
+      },
+      "before": {
+        "term": 5,
+        "phase": "eventPending",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": "daily:contest1:5",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 5,
+        "phase": "eventPending",
+        "time": 6,
+        "energy": 42,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": "daily:contest2:5",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 5,
+      "event": "contest2",
+      "instanceId": "daily:contest2:5",
+      "choice": "compete",
+      "title": "全力以赴",
+      "changes": {
+        "time": -2,
+        "energy": -12,
+        "money": 0,
+        "preparation": 8,
+        "social": 5,
+        "fitness": 0,
+        "mood": 6,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 30,
+      "commandId": "ui:mvi06wtl:20",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "compete",
+        "eventInstanceId": "daily:contest2:5"
+      },
+      "before": {
+        "term": 5,
+        "phase": "eventPending",
+        "time": 6,
+        "energy": 42,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": "daily:contest2:5",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 5,
+        "phase": "playing",
+        "time": 4,
+        "energy": 30,
+        "money": 0,
+        "preparation": 48,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "endTerm",
+      "title": "学期结算",
+      "term": 5,
+      "revision": 31,
+      "commandId": "ui:mvi06wtl:21",
+      "command": {
+        "operation": "endTerm"
+      },
+      "before": {
+        "term": 5,
+        "phase": "playing",
+        "time": 4,
+        "energy": 30,
+        "money": 0,
+        "preparation": 48,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 5,
+        "phase": "summary",
+        "time": 4,
+        "energy": 30,
+        "money": 0,
+        "preparation": 48,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "continueGame",
+      "title": "进入下一学期",
+      "term": 5,
+      "revision": 32,
+      "commandId": "ui:mvi06wtl:22",
+      "command": {
+        "operation": "continueGame"
+      },
+      "before": {
+        "term": 5,
+        "phase": "summary",
+        "time": 4,
+        "energy": 30,
+        "money": 0,
+        "preparation": 48,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 6,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "work",
+      "title": "校内勤工助学",
+      "changes": {
+        "time": -2,
+        "energy": -20,
+        "money": 200,
+        "preparation": 0,
+        "social": 2,
+        "fitness": 0,
+        "mood": -5,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 6,
+      "revision": 33,
+      "commandId": "ui:mvi06wtl:23",
+      "command": {
+        "operation": "executeAction",
+        "id": "work"
+      },
+      "before": {
+        "term": 6,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 6,
+        "phase": "playing",
+        "time": 10,
+        "energy": 60,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "checkup",
+      "title": "体检",
+      "changes": {
+        "time": -1,
+        "energy": -5,
+        "money": -50,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 3,
+        "mood": 2,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 6,
+      "revision": 34,
+      "commandId": "ui:mvi06wtl:24",
+      "command": {
+        "operation": "executeAction",
+        "id": "checkup"
+      },
+      "before": {
+        "term": 6,
+        "phase": "playing",
+        "time": 10,
+        "energy": 60,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 6,
+        "phase": "eventPending",
+        "time": 9,
+        "energy": 55,
+        "money": 150,
+        "preparation": 0,
+        "pendingEvent": "daily:seminar:6",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 6,
+      "event": "seminar",
+      "instanceId": "daily:seminar:6",
+      "choice": "later",
+      "title": "路过，不进去",
+      "changes": {
+        "time": 0,
+        "energy": 0,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 35,
+      "commandId": "ui:mvi06wtl:25",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "later",
+        "eventInstanceId": "daily:seminar:6"
+      },
+      "before": {
+        "term": 6,
+        "phase": "eventPending",
+        "time": 9,
+        "energy": 55,
+        "money": 150,
+        "preparation": 0,
+        "pendingEvent": "daily:seminar:6",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 6,
+        "phase": "playing",
+        "time": 9,
+        "energy": 55,
+        "money": 150,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "sickVisit",
+      "title": "看病开药",
+      "changes": {
+        "time": -1,
+        "energy": -3,
+        "money": -60,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 8,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 6,
+      "revision": 36,
+      "commandId": "ui:mvi06wtl:26",
+      "command": {
+        "operation": "executeAction",
+        "id": "sickVisit"
+      },
+      "before": {
+        "term": 6,
+        "phase": "playing",
+        "time": 9,
+        "energy": 55,
+        "money": 150,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 6,
+        "phase": "playing",
+        "time": 8,
+        "energy": 52,
+        "money": 90,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "alumniVolunteer",
+      "title": "校友接待志愿",
+      "changes": {
+        "time": -2,
+        "energy": -10,
+        "money": 0,
+        "preparation": 0,
+        "social": 5,
+        "fitness": 0,
+        "mood": 3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 6,
+      "revision": 37,
+      "commandId": "ui:mvi06wtl:27",
+      "command": {
+        "operation": "executeAction",
+        "id": "alumniVolunteer"
+      },
+      "before": {
+        "term": 6,
+        "phase": "playing",
+        "time": 8,
+        "energy": 52,
+        "money": 90,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 6,
+        "phase": "playing",
+        "time": 6,
+        "energy": 42,
+        "money": 90,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "show",
+      "title": "看演出",
+      "changes": {
+        "time": -1,
+        "energy": -2,
+        "money": -40,
+        "preparation": 0,
+        "social": 2,
+        "fitness": 0,
+        "mood": 8,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 6,
+      "revision": 38,
+      "commandId": "ui:mvi06wtl:28",
+      "command": {
+        "operation": "executeAction",
+        "id": "show"
+      },
+      "before": {
+        "term": 6,
+        "phase": "playing",
+        "time": 6,
+        "energy": 42,
+        "money": 90,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 6,
+        "phase": "playing",
+        "time": 5,
+        "energy": 40,
+        "money": 50,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 6,
+      "revision": 39,
+      "commandId": "ui:mvi06wtl:29",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 6,
+        "phase": "playing",
+        "time": 5,
+        "energy": 40,
+        "money": 50,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 6,
+        "phase": "playing",
+        "time": 3,
+        "energy": 25,
+        "money": 50,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 6,
+      "revision": 40,
+      "commandId": "ui:mvi06wtl:30",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 6,
+        "phase": "playing",
+        "time": 3,
+        "energy": 25,
+        "money": 50,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 6,
+        "phase": "playing",
+        "time": 1,
+        "energy": 10,
+        "money": 50,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "endTerm",
+      "title": "学期结算",
+      "term": 6,
+      "revision": 41,
+      "commandId": "ui:mvi06wtl:31",
+      "command": {
+        "operation": "endTerm"
+      },
+      "before": {
+        "term": 6,
+        "phase": "playing",
+        "time": 1,
+        "energy": 10,
+        "money": 50,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 6,
+        "phase": "summary",
+        "time": 1,
+        "energy": 10,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "continueGame",
+      "title": "进入下一学期",
+      "term": 6,
+      "revision": 42,
+      "commandId": "ui:mvi0d003:1",
+      "command": {
+        "operation": "continueGame"
+      },
+      "before": {
+        "term": 6,
+        "phase": "summary",
+        "time": 1,
+        "energy": 10,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "applyInternship",
+      "title": "申请实习经历",
+      "changes": {
+        "time": -1,
+        "energy": -5,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 7,
+      "revision": 43,
+      "commandId": "ui:mvi0d003:2",
+      "command": {
+        "operation": "executeAction",
+        "id": "applyInternship"
+      },
+      "before": {
+        "term": 7,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "eventPending",
+        "time": 11,
+        "energy": 75,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": "internship:internshipOffer:7",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 7,
+      "event": "internshipOffer",
+      "instanceId": "internship:internshipOffer:7",
+      "choice": "accept",
+      "title": "接下实习",
+      "changes": {
+        "time": 0,
+        "energy": 0,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 44,
+      "commandId": "ui:mvi0d003:3",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "accept",
+        "eventInstanceId": "internship:internshipOffer:7"
+      },
+      "before": {
+        "term": 7,
+        "phase": "eventPending",
+        "time": 11,
+        "energy": 75,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": "internship:internshipOffer:7",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "playing",
+        "time": 11,
+        "energy": 75,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "internshipWork",
+      "title": "实习投入",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 100,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 7,
+      "revision": 45,
+      "commandId": "ui:mvi0d003:4",
+      "command": {
+        "operation": "executeAction",
+        "id": "internshipWork"
+      },
+      "before": {
+        "term": 7,
+        "phase": "playing",
+        "time": 11,
+        "energy": 75,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "playing",
+        "time": 9,
+        "energy": 60,
+        "money": 100,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "internshipWork",
+      "title": "实习投入",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 100,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 7,
+      "revision": 46,
+      "commandId": "ui:mvi0d003:5",
+      "command": {
+        "operation": "executeAction",
+        "id": "internshipWork"
+      },
+      "before": {
+        "term": 7,
+        "phase": "playing",
+        "time": 9,
+        "energy": 60,
+        "money": 100,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "eventPending",
+        "time": 7,
+        "energy": 45,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": "internship:internshipReview:7",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 7,
+      "event": "internshipReview",
+      "instanceId": "internship:internshipReview:7",
+      "choice": "complete",
+      "title": "办实习证明",
+      "changes": {
+        "time": 0,
+        "energy": 0,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 5,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 47,
+      "commandId": "ui:mvi0d003:6",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "complete",
+        "eventInstanceId": "internship:internshipReview:7"
+      },
+      "before": {
+        "term": 7,
+        "phase": "eventPending",
+        "time": 7,
+        "energy": 45,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": "internship:internshipReview:7",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "playing",
+        "time": 7,
+        "energy": 45,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "furtherStudy",
+      "title": "深造准备",
+      "changes": {
+        "time": -1,
+        "energy": -8,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 20,
+        "jobPreparation": 0
+      },
+      "term": 7,
+      "revision": 48,
+      "commandId": "ui:mvi0d003:7",
+      "command": {
+        "operation": "executeAction",
+        "id": "furtherStudy"
+      },
+      "before": {
+        "term": 7,
+        "phase": "playing",
+        "time": 7,
+        "energy": 45,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "playing",
+        "time": 6,
+        "energy": 37,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "jobPreparation",
+      "title": "求职准备",
+      "changes": {
+        "time": -1,
+        "energy": -8,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 20
+      },
+      "term": 7,
+      "revision": 49,
+      "commandId": "ui:mvi0d003:8",
+      "command": {
+        "operation": "executeAction",
+        "id": "jobPreparation"
+      },
+      "before": {
+        "term": 7,
+        "phase": "playing",
+        "time": 6,
+        "energy": 37,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "playing",
+        "time": 5,
+        "energy": 29,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "rest",
+      "title": "休息调整",
+      "changes": {
+        "time": -1,
+        "energy": 30,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 7,
+      "revision": 50,
+      "commandId": "ui:mvi0d003:9",
+      "command": {
+        "operation": "executeAction",
+        "id": "rest"
+      },
+      "before": {
+        "term": 7,
+        "phase": "playing",
+        "time": 5,
+        "energy": 29,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "playing",
+        "time": 4,
+        "energy": 59,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 7,
+      "revision": 51,
+      "commandId": "ui:mvi0d003:10",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 7,
+        "phase": "playing",
+        "time": 4,
+        "energy": 59,
+        "money": 200,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "playing",
+        "time": 2,
+        "energy": 44,
+        "money": 200,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 7,
+      "revision": 52,
+      "commandId": "ui:mvi0d003:11",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 7,
+        "phase": "playing",
+        "time": 2,
+        "energy": 44,
+        "money": 200,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "playing",
+        "time": 0,
+        "energy": 29,
+        "money": 200,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "endTerm",
+      "title": "学期结算",
+      "term": 7,
+      "revision": 53,
+      "commandId": "ui:mvi0d003:12",
+      "command": {
+        "operation": "endTerm"
+      },
+      "before": {
+        "term": 7,
+        "phase": "playing",
+        "time": 0,
+        "energy": 29,
+        "money": 200,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 7,
+        "phase": "summary",
+        "time": 0,
+        "energy": 29,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "continueGame",
+      "title": "进入下一学期",
+      "term": 7,
+      "revision": 54,
+      "commandId": "ui:mvi0d003:13",
+      "command": {
+        "operation": "continueGame"
+      },
+      "before": {
+        "term": 7,
+        "phase": "summary",
+        "time": 0,
+        "energy": 29,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 8,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 8,
+      "revision": 55,
+      "commandId": "ui:mvi0d003:14",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 8,
+        "phase": "playing",
+        "time": 12,
+        "energy": 80,
+        "money": 0,
+        "preparation": 0,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 8,
+        "phase": "playing",
+        "time": 10,
+        "energy": 65,
+        "money": 0,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "study",
+      "title": "课程学习",
+      "changes": {
+        "time": -2,
+        "energy": -15,
+        "money": 0,
+        "preparation": 20,
+        "social": 0,
+        "fitness": 0,
+        "mood": -3,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "term": 8,
+      "revision": 56,
+      "commandId": "ui:mvi0d003:15",
+      "command": {
+        "operation": "executeAction",
+        "id": "study"
+      },
+      "before": {
+        "term": 8,
+        "phase": "playing",
+        "time": 10,
+        "energy": 65,
+        "money": 0,
+        "preparation": 20,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 8,
+        "phase": "eventPending",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": "daily:graduation:8",
+        "rngCalls": 2
+      }
+    },
+    {
+      "term": 8,
+      "event": "graduation",
+      "instanceId": "daily:graduation:8",
+      "choice": "later",
+      "title": "这些都不弄了",
+      "changes": {
+        "time": 0,
+        "energy": 0,
+        "money": 0,
+        "preparation": 0,
+        "social": 0,
+        "fitness": 0,
+        "mood": 0,
+        "furtherStudy": 0,
+        "jobPreparation": 0
+      },
+      "revision": 57,
+      "commandId": "ui:mvi0d003:16",
+      "command": {
+        "operation": "submitEventChoice",
+        "id": "later",
+        "eventInstanceId": "daily:graduation:8"
+      },
+      "before": {
+        "term": 8,
+        "phase": "eventPending",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": "daily:graduation:8",
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 8,
+        "phase": "playing",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "endTerm",
+      "title": "学期结算",
+      "term": 8,
+      "revision": 58,
+      "commandId": "ui:mvi0d003:17",
+      "command": {
+        "operation": "endTerm"
+      },
+      "before": {
+        "term": 8,
+        "phase": "playing",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 8,
+        "phase": "summary",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "continueGame",
+      "title": "评估毕业方向",
+      "term": 8,
+      "revision": 59,
+      "commandId": "ui:mvi0d003:18",
+      "command": {
+        "operation": "continueGame"
+      },
+      "before": {
+        "term": 8,
+        "phase": "summary",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 8,
+        "phase": "endingChoice",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    },
+    {
+      "action": "chooseEnding",
+      "title": "普通毕业",
+      "term": 8,
+      "revision": 60,
+      "commandId": "ui:mvi0eerz:1",
+      "command": {
+        "operation": "chooseEnding",
+        "id": "ordinary"
+      },
+      "before": {
+        "term": 8,
+        "phase": "endingChoice",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      },
+      "after": {
+        "term": 8,
+        "phase": "finished",
+        "time": 8,
+        "energy": 50,
+        "money": 0,
+        "preparation": 40,
+        "pendingEvent": null,
+        "rngCalls": 2
+      }
+    }
+  ],
+  "failures": [],
+  "finalState": {
+    "version": 3,
+    "rulesVersion": 3,
+    "saveFormatVersion": 1,
+    "appVersion": "0.3.0",
+    "nickname": "分支集成验收",
+    "background": {
+      "id": "engineering",
+      "college": "工程类学院",
+      "major": "交通工程方向"
+    },
+    "rng": {
+      "algorithm": "mulberry32-v1",
+      "seed": "all-branches-qa",
+      "value": 4007576154,
+      "calls": 2
+    },
+    "term": 8,
+    "phase": "finished",
+    "revision": 60,
+    "processedCommands": [
+      "ui:mvhzt6lk:1",
+      "ui:mvhzt6lk:2",
+      "ui:mvhzvqim:1",
+      "ui:mvhzvqim:2",
+      "ui:mvhzvqim:3",
+      "ui:mvhzvqim:4",
+      "ui:mvhzvqim:5",
+      "ui:mvhzvqim:6",
+      "ui:mvi03i6h:1",
+      "ui:mvi06hfx:1",
+      "ui:mvi06wtl:1",
+      "ui:mvi06wtl:2",
+      "ui:mvi06wtl:3",
+      "ui:mvi06wtl:4",
+      "ui:mvi06wtl:5",
+      "ui:mvi06wtl:6",
+      "ui:mvi06wtl:7",
+      "ui:mvi06wtl:8",
+      "ui:mvi06wtl:9",
+      "ui:mvi06wtl:10",
+      "ui:mvi06wtl:11",
+      "ui:mvi06wtl:12",
+      "ui:mvi06wtl:13",
+      "ui:mvi06wtl:14",
+      "ui:mvi06wtl:15",
+      "ui:mvi06wtl:16",
+      "ui:mvi06wtl:17",
+      "ui:mvi06wtl:18",
+      "ui:mvi06wtl:19",
+      "ui:mvi06wtl:20",
+      "ui:mvi06wtl:21",
+      "ui:mvi06wtl:22",
+      "ui:mvi06wtl:23",
+      "ui:mvi06wtl:24",
+      "ui:mvi06wtl:25",
+      "ui:mvi06wtl:26",
+      "ui:mvi06wtl:27",
+      "ui:mvi06wtl:28",
+      "ui:mvi06wtl:29",
+      "ui:mvi06wtl:30",
+      "ui:mvi06wtl:31",
+      "ui:mvi0d003:1",
+      "ui:mvi0d003:2",
+      "ui:mvi0d003:3",
+      "ui:mvi0d003:4",
+      "ui:mvi0d003:5",
+      "ui:mvi0d003:6",
+      "ui:mvi0d003:7",
+      "ui:mvi0d003:8",
+      "ui:mvi0d003:9",
+      "ui:mvi0d003:10",
+      "ui:mvi0d003:11",
+      "ui:mvi0d003:12",
+      "ui:mvi0d003:13",
+      "ui:mvi0d003:14",
+      "ui:mvi0d003:15",
+      "ui:mvi0d003:16",
+      "ui:mvi0d003:17",
+      "ui:mvi0d003:18",
+      "ui:mvi0eerz:1"
+    ],
+    "time": 8,
+    "energy": 50,
+    "money": 0,
+    "social": 51,
+    "fitness": 58,
+    "mood": 83,
+    "preparation": 40,
+    "furtherStudy": 20,
+    "jobPreparation": 20,
+    "counts": {
+      "study": 2
+    },
+    "courses": [
+      {
+        "term": 1,
+        "name": "大一上",
+        "preparation": 40,
+        "grade": 64,
+        "passed": true,
+        "livingCost": 300,
+        "aid": 0,
+        "moneyAfter": 700,
+        "unusedTime": 0,
+        "counts": {
+          "study": 2,
+          "rest": 1
+        },
+        "attributes": {
+          "social": 31,
+          "fitness": 55,
+          "mood": 83
+        },
+        "notices": []
+      },
+      {
+        "term": 2,
+        "name": "大一下",
+        "preparation": 40,
+        "grade": 64,
+        "passed": true,
+        "livingCost": 300,
+        "aid": 0,
+        "moneyAfter": 400,
+        "unusedTime": 7,
+        "counts": {
+          "study": 2
+        },
+        "attributes": {
+          "social": 31,
+          "fitness": 55,
+          "mood": 83
+        },
+        "notices": []
+      },
+      {
+        "term": 3,
+        "name": "大二上",
+        "preparation": 40,
+        "grade": 64,
+        "passed": true,
+        "livingCost": 300,
+        "aid": 0,
+        "moneyAfter": 100,
+        "unusedTime": 7,
+        "counts": {
+          "study": 2
+        },
+        "attributes": {
+          "social": 37,
+          "fitness": 55,
+          "mood": 83
+        },
+        "notices": []
+      },
+      {
+        "term": 4,
+        "name": "大二下",
+        "preparation": 40,
+        "grade": 64,
+        "passed": true,
+        "livingCost": 300,
+        "aid": 200,
+        "moneyAfter": 0,
+        "unusedTime": 8,
+        "counts": {
+          "study": 2
+        },
+        "attributes": {
+          "social": 37,
+          "fitness": 55,
+          "mood": 77
+        },
+        "notices": []
+      },
+      {
+        "term": 5,
+        "name": "大三上",
+        "preparation": 48,
+        "grade": 69,
+        "passed": true,
+        "livingCost": 300,
+        "aid": 300,
+        "moneyAfter": 0,
+        "unusedTime": 4,
+        "counts": {
+          "study": 2
+        },
+        "attributes": {
+          "social": 42,
+          "fitness": 55,
+          "mood": 77
+        },
+        "notices": []
+      },
+      {
+        "term": 6,
+        "name": "大三下",
+        "preparation": 40,
+        "grade": 64,
+        "passed": true,
+        "livingCost": 300,
+        "aid": 250,
+        "moneyAfter": 0,
+        "unusedTime": 1,
+        "counts": {
+          "work": 1,
+          "checkup": 1,
+          "sickVisit": 1,
+          "alumniVolunteer": 1,
+          "show": 1,
+          "study": 2
+        },
+        "attributes": {
+          "social": 51,
+          "fitness": 58,
+          "mood": 87
+        },
+        "notices": []
+      },
+      {
+        "term": 7,
+        "name": "大四上",
+        "preparation": 40,
+        "grade": 64,
+        "passed": true,
+        "livingCost": 300,
+        "aid": 100,
+        "moneyAfter": 0,
+        "unusedTime": 0,
+        "counts": {
+          "applyInternship": 1,
+          "internshipWork": 2,
+          "furtherStudy": 1,
+          "jobPreparation": 1,
+          "rest": 1,
+          "study": 2
+        },
+        "attributes": {
+          "social": 51,
+          "fitness": 58,
+          "mood": 89
+        },
+        "notices": []
+      },
+      {
+        "term": 8,
+        "name": "大四下",
+        "preparation": 40,
+        "grade": 64,
+        "passed": true,
+        "livingCost": 300,
+        "aid": 300,
+        "moneyAfter": 0,
+        "unusedTime": 8,
+        "counts": {
+          "study": 2
+        },
+        "attributes": {
+          "social": 51,
+          "fitness": 58,
+          "mood": 83
+        },
+        "notices": []
+      }
+    ],
+    "history": [
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 1,
+        "revision": 1,
+        "commandId": "ui:mvhzt6lk:1",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "playing",
+          "time": 10,
+          "energy": 65,
+          "money": 1000,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 1,
+        "revision": 2,
+        "commandId": "ui:mvhzt6lk:2",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 10,
+          "energy": 65,
+          "money": 1000,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 8,
+          "energy": 50,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:military1:1",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 1,
+        "event": "military1",
+        "instanceId": "daily:military1:1",
+        "choice": "join",
+        "title": "换上迷彩服",
+        "changes": {
+          "time": -1,
+          "energy": -10,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 5,
+          "mood": -5,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 3,
+        "commandId": "ui:mvhzvqim:1",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "join",
+          "eventInstanceId": "daily:military1:1"
+        },
+        "before": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 8,
+          "energy": 50,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:military1:1",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 7,
+          "energy": 40,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:military2:1",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 1,
+        "event": "military2",
+        "instanceId": "daily:military2:1",
+        "choice": "perform",
+        "title": "认真走完汇演",
+        "changes": {
+          "time": -1,
+          "energy": -8,
+          "money": 0,
+          "preparation": 0,
+          "social": 3,
+          "fitness": 0,
+          "mood": 6,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 4,
+        "commandId": "ui:mvhzvqim:2",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "perform",
+          "eventInstanceId": "daily:military2:1"
+        },
+        "before": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 7,
+          "energy": 40,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:military2:1",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 6,
+          "energy": 32,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:singer1:1",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 1,
+        "event": "singer1",
+        "instanceId": "daily:singer1:1",
+        "choice": "signup",
+        "title": "报名试试",
+        "changes": {
+          "time": -1,
+          "energy": -3,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 5,
+        "commandId": "ui:mvhzvqim:3",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "signup",
+          "eventInstanceId": "daily:singer1:1"
+        },
+        "before": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 6,
+          "energy": 32,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:singer1:1",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 5,
+          "energy": 29,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:singer2:1",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 1,
+        "event": "singer2",
+        "instanceId": "daily:singer2:1",
+        "choice": "advance",
+        "title": "认真唱完",
+        "changes": {
+          "time": -1,
+          "energy": -8,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 6,
+        "commandId": "ui:mvhzvqim:4",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "advance",
+          "eventInstanceId": "daily:singer2:1"
+        },
+        "before": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 5,
+          "energy": 29,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:singer2:1",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 4,
+          "energy": 21,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:singer3:1",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 1,
+        "event": "singer3",
+        "instanceId": "daily:singer3:1",
+        "choice": "perform",
+        "title": "上台唱完",
+        "changes": {
+          "time": -2,
+          "energy": -10,
+          "money": 0,
+          "preparation": 0,
+          "social": 8,
+          "fitness": 0,
+          "mood": 10,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 7,
+        "commandId": "ui:mvhzvqim:5",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "perform",
+          "eventInstanceId": "daily:singer3:1"
+        },
+        "before": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 4,
+          "energy": 21,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:singer3:1",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 2,
+          "energy": 11,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:ticket1:1",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 1,
+        "event": "ticket1",
+        "instanceId": "daily:ticket1:1",
+        "choice": "buy",
+        "title": "定好闹钟抢票",
+        "changes": {
+          "time": -1,
+          "energy": -3,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 2,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 8,
+        "commandId": "ui:mvhzvqim:6",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "buy",
+          "eventInstanceId": "daily:ticket1:1"
+        },
+        "before": {
+          "term": 1,
+          "phase": "eventPending",
+          "time": 2,
+          "energy": 11,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": "daily:ticket1:1",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "playing",
+          "time": 1,
+          "energy": 8,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "rest",
+        "title": "休息调整",
+        "changes": {
+          "time": -1,
+          "energy": 30,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 1,
+        "revision": 9,
+        "commandId": "ui:mvi03i6h:1",
+        "command": {
+          "operation": "executeAction",
+          "id": "rest"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 1,
+          "energy": 8,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "playing",
+          "time": 0,
+          "energy": 38,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 1,
+        "revision": 10,
+        "commandId": "ui:mvi06hfx:1",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 0,
+          "energy": 38,
+          "money": 1000,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "summary",
+          "time": 0,
+          "energy": 38,
+          "money": 700,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "进入下一学期",
+        "term": 1,
+        "revision": 11,
+        "commandId": "ui:mvi06wtl:1",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 1,
+          "phase": "summary",
+          "time": 0,
+          "energy": 38,
+          "money": 700,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 2,
+          "phase": "eventPending",
+          "time": 12,
+          "energy": 80,
+          "money": 700,
+          "preparation": 0,
+          "pendingEvent": "daily:ticket2:2",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 2,
+        "event": "ticket2",
+        "instanceId": "daily:ticket2:2",
+        "choice": "board",
+        "title": "上车回家",
+        "changes": {
+          "time": -1,
+          "energy": -5,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 6,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 12,
+        "commandId": "ui:mvi06wtl:2",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "board",
+          "eventInstanceId": "daily:ticket2:2"
+        },
+        "before": {
+          "term": 2,
+          "phase": "eventPending",
+          "time": 12,
+          "energy": 80,
+          "money": 700,
+          "preparation": 0,
+          "pendingEvent": "daily:ticket2:2",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 2,
+          "phase": "playing",
+          "time": 11,
+          "energy": 75,
+          "money": 700,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 2,
+        "revision": 13,
+        "commandId": "ui:mvi06wtl:3",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 2,
+          "phase": "playing",
+          "time": 11,
+          "energy": 75,
+          "money": 700,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 2,
+          "phase": "playing",
+          "time": 9,
+          "energy": 60,
+          "money": 700,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 2,
+        "revision": 14,
+        "commandId": "ui:mvi06wtl:4",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 2,
+          "phase": "playing",
+          "time": 9,
+          "energy": 60,
+          "money": 700,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 2,
+          "phase": "playing",
+          "time": 7,
+          "energy": 45,
+          "money": 700,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 2,
+        "revision": 15,
+        "commandId": "ui:mvi06wtl:5",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 2,
+          "phase": "playing",
+          "time": 7,
+          "energy": 45,
+          "money": 700,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 2,
+          "phase": "summary",
+          "time": 7,
+          "energy": 45,
+          "money": 400,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "进入下一学期",
+        "term": 2,
+        "revision": 16,
+        "commandId": "ui:mvi06wtl:6",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 2,
+          "phase": "summary",
+          "time": 7,
+          "energy": 45,
+          "money": 400,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 3,
+          "phase": "eventPending",
+          "time": 12,
+          "energy": 80,
+          "money": 400,
+          "preparation": 0,
+          "pendingEvent": "daily:ticket3:3",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 3,
+        "event": "ticket3",
+        "instanceId": "daily:ticket3:3",
+        "choice": "share",
+        "title": "分给室友",
+        "changes": {
+          "time": -1,
+          "energy": -3,
+          "money": 0,
+          "preparation": 0,
+          "social": 6,
+          "fitness": 0,
+          "mood": 6,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 17,
+        "commandId": "ui:mvi06wtl:7",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "share",
+          "eventInstanceId": "daily:ticket3:3"
+        },
+        "before": {
+          "term": 3,
+          "phase": "eventPending",
+          "time": 12,
+          "energy": 80,
+          "money": 400,
+          "preparation": 0,
+          "pendingEvent": "daily:ticket3:3",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 3,
+          "phase": "playing",
+          "time": 11,
+          "energy": 77,
+          "money": 400,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 3,
+        "revision": 18,
+        "commandId": "ui:mvi06wtl:8",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 3,
+          "phase": "playing",
+          "time": 11,
+          "energy": 77,
+          "money": 400,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 3,
+          "phase": "playing",
+          "time": 9,
+          "energy": 62,
+          "money": 400,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 3,
+        "revision": 19,
+        "commandId": "ui:mvi06wtl:9",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 3,
+          "phase": "playing",
+          "time": 9,
+          "energy": 62,
+          "money": 400,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 3,
+          "phase": "eventPending",
+          "time": 7,
+          "energy": 47,
+          "money": 400,
+          "preparation": 40,
+          "pendingEvent": "daily:transfer:3",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 3,
+        "event": "transfer",
+        "instanceId": "daily:transfer:3",
+        "choice": "later",
+        "title": "留在原专业",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 20,
+        "commandId": "ui:mvi06wtl:10",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "later",
+          "eventInstanceId": "daily:transfer:3"
+        },
+        "before": {
+          "term": 3,
+          "phase": "eventPending",
+          "time": 7,
+          "energy": 47,
+          "money": 400,
+          "preparation": 40,
+          "pendingEvent": "daily:transfer:3",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 3,
+          "phase": "playing",
+          "time": 7,
+          "energy": 47,
+          "money": 400,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 3,
+        "revision": 21,
+        "commandId": "ui:mvi06wtl:11",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 3,
+          "phase": "playing",
+          "time": 7,
+          "energy": 47,
+          "money": 400,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 3,
+          "phase": "summary",
+          "time": 7,
+          "energy": 47,
+          "money": 100,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "进入下一学期",
+        "term": 3,
+        "revision": 22,
+        "commandId": "ui:mvi06wtl:12",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 3,
+          "phase": "summary",
+          "time": 7,
+          "energy": 47,
+          "money": 100,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 4,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 100,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 4,
+        "revision": 23,
+        "commandId": "ui:mvi06wtl:13",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 4,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 100,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 4,
+          "phase": "playing",
+          "time": 10,
+          "energy": 65,
+          "money": 100,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 4,
+        "revision": 24,
+        "commandId": "ui:mvi06wtl:14",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 4,
+          "phase": "playing",
+          "time": 10,
+          "energy": 65,
+          "money": 100,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 4,
+          "phase": "playing",
+          "time": 8,
+          "energy": 50,
+          "money": 100,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 4,
+        "revision": 25,
+        "commandId": "ui:mvi06wtl:15",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 4,
+          "phase": "playing",
+          "time": 8,
+          "energy": 50,
+          "money": 100,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 4,
+          "phase": "summary",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "进入下一学期",
+        "term": 4,
+        "revision": 26,
+        "commandId": "ui:mvi06wtl:16",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 4,
+          "phase": "summary",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 5,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 5,
+        "revision": 27,
+        "commandId": "ui:mvi06wtl:17",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 5,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 5,
+          "phase": "playing",
+          "time": 10,
+          "energy": 65,
+          "money": 0,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 5,
+        "revision": 28,
+        "commandId": "ui:mvi06wtl:18",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 5,
+          "phase": "playing",
+          "time": 10,
+          "energy": 65,
+          "money": 0,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 5,
+          "phase": "eventPending",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": "daily:contest1:5",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 5,
+        "event": "contest1",
+        "instanceId": "daily:contest1:5",
+        "choice": "join",
+        "title": "组队报名",
+        "changes": {
+          "time": -2,
+          "energy": -8,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 29,
+        "commandId": "ui:mvi06wtl:19",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "join",
+          "eventInstanceId": "daily:contest1:5"
+        },
+        "before": {
+          "term": 5,
+          "phase": "eventPending",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": "daily:contest1:5",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 5,
+          "phase": "eventPending",
+          "time": 6,
+          "energy": 42,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": "daily:contest2:5",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 5,
+        "event": "contest2",
+        "instanceId": "daily:contest2:5",
+        "choice": "compete",
+        "title": "全力以赴",
+        "changes": {
+          "time": -2,
+          "energy": -12,
+          "money": 0,
+          "preparation": 8,
+          "social": 5,
+          "fitness": 0,
+          "mood": 6,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 30,
+        "commandId": "ui:mvi06wtl:20",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "compete",
+          "eventInstanceId": "daily:contest2:5"
+        },
+        "before": {
+          "term": 5,
+          "phase": "eventPending",
+          "time": 6,
+          "energy": 42,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": "daily:contest2:5",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 5,
+          "phase": "playing",
+          "time": 4,
+          "energy": 30,
+          "money": 0,
+          "preparation": 48,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 5,
+        "revision": 31,
+        "commandId": "ui:mvi06wtl:21",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 5,
+          "phase": "playing",
+          "time": 4,
+          "energy": 30,
+          "money": 0,
+          "preparation": 48,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 5,
+          "phase": "summary",
+          "time": 4,
+          "energy": 30,
+          "money": 0,
+          "preparation": 48,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "进入下一学期",
+        "term": 5,
+        "revision": 32,
+        "commandId": "ui:mvi06wtl:22",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 5,
+          "phase": "summary",
+          "time": 4,
+          "energy": 30,
+          "money": 0,
+          "preparation": 48,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 6,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "work",
+        "title": "校内勤工助学",
+        "changes": {
+          "time": -2,
+          "energy": -20,
+          "money": 200,
+          "preparation": 0,
+          "social": 2,
+          "fitness": 0,
+          "mood": -5,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 6,
+        "revision": 33,
+        "commandId": "ui:mvi06wtl:23",
+        "command": {
+          "operation": "executeAction",
+          "id": "work"
+        },
+        "before": {
+          "term": 6,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 6,
+          "phase": "playing",
+          "time": 10,
+          "energy": 60,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "checkup",
+        "title": "体检",
+        "changes": {
+          "time": -1,
+          "energy": -5,
+          "money": -50,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 3,
+          "mood": 2,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 6,
+        "revision": 34,
+        "commandId": "ui:mvi06wtl:24",
+        "command": {
+          "operation": "executeAction",
+          "id": "checkup"
+        },
+        "before": {
+          "term": 6,
+          "phase": "playing",
+          "time": 10,
+          "energy": 60,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 6,
+          "phase": "eventPending",
+          "time": 9,
+          "energy": 55,
+          "money": 150,
+          "preparation": 0,
+          "pendingEvent": "daily:seminar:6",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 6,
+        "event": "seminar",
+        "instanceId": "daily:seminar:6",
+        "choice": "later",
+        "title": "路过，不进去",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 35,
+        "commandId": "ui:mvi06wtl:25",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "later",
+          "eventInstanceId": "daily:seminar:6"
+        },
+        "before": {
+          "term": 6,
+          "phase": "eventPending",
+          "time": 9,
+          "energy": 55,
+          "money": 150,
+          "preparation": 0,
+          "pendingEvent": "daily:seminar:6",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 6,
+          "phase": "playing",
+          "time": 9,
+          "energy": 55,
+          "money": 150,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "sickVisit",
+        "title": "看病开药",
+        "changes": {
+          "time": -1,
+          "energy": -3,
+          "money": -60,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 8,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 6,
+        "revision": 36,
+        "commandId": "ui:mvi06wtl:26",
+        "command": {
+          "operation": "executeAction",
+          "id": "sickVisit"
+        },
+        "before": {
+          "term": 6,
+          "phase": "playing",
+          "time": 9,
+          "energy": 55,
+          "money": 150,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 6,
+          "phase": "playing",
+          "time": 8,
+          "energy": 52,
+          "money": 90,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "alumniVolunteer",
+        "title": "校友接待志愿",
+        "changes": {
+          "time": -2,
+          "energy": -10,
+          "money": 0,
+          "preparation": 0,
+          "social": 5,
+          "fitness": 0,
+          "mood": 3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 6,
+        "revision": 37,
+        "commandId": "ui:mvi06wtl:27",
+        "command": {
+          "operation": "executeAction",
+          "id": "alumniVolunteer"
+        },
+        "before": {
+          "term": 6,
+          "phase": "playing",
+          "time": 8,
+          "energy": 52,
+          "money": 90,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 6,
+          "phase": "playing",
+          "time": 6,
+          "energy": 42,
+          "money": 90,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "show",
+        "title": "看演出",
+        "changes": {
+          "time": -1,
+          "energy": -2,
+          "money": -40,
+          "preparation": 0,
+          "social": 2,
+          "fitness": 0,
+          "mood": 8,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 6,
+        "revision": 38,
+        "commandId": "ui:mvi06wtl:28",
+        "command": {
+          "operation": "executeAction",
+          "id": "show"
+        },
+        "before": {
+          "term": 6,
+          "phase": "playing",
+          "time": 6,
+          "energy": 42,
+          "money": 90,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 6,
+          "phase": "playing",
+          "time": 5,
+          "energy": 40,
+          "money": 50,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 6,
+        "revision": 39,
+        "commandId": "ui:mvi06wtl:29",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 6,
+          "phase": "playing",
+          "time": 5,
+          "energy": 40,
+          "money": 50,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 6,
+          "phase": "playing",
+          "time": 3,
+          "energy": 25,
+          "money": 50,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 6,
+        "revision": 40,
+        "commandId": "ui:mvi06wtl:30",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 6,
+          "phase": "playing",
+          "time": 3,
+          "energy": 25,
+          "money": 50,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 6,
+          "phase": "playing",
+          "time": 1,
+          "energy": 10,
+          "money": 50,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 6,
+        "revision": 41,
+        "commandId": "ui:mvi06wtl:31",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 6,
+          "phase": "playing",
+          "time": 1,
+          "energy": 10,
+          "money": 50,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 6,
+          "phase": "summary",
+          "time": 1,
+          "energy": 10,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "进入下一学期",
+        "term": 6,
+        "revision": 42,
+        "commandId": "ui:mvi0d003:1",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 6,
+          "phase": "summary",
+          "time": 1,
+          "energy": 10,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "applyInternship",
+        "title": "申请实习经历",
+        "changes": {
+          "time": -1,
+          "energy": -5,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 7,
+        "revision": 43,
+        "commandId": "ui:mvi0d003:2",
+        "command": {
+          "operation": "executeAction",
+          "id": "applyInternship"
+        },
+        "before": {
+          "term": 7,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "eventPending",
+          "time": 11,
+          "energy": 75,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": "internship:internshipOffer:7",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 7,
+        "event": "internshipOffer",
+        "instanceId": "internship:internshipOffer:7",
+        "choice": "accept",
+        "title": "接下实习",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 44,
+        "commandId": "ui:mvi0d003:3",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "accept",
+          "eventInstanceId": "internship:internshipOffer:7"
+        },
+        "before": {
+          "term": 7,
+          "phase": "eventPending",
+          "time": 11,
+          "energy": 75,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": "internship:internshipOffer:7",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "playing",
+          "time": 11,
+          "energy": 75,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "internshipWork",
+        "title": "实习投入",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 100,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 7,
+        "revision": 45,
+        "commandId": "ui:mvi0d003:4",
+        "command": {
+          "operation": "executeAction",
+          "id": "internshipWork"
+        },
+        "before": {
+          "term": 7,
+          "phase": "playing",
+          "time": 11,
+          "energy": 75,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "playing",
+          "time": 9,
+          "energy": 60,
+          "money": 100,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "internshipWork",
+        "title": "实习投入",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 100,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 7,
+        "revision": 46,
+        "commandId": "ui:mvi0d003:5",
+        "command": {
+          "operation": "executeAction",
+          "id": "internshipWork"
+        },
+        "before": {
+          "term": 7,
+          "phase": "playing",
+          "time": 9,
+          "energy": 60,
+          "money": 100,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "eventPending",
+          "time": 7,
+          "energy": 45,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": "internship:internshipReview:7",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 7,
+        "event": "internshipReview",
+        "instanceId": "internship:internshipReview:7",
+        "choice": "complete",
+        "title": "办实习证明",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 5,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 47,
+        "commandId": "ui:mvi0d003:6",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "complete",
+          "eventInstanceId": "internship:internshipReview:7"
+        },
+        "before": {
+          "term": 7,
+          "phase": "eventPending",
+          "time": 7,
+          "energy": 45,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": "internship:internshipReview:7",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "playing",
+          "time": 7,
+          "energy": 45,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "furtherStudy",
+        "title": "深造准备",
+        "changes": {
+          "time": -1,
+          "energy": -8,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 20,
+          "jobPreparation": 0
+        },
+        "term": 7,
+        "revision": 48,
+        "commandId": "ui:mvi0d003:7",
+        "command": {
+          "operation": "executeAction",
+          "id": "furtherStudy"
+        },
+        "before": {
+          "term": 7,
+          "phase": "playing",
+          "time": 7,
+          "energy": 45,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "playing",
+          "time": 6,
+          "energy": 37,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "jobPreparation",
+        "title": "求职准备",
+        "changes": {
+          "time": -1,
+          "energy": -8,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 20
+        },
+        "term": 7,
+        "revision": 49,
+        "commandId": "ui:mvi0d003:8",
+        "command": {
+          "operation": "executeAction",
+          "id": "jobPreparation"
+        },
+        "before": {
+          "term": 7,
+          "phase": "playing",
+          "time": 6,
+          "energy": 37,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "playing",
+          "time": 5,
+          "energy": 29,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "rest",
+        "title": "休息调整",
+        "changes": {
+          "time": -1,
+          "energy": 30,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 7,
+        "revision": 50,
+        "commandId": "ui:mvi0d003:9",
+        "command": {
+          "operation": "executeAction",
+          "id": "rest"
+        },
+        "before": {
+          "term": 7,
+          "phase": "playing",
+          "time": 5,
+          "energy": 29,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "playing",
+          "time": 4,
+          "energy": 59,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 7,
+        "revision": 51,
+        "commandId": "ui:mvi0d003:10",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 7,
+          "phase": "playing",
+          "time": 4,
+          "energy": 59,
+          "money": 200,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "playing",
+          "time": 2,
+          "energy": 44,
+          "money": 200,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 7,
+        "revision": 52,
+        "commandId": "ui:mvi0d003:11",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 7,
+          "phase": "playing",
+          "time": 2,
+          "energy": 44,
+          "money": 200,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "playing",
+          "time": 0,
+          "energy": 29,
+          "money": 200,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 7,
+        "revision": 53,
+        "commandId": "ui:mvi0d003:12",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 7,
+          "phase": "playing",
+          "time": 0,
+          "energy": 29,
+          "money": 200,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 7,
+          "phase": "summary",
+          "time": 0,
+          "energy": 29,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "进入下一学期",
+        "term": 7,
+        "revision": 54,
+        "commandId": "ui:mvi0d003:13",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 7,
+          "phase": "summary",
+          "time": 0,
+          "energy": 29,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 8,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 8,
+        "revision": 55,
+        "commandId": "ui:mvi0d003:14",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 8,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 0,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 8,
+          "phase": "playing",
+          "time": 10,
+          "energy": 65,
+          "money": 0,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "study",
+        "title": "课程学习",
+        "changes": {
+          "time": -2,
+          "energy": -15,
+          "money": 0,
+          "preparation": 20,
+          "social": 0,
+          "fitness": 0,
+          "mood": -3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "term": 8,
+        "revision": 56,
+        "commandId": "ui:mvi0d003:15",
+        "command": {
+          "operation": "executeAction",
+          "id": "study"
+        },
+        "before": {
+          "term": 8,
+          "phase": "playing",
+          "time": 10,
+          "energy": 65,
+          "money": 0,
+          "preparation": 20,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 8,
+          "phase": "eventPending",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": "daily:graduation:8",
+          "rngCalls": 2
+        }
+      },
+      {
+        "term": 8,
+        "event": "graduation",
+        "instanceId": "daily:graduation:8",
+        "choice": "later",
+        "title": "这些都不弄了",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "revision": 57,
+        "commandId": "ui:mvi0d003:16",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "later",
+          "eventInstanceId": "daily:graduation:8"
+        },
+        "before": {
+          "term": 8,
+          "phase": "eventPending",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": "daily:graduation:8",
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 8,
+          "phase": "playing",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 8,
+        "revision": 58,
+        "commandId": "ui:mvi0d003:17",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 8,
+          "phase": "playing",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 8,
+          "phase": "summary",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "评估毕业方向",
+        "term": 8,
+        "revision": 59,
+        "commandId": "ui:mvi0d003:18",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 8,
+          "phase": "summary",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 8,
+          "phase": "endingChoice",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      },
+      {
+        "action": "chooseEnding",
+        "title": "普通毕业",
+        "term": 8,
+        "revision": 60,
+        "commandId": "ui:mvi0eerz:1",
+        "command": {
+          "operation": "chooseEnding",
+          "id": "ordinary"
+        },
+        "before": {
+          "term": 8,
+          "phase": "endingChoice",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 8,
+          "phase": "finished",
+          "time": 8,
+          "energy": 50,
+          "money": 0,
+          "preparation": 40,
+          "pendingEvent": null,
+          "rngCalls": 2
+        }
+      }
+    ],
+    "summary": {
+      "term": 8,
+      "name": "大四下",
+      "preparation": 40,
+      "grade": 64,
+      "passed": true,
+      "livingCost": 300,
+      "aid": 300,
+      "moneyAfter": 0,
+      "unusedTime": 8,
+      "counts": {
+        "study": 2
+      },
+      "attributes": {
+        "social": 51,
+        "fitness": 58,
+        "mood": 83
+      },
+      "notices": []
+    },
+    "pendingEvent": null,
+    "eventQueue": [],
+    "eventFlags": {
+      "daily:military1:1": true,
+      "daily:military2:1": true,
+      "daily:singer1:1": true,
+      "daily:singer2:1": true,
+      "daily:singer3:1": true,
+      "daily:ticket1:1": true,
+      "daily:ticket2:2": true,
+      "daily:ticket3:3": true,
+      "daily:transfer:3": true,
+      "daily:contest1:5": true,
+      "daily:contest2:5": true,
+      "daily:seminar:6": true,
+      "internship:internshipOffer:7": true,
+      "internship:internshipReview:7": true,
+      "daily:graduation:8": true
+    },
+    "eventHistory": [
+      {
+        "term": 1,
+        "event": "military1",
+        "instanceId": "daily:military1:1",
+        "choice": "join",
+        "title": "换上迷彩服",
+        "changes": {
+          "time": -1,
+          "energy": -10,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 5,
+          "mood": -5,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 1,
+        "event": "military2",
+        "instanceId": "daily:military2:1",
+        "choice": "perform",
+        "title": "认真走完汇演",
+        "changes": {
+          "time": -1,
+          "energy": -8,
+          "money": 0,
+          "preparation": 0,
+          "social": 3,
+          "fitness": 0,
+          "mood": 6,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 1,
+        "event": "singer1",
+        "instanceId": "daily:singer1:1",
+        "choice": "signup",
+        "title": "报名试试",
+        "changes": {
+          "time": -1,
+          "energy": -3,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 1,
+        "event": "singer2",
+        "instanceId": "daily:singer2:1",
+        "choice": "advance",
+        "title": "认真唱完",
+        "changes": {
+          "time": -1,
+          "energy": -8,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 3,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 1,
+        "event": "singer3",
+        "instanceId": "daily:singer3:1",
+        "choice": "perform",
+        "title": "上台唱完",
+        "changes": {
+          "time": -2,
+          "energy": -10,
+          "money": 0,
+          "preparation": 0,
+          "social": 8,
+          "fitness": 0,
+          "mood": 10,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 1,
+        "event": "ticket1",
+        "instanceId": "daily:ticket1:1",
+        "choice": "buy",
+        "title": "定好闹钟抢票",
+        "changes": {
+          "time": -1,
+          "energy": -3,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 2,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 2,
+        "event": "ticket2",
+        "instanceId": "daily:ticket2:2",
+        "choice": "board",
+        "title": "上车回家",
+        "changes": {
+          "time": -1,
+          "energy": -5,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 6,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 3,
+        "event": "ticket3",
+        "instanceId": "daily:ticket3:3",
+        "choice": "share",
+        "title": "分给室友",
+        "changes": {
+          "time": -1,
+          "energy": -3,
+          "money": 0,
+          "preparation": 0,
+          "social": 6,
+          "fitness": 0,
+          "mood": 6,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 3,
+        "event": "transfer",
+        "instanceId": "daily:transfer:3",
+        "choice": "later",
+        "title": "留在原专业",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 5,
+        "event": "contest1",
+        "instanceId": "daily:contest1:5",
+        "choice": "join",
+        "title": "组队报名",
+        "changes": {
+          "time": -2,
+          "energy": -8,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 5,
+        "event": "contest2",
+        "instanceId": "daily:contest2:5",
+        "choice": "compete",
+        "title": "全力以赴",
+        "changes": {
+          "time": -2,
+          "energy": -12,
+          "money": 0,
+          "preparation": 8,
+          "social": 5,
+          "fitness": 0,
+          "mood": 6,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 6,
+        "event": "seminar",
+        "instanceId": "daily:seminar:6",
+        "choice": "later",
+        "title": "路过，不进去",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 7,
+        "event": "internshipOffer",
+        "instanceId": "internship:internshipOffer:7",
+        "choice": "accept",
+        "title": "接下实习",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 7,
+        "event": "internshipReview",
+        "instanceId": "internship:internshipReview:7",
+        "choice": "complete",
+        "title": "办实习证明",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 5,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      },
+      {
+        "term": 8,
+        "event": "graduation",
+        "instanceId": "daily:graduation:8",
+        "choice": "later",
+        "title": "这些都不弄了",
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        }
+      }
+    ],
+    "experiences": [
+      {
+        "term": 1,
+        "type": "military"
+      },
+      {
+        "term": 1,
+        "type": "singer"
+      },
+      {
+        "term": 3,
+        "type": "trip"
+      },
+      {
+        "term": 5,
+        "type": "contest"
+      },
+      {
+        "term": 7,
+        "type": "internship"
+      }
+    ],
+    "chains": {
+      "project": {
+        "status": "idle",
+        "progress": 0,
+        "startedTerm": 0,
+        "deadline": 0,
+        "nextEligibleTerm": 1,
+        "reviewAfter": 0
+      },
+      "club": {
+        "status": "idle",
+        "progress": 0,
+        "startedTerm": 0,
+        "deadline": 0,
+        "nextEligibleTerm": 1,
+        "reviewAfter": 0
+      },
+      "internship": {
+        "status": "completed",
+        "progress": 2,
+        "startedTerm": 7,
+        "deadline": 8,
+        "nextEligibleTerm": 1,
+        "reviewAfter": 7
+      }
+    },
+    "endingOptions": {
+      "average": 64.625,
+      "passed": 8,
+      "graduated": true,
+      "options": [
+        {
+          "id": "ordinary",
+          "title": "普通毕业",
+          "available": true,
+          "requirements": [
+            {
+              "label": "平均成绩至少 60",
+              "met": true,
+              "value": 64.625
+            },
+            {
+              "label": "至少 6 个学期达标",
+              "met": true,
+              "value": 8
+            }
+          ]
+        },
+        {
+          "id": "furtherStudy",
+          "title": "继续深造",
+          "available": false,
+          "requirements": [
+            {
+              "label": "平均成绩至少 60",
+              "met": true,
+              "value": 64.625
+            },
+            {
+              "label": "至少 6 个学期达标",
+              "met": true,
+              "value": 8
+            },
+            {
+              "label": "平均成绩至少 80",
+              "met": false,
+              "value": 64.625
+            },
+            {
+              "label": "完成校园项目",
+              "met": false,
+              "value": "idle"
+            },
+            {
+              "label": "深造准备至少 60",
+              "met": false,
+              "value": 20
+            }
+          ]
+        },
+        {
+          "id": "employment",
+          "title": "进入就业",
+          "available": false,
+          "requirements": [
+            {
+              "label": "平均成绩至少 60",
+              "met": true,
+              "value": 64.625
+            },
+            {
+              "label": "至少 6 个学期达标",
+              "met": true,
+              "value": 8
+            },
+            {
+              "label": "完成实习经历",
+              "met": true,
+              "value": "completed"
+            },
+            {
+              "label": "求职准备至少 60",
+              "met": false,
+              "value": 20
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "direction": "ordinary",
+      "title": "普通毕业",
+      "requirements": [
+        {
+          "label": "平均成绩至少 60",
+          "met": true,
+          "value": 64.625
+        },
+        {
+          "label": "至少 6 个学期达标",
+          "met": true,
+          "value": 8
+        }
+      ],
+      "average": 64.625,
+      "passed": 8,
+      "experiences": [
+        {
+          "term": 1,
+          "type": "military"
+        },
+        {
+          "term": 1,
+          "type": "singer"
+        },
+        {
+          "term": 3,
+          "type": "trip"
+        },
+        {
+          "term": 5,
+          "type": "contest"
+        },
+        {
+          "term": 7,
+          "type": "internship"
+        }
+      ],
+      "courses": [
+        {
+          "term": 1,
+          "name": "大一上",
+          "preparation": 40,
+          "grade": 64,
+          "passed": true,
+          "livingCost": 300,
+          "aid": 0,
+          "moneyAfter": 700,
+          "unusedTime": 0,
+          "counts": {
+            "study": 2,
+            "rest": 1
+          },
+          "attributes": {
+            "social": 31,
+            "fitness": 55,
+            "mood": 83
+          },
+          "notices": []
+        },
+        {
+          "term": 2,
+          "name": "大一下",
+          "preparation": 40,
+          "grade": 64,
+          "passed": true,
+          "livingCost": 300,
+          "aid": 0,
+          "moneyAfter": 400,
+          "unusedTime": 7,
+          "counts": {
+            "study": 2
+          },
+          "attributes": {
+            "social": 31,
+            "fitness": 55,
+            "mood": 83
+          },
+          "notices": []
+        },
+        {
+          "term": 3,
+          "name": "大二上",
+          "preparation": 40,
+          "grade": 64,
+          "passed": true,
+          "livingCost": 300,
+          "aid": 0,
+          "moneyAfter": 100,
+          "unusedTime": 7,
+          "counts": {
+            "study": 2
+          },
+          "attributes": {
+            "social": 37,
+            "fitness": 55,
+            "mood": 83
+          },
+          "notices": []
+        },
+        {
+          "term": 4,
+          "name": "大二下",
+          "preparation": 40,
+          "grade": 64,
+          "passed": true,
+          "livingCost": 300,
+          "aid": 200,
+          "moneyAfter": 0,
+          "unusedTime": 8,
+          "counts": {
+            "study": 2
+          },
+          "attributes": {
+            "social": 37,
+            "fitness": 55,
+            "mood": 77
+          },
+          "notices": []
+        },
+        {
+          "term": 5,
+          "name": "大三上",
+          "preparation": 48,
+          "grade": 69,
+          "passed": true,
+          "livingCost": 300,
+          "aid": 300,
+          "moneyAfter": 0,
+          "unusedTime": 4,
+          "counts": {
+            "study": 2
+          },
+          "attributes": {
+            "social": 42,
+            "fitness": 55,
+            "mood": 77
+          },
+          "notices": []
+        },
+        {
+          "term": 6,
+          "name": "大三下",
+          "preparation": 40,
+          "grade": 64,
+          "passed": true,
+          "livingCost": 300,
+          "aid": 250,
+          "moneyAfter": 0,
+          "unusedTime": 1,
+          "counts": {
+            "work": 1,
+            "checkup": 1,
+            "sickVisit": 1,
+            "alumniVolunteer": 1,
+            "show": 1,
+            "study": 2
+          },
+          "attributes": {
+            "social": 51,
+            "fitness": 58,
+            "mood": 87
+          },
+          "notices": []
+        },
+        {
+          "term": 7,
+          "name": "大四上",
+          "preparation": 40,
+          "grade": 64,
+          "passed": true,
+          "livingCost": 300,
+          "aid": 100,
+          "moneyAfter": 0,
+          "unusedTime": 0,
+          "counts": {
+            "applyInternship": 1,
+            "internshipWork": 2,
+            "furtherStudy": 1,
+            "jobPreparation": 1,
+            "rest": 1,
+            "study": 2
+          },
+          "attributes": {
+            "social": 51,
+            "fitness": 58,
+            "mood": 89
+          },
+          "notices": []
+        },
+        {
+          "term": 8,
+          "name": "大四下",
+          "preparation": 40,
+          "grade": 64,
+          "passed": true,
+          "livingCost": 300,
+          "aid": 300,
+          "moneyAfter": 0,
+          "unusedTime": 8,
+          "counts": {
+            "study": 2
+          },
+          "attributes": {
+            "social": 51,
+            "fitness": 58,
+            "mood": 83
+          },
+          "notices": []
+        }
+      ]
+    }
+  }
+}
