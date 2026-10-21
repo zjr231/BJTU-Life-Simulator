@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.3.0', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.3.1', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
   const TERM_NAMES = ['大一上', '大一下', '大二上', '大二下', '大三上', '大三下', '大四上', '大四下'];
   // These are deliberately simplified game backgrounds, not real degree programmes.
   const BACKGROUNDS = [
@@ -120,13 +120,13 @@
       { id: 'perform', title: '上台唱完', description: '唱到最后，台下有人跟着哼。这个晚上够记很久。', time: 2, energy: 10, social: 8, mood: 10, experience: 'singer' },
       { id: 'later', title: '临时退出', description: '在后台站到散场，把演出看完了。' }
     ] },
-    ticket1: { priority: 45, title: '春运抢票', description: '寒假将近，宿舍群里开始流传抢票攻略。室友说，你回家的票还没买吧。', trigger: '宿舍群里开始流传抢票攻略', choices: [
-      { id: 'buy', title: '定好闹钟抢票', description: '准点开抢，页面转了三圈，出票成功。', time: 1, energy: 3, mood: 2 },
+    ticket1: { priority: 45, title: '春运抢票', description: '秋季学期进入尾声，寒假将近，宿舍群里开始流传抢票攻略。室友说，你回家的票还没买吧。', trigger: '秋季学期末，宿舍群里开始流传抢票攻略', choices: [
+      { id: 'buy', title: '定好闹钟抢票', description: '准点开抢，页面转了三圈。回家和开学返校的车次都安排好了。', time: 1, energy: 3, mood: 2 },
       { id: 'later', title: '寒假再说', description: '把群消息设成免打扰。' }
     ] },
-    ticket2: { priority: 46, title: '回家的车', description: '车站人山人海。你的车次开始检票，广播里一遍遍重复着注意事项。', trigger: '广播里一遍遍重复着注意事项', choices: [
-      { id: 'board', title: '上车回家', description: '火车开动，窗外的城市慢慢退后。', time: 1, energy: 5, mood: 6 },
-      { id: 'later', title: '改签留校', description: '退了票。这个假期，先不回了。' }
+    ticket2: { priority: 46, title: '返校的车', description: '寒假结束，该回北京上课了。你在家乡的车站等候返校列车，行李里装着家人准备的特产。', trigger: '春季开学，确认上一学期约好的返校行程', choices: [
+      { id: 'board', title: '上车返校', description: '火车开动，家乡慢慢退后，北京和新的学期就在前面。', time: 1, energy: 5, mood: 6 },
+      { id: 'later', title: '另作返校安排', description: '原定车次不合适，你改签换乘，返校行程另外安排。' }
     ] },
     ticket3: { priority: 47, title: '家乡特产', description: '假期结束返校，行李箱里塞满了家里塞给你的东西。你拎了一袋特产，分给宿舍。', trigger: '行李箱里塞满了家里塞给你的东西', choices: [
       { id: 'share', title: '分给室友', description: '特产摆了一桌，大家边吃边聊起各自的家乡。', time: 1, energy: 3, social: 6, mood: 6, experience: 'trip' },
@@ -204,7 +204,41 @@
   };
   const ENDINGS = { graduationAverage: 60, passedTerms: 6, furtherStudyAverage: 80, furtherStudyPreparation: 60, jobPreparation: 60 };
   const RANDOM_POOL = ['campusDiscussion', 'cat', 'canteen', 'card', 'wall', 'seat', 'snow', 'parcel', 'night', 'injury', 'flu', 'insomnia', 'lecture', 'drama', 'alumniStory', 'frontDesk'];
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL };
+  // Elapsed time is an estimate of semester progress, not a week/day calendar.
+  const CAMPUS_SCHEDULE = {
+    military1: { terms: [1], minActions: 2, maxElapsed: 4 },
+    military2: { terms: [1], maxElapsed: 7, after: ['military1', 'join', 0], actionGap: 1 },
+    singer1: { season: 'autumn', minElapsed: 4, maxElapsed: 7, unless: 'singer3' },
+    singer2: { season: 'autumn', after: ['singer1', 'signup', 0], actionGap: 1 },
+    singer3: { season: 'autumn', after: ['singer2', 'advance', 0], actionGap: 1 },
+    ticket1: { season: 'autumn', minElapsed: 9, unless: 'ticket3' },
+    ticket2: { season: 'spring', maxElapsed: 4, after: ['ticket1', 'buy', 1] },
+    ticket3: { season: 'spring', maxElapsed: 6, after: ['ticket2', 'board', 0], actionGap: 1 },
+    contest1: { terms: [5], minElapsed: 4, maxElapsed: 7, unless: 'contest2' },
+    contest2: { terms: [5], after: ['contest1', 'join', 0], actionGap: 1 },
+    transfer: { terms: [3], minElapsed: 4, maxElapsed: 7 },
+    seminar: { terms: [6], minElapsed: 4, maxElapsed: 7 },
+    graduation: { terms: [8], minElapsed: 9 }
+  };
+  const RANDOM_CONTEXTS = {
+    campusDiscussion: { actions: ['selfStudy'] },
+    cat: { actions: ['selfStudy', 'walk'] },
+    canteen: { actions: ['selfStudy', 'walk', 'chat', 'exercise'] },
+    card: { actions: ['selfStudy', 'walk', 'exercise'] },
+    wall: { actions: ['selfStudy', 'chat'] },
+    seat: { actions: ['selfStudy'] },
+    snow: { actions: ['walk'], season: 'autumn', minElapsed: 9 },
+    parcel: { actions: ['chat'], season: 'autumn', minElapsed: 6 },
+    night: { actions: ['chat'] },
+    injury: { actions: ['exercise'] },
+    flu: { actions: ['chat'], season: 'autumn', minElapsed: 4 },
+    insomnia: { actions: ['chat'] },
+    lecture: { actions: ['show'] },
+    drama: { actions: ['show'], season: 'spring', minElapsed: 9 },
+    alumniStory: { actions: ['alumniVolunteer'] },
+    frontDesk: { actions: ['alumniVolunteer'] }
+  };
+  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

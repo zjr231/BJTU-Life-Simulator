@@ -2,7 +2,7 @@
   'use strict';
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
-  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL } = config;
+  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS } = config;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
   const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -90,43 +90,62 @@
     return next;
   }
   function instanceFor(state, id) { return { id, term: state.term, instanceId: (EVENTS[id].chain || 'daily') + ':' + id + ':' + state.term }; }
+  function getTermStage(state) {
+    const elapsed = RULES.time - state.time;
+    return elapsed <= 4 ? '学期初' : elapsed < 9 ? '学期中' : '学期末';
+  }
   function attachEvents(state, triggerAction) {
     if (!['playing', 'eventPending'].includes(state.phase)) return state;
-    let next = { ...state, eventQueue: [...state.eventQueue] };
+    // Old saves can contain several optional campus events queued by one action.
+    // Keep the visible event and required chain/condition events; reschedule the
+    // not-yet-shown optional events on a later action in their valid time window.
+    let next = { ...state, eventQueue: state.eventQueue.filter(item => !own(CAMPUS_SCHEDULE, item.id) && !RANDOM_POOL.includes(item.id)) };
     const enqueue = (id) => {
       const instance = instanceFor(next, id);
       if (!next.eventFlags[instance.instanceId] && next.pendingEvent?.instanceId !== instance.instanceId && !next.eventQueue.some((item) => item.instanceId === instance.instanceId)) next.eventQueue.push(instance);
     };
     const did = (event, choice, termsAgo) => next.eventHistory.some((entry) => entry.event === event && (choice === undefined || entry.choice === choice) && (termsAgo === undefined || entry.term === next.term - termsAgo));
-    const termActions = next.history.filter((entry) => entry.command.operation === 'executeAction' && entry.term === next.term).length;
+    const isAction = own(ACTIONS, triggerAction);
+    const termActions = next.history.filter((entry) => entry.command.operation === 'executeAction' && entry.term === next.term).length + (isAction ? 1 : 0);
+    const elapsed = RULES.time - next.time;
+    const season = next.term % 2 === 1 ? 'autumn' : 'spring';
+    const inWindow = rule => (!rule.terms || rule.terms.includes(next.term)) && (!rule.season || rule.season === season)
+      && elapsed >= (rule.minElapsed || 0) && elapsed <= (rule.maxElapsed ?? RULES.time);
+    const actionsAfter = eventId => {
+      let count = isAction ? 1 : 0;
+      for (let index = next.history.length - 1; index >= 0; index--) {
+        const entry = next.history[index];
+        if (entry.term !== next.term) continue;
+        if (entry.command.operation === 'submitEventChoice' && entry.event === eventId) return count;
+        if (entry.command.operation === 'executeAction') count++;
+      }
+      return 0;
+    };
     if (next.mood < RULES.lowMood) enqueue('roommateCare');
     if (triggerAction === 'exercise' && next.term % 2 === 0 && next.fitness >= RULES.fitnessThreshold) enqueue('fitnessTest');
     for (const [id, chain] of Object.entries(next.chains)) {
       if (triggerAction === 'apply' + id[0].toUpperCase() + id.slice(1)) enqueue(id + 'Offer');
       if (chain.status === 'active' && chain.progress === 2 && next.term >= chain.reviewAfter && (id === 'internship' || next.term > chain.startedTerm)) enqueue(id + 'Review');
     }
-    if (next.term === 1 && termActions >= 1) {
-      enqueue('military1');
-      if (did('military1', 'join', 0)) enqueue('military2');
-    }
-    if ([1, 3, 5, 7].includes(next.term) && termActions >= 1 && !did('singer3')) enqueue('singer1');
-    if (did('singer1', 'signup', 0)) enqueue('singer2');
-    if (did('singer2', 'advance', 0)) enqueue('singer3');
-    if ([1, 3, 5].includes(next.term) && termActions >= 1 && !did('ticket3')) enqueue('ticket1');
-    if ([2, 4, 6].includes(next.term) && did('ticket1', 'buy', 1)) enqueue('ticket2');
-    if ([3, 5, 7].includes(next.term) && did('ticket2', undefined, 1)) enqueue('ticket3');
-    if (next.term === 5 && termActions >= 1 && !did('contest2')) enqueue('contest1');
-    if (did('contest1', 'join', 0)) enqueue('contest2');
-    if (next.term === 3 && termActions >= 1) enqueue('transfer');
-    if (next.term === 6 && termActions >= 1) enqueue('seminar');
-    if (next.term === 8 && termActions >= 1) enqueue('graduation');
     if (next.term >= 2 && next.courses.length && next.courses.at(-1).term === next.term - 1 && !next.courses.at(-1).passed) enqueue('retake');
+    // Choosing an event option never starts another optional campus event.
+    // Required low-mood/fitness and player-requested project/club/internship
+    // events retain their existing queue and priority behaviour.
+    if ((isAction || triggerAction === 'newTerm') && !next.pendingEvent && !next.eventQueue.length) {
+      const eligible = Object.keys(CAMPUS_SCHEDULE).filter(id => {
+        const rule = CAMPUS_SCHEDULE[id];
+        return inWindow(rule) && (isAction || id === 'ticket2') && termActions >= (rule.minActions || 0)
+          && !did(id, undefined, 0) && (!rule.unless || !did(rule.unless))
+          && (!rule.after || did(...rule.after)) && (!rule.actionGap || actionsAfter(rule.after[0]) >= rule.actionGap);
+      }).sort((a, b) => EVENTS[a].priority - EVENTS[b].priority);
+      if (eligible.length) enqueue(eligible[0]);
+    }
     const rollKey = 'randomCampusRoll:' + next.term;
-    if (triggerAction === 'selfStudy' && !next.eventFlags[rollKey]) {
+    const pool = isAction ? RANDOM_POOL.filter(id => RANDOM_CONTEXTS[id].actions.includes(triggerAction) && inWindow(RANDOM_CONTEXTS[id])) : [];
+    if (pool.length && !next.pendingEvent && !next.eventQueue.length && !next.eventFlags[rollKey]) {
       const rolled = random.draw(next.rng);
       next = { ...next, rng: rolled.rng, eventFlags: { ...next.eventFlags, [rollKey]: true } };
       if (rolled.number < 0.35) {
-        const pool = RANDOM_POOL.filter((id) => !EVENTS[id].season || (EVENTS[id].season === 'autumn' && next.term % 2 === 1));
         enqueue(pool[Math.min(pool.length - 1, Math.floor((rolled.number / 0.35) * pool.length))]);
       }
     }
@@ -276,7 +295,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, CHAIN_NAMES, createGame, validateNickname, getAction, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, endTerm, continueGame, evaluateEndings, chooseEnding, validateState, stateBrief, replay };
+  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, CHAIN_NAMES, createGame, validateNickname, getAction, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, endTerm, continueGame, evaluateEndings, chooseEnding, validateState, stateBrief, replay, getTermStage };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

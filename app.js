@@ -101,8 +101,8 @@ const EVENT_CHOICE_FLAVOR = {
   'singer3:later': '你在后台把决赛听完了。明年，明年一定上。',
   'ticket1:buy': '出票成功四个字弹出来。你把截图发进家庭群，秒回：几号到家。',
   'ticket1:later': '群消息设了免打扰。票的事，再等等。',
-  'ticket2:board': '火车开动，窗外的站台慢慢后退。你把座位调低，睡了一路。',
-  'ticket2:later': '退票手续费扣了。你留校，宿舍一下子安静下来。',
+  'ticket2:board': '火车开向北京，家乡的站台慢慢后退。行李箱里的特产，回宿舍就能分给室友。',
+  'ticket2:later': '原定车次没有坐成。你改签换乘，重新安排返校行程。',
   'ticket3:share': '特产一抢而空。老家的味道在宿舍转了一圈，有人说：这我妈也做过。',
   'ticket3:later': '你留着自己吃，慢慢吃。味道是家里的。',
   'contest1:join': '队名定了，群聊建好，第一版方案写到凌晨。',
@@ -158,7 +158,7 @@ function chainLabel(chain) {
 function renderState() {
   if (!state) return;
   $('#playerLabel').textContent = state.nickname + ' · ' + state.background.major;
-  $('#termLabel').textContent = game.TERM_NAMES[state.term - 1] + (state.phase === 'finished' ? ' · 已结束' : ' · 第 ' + state.term + ' 学期');
+  $('#termLabel').textContent = game.TERM_NAMES[state.term - 1] + (state.phase === 'finished' ? ' · 已结束' : ' · ' + game.getTermStage(state));
   $('#timeLabel').textContent = '时间 ' + state.time + ' / 12';
   $('#energyLabel').textContent = '精力 ' + state.energy + ' / 100';
   $('#mapStats').innerHTML = statsMarkup();

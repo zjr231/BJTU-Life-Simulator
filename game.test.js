@@ -216,7 +216,8 @@ test('心情严格低于 30 才触发，事件阻止其他行动与结算', () =
   assert.equal(result.state.time, 9);
   assert.equal(result.state.mood, 44);
   assert.equal(result.state.social, 23);
-  assert.equal(result.state.pendingEvent.id, 'military1');
+  assert.equal(result.state.pendingEvent, null);
+  assert.deepEqual(result.state.eventQueue, []);
   assert.deepEqual(pending, before);
   assert.equal(game.submitEventChoice(result.state, 'talk').ok, false);
 });
@@ -232,7 +233,7 @@ test('事件选项资源不足不扣费，零时间有免费选项可继续结�
   const declined = game.submitEventChoice(pending, 'later');
   assert.equal(declined.ok, true);
   assert.equal(declined.state.mood, 29);
-  assert.equal(declined.state.pendingEvent.id, 'military1');
+  assert.equal(declined.state.pendingEvent, null);
   let cleared = declined.state;
   while (cleared.pendingEvent) cleared = game.submitEventChoice(cleared, 'later').state;
   const next = game.continueGame(game.endTerm(cleared).state).state;
@@ -248,7 +249,8 @@ test('同一低心情事件每学期至多一次，变化与历史没有重复�
   const action = game.executeAction(resolved, 'study');
   assert.equal(action.ok, true);
   assert.equal(action.state.mood, 26);
-  assert.equal(action.state.pendingEvent, null);
+  assert.equal(action.state.pendingEvent.id, 'military1');
+  assert.deepEqual(action.state.eventQueue, []);
   assert.equal(action.state.eventHistory.filter((entry) => entry.event === 'roommateCare').length, 1);
   assert.equal(action.state.history.filter((entry) => entry.command.operation === 'executeAction').length, 2);
 });

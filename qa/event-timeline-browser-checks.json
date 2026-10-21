@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-21",
+  "appVersion": "0.3.1",
+  "url": "http://127.0.0.1:18766/?debug=1",
+  "seed": "timeline-browser",
+  "checks": [
+    {
+      "scenario": "第一次课程学习",
+      "result": "无事件，时间10"
+    },
+    {
+      "scenario": "第二次课程学习",
+      "result": "只有军训开训；选择参加后弹窗关闭，无歌手或订票连弹，时间7"
+    },
+    {
+      "scenario": "下一次休息",
+      "result": "军训汇演；选择混在队伍后面后无新事件"
+    },
+    {
+      "scenario": "再休息",
+      "result": "歌手报名；选择围观后关闭"
+    },
+    {
+      "scenario": "已用时间8",
+      "result": "休息后仍无订票"
+    },
+    {
+      "scenario": "已用时间9",
+      "result": "出现春运抢票；购票后地图显示大一上·学期末、时间2"
+    },
+    {
+      "scenario": "结算进入春季",
+      "result": "返校的车，文案与选项为上车返校"
+    },
+    {
+      "scenario": "确认返校",
+      "result": "弹窗关闭；再课程学习后才触发家乡特产"
+    },
+    {
+      "scenario": "事件存档刷新读取",
+      "result": "恢复同一家乡特产事件；分享后成长记录只有一条大一下返乡分享经历"
+    },
+    {
+      "scenario": "390x844",
+      "result": "无横向溢出；大一下·学期初，时间8"
+    },
+    {
+      "scenario": "页面错误日志",
+      "result": []
+    }
+  ],
+  "screenshots": [
+    "event-timeline-after-choice.png",
+    "event-timeline-autumn-end.png",
+    "event-timeline-spring-return.png",
+    "event-timeline-mobile-stage.png"
+  ]
+}
