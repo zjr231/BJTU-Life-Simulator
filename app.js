@@ -12,7 +12,9 @@ const dialog = $('#termDialog');
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
 try { storage = window.localStorage; } catch (_) { /* Play remains available without storage. */ }
-const saves = CampusSave.createSaveService(storage);
+const saves = CampusSave.createSlotService(storage);
+let activeSaveSlot = null;
+let saveTarget = null;
 let state = null;
 let activePlace = null;
 let lastHotspot = null;
@@ -165,8 +167,8 @@ function renderState() {
   $('#placeStats').innerHTML = '<div class="place-resources"><span>时间 <b>' + state.time + ' / 12</b></span><span>精力 <b>' + state.energy + ' / 100</b></span><span>学习进度 <b>' + state.preparation + ' / 100</b></span></div><div class="place-attributes">' + statsMarkup() + '</div>';
   $('#directionBrief').innerHTML = '<div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
   $('#endTermButton').textContent = ({ eventPending: '处理当前事件', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果' })[state.phase] || '结束学期';
-  $('#sessionNote').textContent = savedAt ? (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '还没有存档。学期结算时会自动存一份，也可以现在手动保存。';
-  $('#dialogSave').hidden = dialogMode === 'admission' || dialogMode === 'restart';
+  $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
+  $('#dialogSave').hidden = ['admission', 'restart', 'save', 'load', 'confirmSave'].includes(dialogMode);
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
@@ -230,7 +232,7 @@ function showDialog(mode, title, body, buttons = []) {
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
   $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
-  $('#dialogSave').hidden = !state || ['admission', 'restart'].includes(mode);
+  $('#dialogSave').hidden = !state || ['admission', 'restart', 'save', 'load', 'confirmSave'].includes(mode);
   if (!dialog.open) dialog.showModal();
   (dialog.querySelector('input') || $('#dialogTitle')).focus({ preventScroll: true });
   dialog.scrollTop = 0;
@@ -263,31 +265,67 @@ function runCommand(operation, id, expectedRevision, eventInstanceId) {
   renderState();
   return result;
 }
-function saveCurrent(automatic = false) {
+function saveCurrent(automatic = false, slotId = activeSaveSlot) {
   if (!state) return;
-  const result = saves.save(state);
+  if (slotId === null) {
+    saveNotice = '尚未选择存档栏位，请点击“保存当前进度”选择栏位；当前进度保留在本页。';
+    showToast(saveNotice);
+    return { ok: false, reason: saveNotice };
+  }
+  const result = saves.save(state, slotId);
   if (result.ok) {
+    activeSaveSlot = slotId;
     savedRevision = state.revision;
     savedAt = result.savedAt;
-    saveNotice = result.warning || '进度已保存 · ' + displayTime(savedAt);
+    saveNotice = result.warning || '已保存到栏位 ' + slotId + ' · ' + displayTime(savedAt);
     audio?.play('save');
     renderState();
-    if (!automatic) showToast(result.warning || '进度已保存');
+    if (!automatic) showToast(result.warning || '已保存到栏位 ' + slotId);
   } else {
     saveNotice = result.reason;
     $('#sessionNote').textContent = result.reason;
     showToast((automatic ? '自动保存未完成：' : '') + result.reason);
   }
+  return result;
 }
 function displayTime(value) { return new Date(value).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }); }
 function saveInfo(slot) {
   if (slot.ok) return h(slot.state.nickname) + ' · ' + game.TERM_NAMES[slot.state.term - 1] + ' · ' + h(displayTime(slot.savedAt));
   return h(slot.reason);
 }
+function slotCards(info, mode) {
+  return '<div class="save-slot-list">' + info.slots.map(slot => {
+    const current = activeSaveSlot === slot.id;
+    const description = !slot.ok ? h(slot.reason) : slot.primary.empty ? '空栏位' : saveInfo(slot.primary);
+    const controls = mode === 'save'
+      ? '<button type="button" data-save-slot="' + slot.id + '"' + (!slot.ok ? ' disabled' : '') + '>' + (slot.ok && slot.primary.empty && slot.backup.empty ? '保存到这里' : '选择此栏位') + '</button>'
+      : (!slot.ok ? '' : (slot.primary.ok ? '<button type="button" data-load-slot="' + slot.id + '" data-save-source="primary">读取此栏位</button>' : '') + (slot.backup.ok ? '<button type="button" class="secondary" data-load-slot="' + slot.id + '" data-save-source="backup">恢复上一备份</button>' : ''));
+    return '<article class="save-slot' + (current ? ' is-current' : '') + '"><h3>栏位 ' + slot.id + (current ? '<span>当前使用</span>' : '') + '</h3><p>' + description + '</p>' + (slot.ok && !slot.backup.empty ? '<p class="save-slot-backup">上一备份：' + saveInfo(slot.backup) + '</p>' : '') + (slot.ok && slot.temporary ? '<p class="dialog-note">检测到未完成保存的临时数据，不会自动读取。</p>' : '') + '<div class="save-slot-actions">' + controls + '</div></article>';
+  }).join('') + '</div>';
+}
+function showSave() {
+  if (!state) return;
+  saveTarget = null;
+  const info = saves.inspect();
+  showDialog('save', '选择保存栏位', '<p>选择一个栏位保存当前进度，之后的自动保存也会使用这个栏位。</p>' + slotCards(info, 'save'), [{ id: 'resume', text: '返回游戏', secondary: true }]);
+}
+function selectSaveSlot(slotId) {
+  const info = saves.inspect().slots.find(slot => slot.id === slotId);
+  if (!info?.ok) { showToast(info?.reason || '未知存档栏位'); return; }
+  if (info.primary.empty && info.backup.empty) { finishSave(slotId); return; }
+  saveTarget = slotId;
+  showDialog('confirmSave', '覆盖栏位 ' + slotId + '？', '<p>该栏位已有内容：' + saveInfo(info.primary) + '</p><p>确认后将保存当前进度，原有效主档会成为该栏位的上一备份。之后自动保存使用栏位 ' + slotId + '。</p>', [{ id: 'confirmSave', text: '确认覆盖' }, { id: 'backToSave', text: '重新选择', secondary: true }]);
+}
+function finishSave(slotId) {
+  const result = saveCurrent(false, slotId);
+  if (!result?.ok) return;
+  saveTarget = null;
+  resumePhase();
+  showToast(result.warning || '已保存到栏位 ' + slotId);
+}
 function showAdmission() {
   const info = saves.inspect();
-  const notice = !info.ok ? '<p class="dialog-note">' + h(info.reason) + '</p>' : '<div class="save-description"><p>主存档：' + saveInfo(info.primary) + '</p>' + (info.backup.ok ? '<p>备份：' + saveInfo(info.backup) + '</p>' : '') + (info.temporary ? '<p>检测到上次保存的临时数据；继续游戏仅使用校验通过的主档或备份。</p>' : '') + '</div>';
-  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p><form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="最多 12 个字符" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form>' + notice + '<p class="dialog-note">新局首次保存时会替换主档，原有效主档会成为备份。</p>', [...(info.ok && info.primary.ok ? [{ id: 'loadPrimary', text: '继续主存档', secondary: true }] : []), ...(info.ok && info.backup.ok ? [{ id: 'loadBackup', text: '恢复备份', secondary: true }] : [])]);
+  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p><form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="最多 12 个字符" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form><h3>或选择存档继续</h3>' + slotCards(info, 'load') + '<p class="dialog-note">共有 3 个存档栏位，新局首次保存时可自主选择。旧版存档位于栏位 1。</p>');
 }
 function startGame() {
   const checked = game.validateNickname($('#nicknameInput').value);
@@ -295,6 +333,7 @@ function startGame() {
   const seed = debug ? $('#seedInput').value : (window.crypto?.getRandomValues ? String(window.crypto.getRandomValues(new Uint32Array(1))[0]) : String(Date.now()));
   try { state = game.createGame({ nickname: checked.value, seed }); } catch (error) { $('#admissionError').textContent = error.message; return; }
   savedRevision = -1;
+  activeSaveSlot = null;
   savedAt = '';
   saveNotice = '';
   failures.length = 0;
@@ -308,7 +347,7 @@ function showEnrollment() {
   showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p><p class="dialog-note">背景只影响一项行动加成，不会锁死你的毕业路线。入学后可在「入学背景」里随时查看。</p>', [{ id: 'resume', text: '看看怎么安排' }]);
 }
 function showTutorial() {
-  showDialog('tutorial', '八学期怎么安排', '<ol><li>点击地图上的地点，先看成本和收益，再决定做不做。逛逛、返回都不花钱。</li><li>学习和自学都攒同一个学习进度；期末成绩 = round(40 + 学习进度 × 0.6)，60 分达标。</li><li>每学期 12 点时间。休息能回精力，回不了时间；长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目和社团的成果在之后的学期确认。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>随时可以手动保存，学期结算后自动保存。下次打开页面，从入学页读档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
+  showDialog('tutorial', '八学期怎么安排', '<ol><li>点击地图上的地点，先看成本和收益，再决定做不做。逛逛、返回都不花钱。</li><li>学习和自学都攒同一个学习进度；期末成绩 = round(40 + 学习进度 × 0.6)，60 分达标。</li><li>每学期 12 点时间。休息能回精力，回不了时间；长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目和社团的成果在之后的学期确认。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
 }
 function showBackground() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
@@ -331,7 +370,7 @@ function requestEndTerm() {
   if (!state) return;
   if (state.phase !== 'playing') { resumePhase(); return; }
   const preview = game.previewSettlement(state);
-  showDialog('confirm', '结束' + preview.name + '？', summaryMarkup(preview) + '<p class="dialog-note">这是只读预览。确认后本学期就不能再行动，会自动保存。' + (preview.unusedTime ? '还有 ' + preview.unusedTime + ' 点时间，可以继续安排。' : '') + '</p>', [{ id: 'resume', text: '继续本学期', secondary: true }, { id: 'settle', text: '确认结算' }]);
+  showDialog('confirm', '结束' + preview.name + '？', summaryMarkup(preview) + '<p class="dialog-note">这是只读预览。确认后本学期不能继续行动。' + (activeSaveSlot === null ? '当前尚未选择存档栏位，结算后请手动选择栏位保存。' : '将自动保存到栏位 ' + activeSaveSlot + '。') + (preview.unusedTime ? '还有 ' + preview.unusedTime + ' 点时间，可以继续安排。' : '') + '</p>', [{ id: 'resume', text: '继续本学期', secondary: true }, { id: 'settle', text: '确认结算' }]);
 }
 function showSummary() {
   audio?.play('paper');
@@ -371,16 +410,17 @@ function resumePhase() {
 }
 function showLoad() {
   const info = saves.inspect();
-  showDialog('load', '读取游戏进度', !info.ok ? '<p>' + h(info.reason) + '</p>' : '<p>主存档：' + saveInfo(info.primary) + '</p><p>备份：' + saveInfo(info.backup) + '</p><p class="dialog-note">读取后，当前没保存的进度会被替换。主档坏了可以用备份恢复。</p>', [...(info.ok && info.primary.ok ? [{ id: 'loadPrimary', text: '读取主存档' }] : []), ...(info.ok && info.backup.ok ? [{ id: 'loadBackup', text: '恢复备份', secondary: true }] : []), { id: state ? 'resume' : 'admission', text: '取消', secondary: true }]);
+  showDialog('load', '选择读取栏位', '<p>选择读取后，当前未保存进度将被替换，之后自动保存到所读栏位。</p>' + slotCards(info, 'load'), [{ id: state ? 'resume' : 'admission', text: '取消', secondary: true }]);
 }
-function loadGame(slot) {
-  const result = saves.load(slot);
+function loadGame(slotId, source = 'primary') {
+  const result = saves.load(slotId, source);
   if (!result.ok) { showToast(result.reason); return; }
   closePlace();
   state = result.state;
+  activeSaveSlot = slotId;
   savedRevision = state.revision;
   savedAt = result.savedAt;
-  saveNotice = '已恢复存档 · ' + displayTime(savedAt);
+  saveNotice = '已恢复栏位 ' + slotId + ' · ' + displayTime(savedAt);
   clearTimeout(unlockTimer);
   uiLocked = false;
   failures.length = 0;
@@ -388,7 +428,7 @@ function loadGame(slot) {
   audio?.startBgm();
   renderState();
   resumePhase();
-  showToast(slot === 'backup' ? '备份已恢复，下次保存会更新主档。' : '进度已恢复。');
+  showToast(source === 'backup' ? '已恢复栏位 ' + slotId + ' 的备份；下次保存时更新该栏位主档' : '已读取栏位 ' + slotId);
 }
 function askRestart() {
   showDialog('restart', '重新开始？', '<p>确认后回到入学页，没保存的进度会被清空。已有存档在新局保存前仍可读取。</p>', [{ id: 'resume', text: '保留本局', secondary: true }, { id: 'confirmRestart', text: '确认重新开始' }]);
@@ -417,7 +457,11 @@ $('#actionList').addEventListener('click', (event) => {
 $('#dialogBody').addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
-  if (button.dataset.eventChoice) {
+  if (button.dataset.saveSlot) {
+    if (dialogMode === 'save') selectSaveSlot(Number(button.dataset.saveSlot));
+  } else if (button.dataset.loadSlot) {
+    if (['load', 'admission'].includes(dialogMode)) loadGame(Number(button.dataset.loadSlot), button.dataset.saveSource);
+  } else if (button.dataset.eventChoice) {
     const result = runCommand('submitEventChoice', button.dataset.eventChoice, button.dataset.revision, button.dataset.instance);
     if (!result) return;
     audio?.play('success');
@@ -434,7 +478,8 @@ $('#dialogButtons').addEventListener('click', (event) => {
   const id = button.dataset.dialogAction;
   if (id === 'resume') { if (dialogMode === 'finished') dialog.close(); else if (dialogMode === 'enrollment') showTutorial(); else resumePhase(); }
   else if (id === 'admission') showAdmission();
-  else if (id === 'loadPrimary' || id === 'loadBackup') loadGame(id === 'loadPrimary' ? 'primary' : 'backup');
+  else if (id === 'confirmSave' && dialogMode === 'confirmSave' && saveTarget !== null) finishSave(saveTarget);
+  else if (id === 'backToSave') showSave();
   else if (id === 'settle' && dialogMode === 'confirm') { if (runCommand('endTerm', null, button.dataset.revision)) { saveCurrent(true); showSummary(); } }
   else if (id === 'next' && dialogMode === 'summary') { if (runCommand('continueGame', null, button.dataset.revision)) resumePhase(); }
   else if (id === 'restart') askRestart();
@@ -442,6 +487,8 @@ $('#dialogButtons').addEventListener('click', (event) => {
     closePlace();
     audio?.stopBgm();
     state = null;
+    activeSaveSlot = null;
+    saveTarget = null;
     savedRevision = -1;
     savedAt = '';
     clearTimeout(unlockTimer);
@@ -452,8 +499,8 @@ $('#dialogButtons').addEventListener('click', (event) => {
 hotspots.forEach((hotspot) => hotspot.addEventListener('click', () => openPlace(hotspot.dataset.place, hotspot)));
 $('#backButton').addEventListener('click', closePlace);
 $('#endTermButton').addEventListener('click', requestEndTerm);
-$('#saveButton').addEventListener('click', () => saveCurrent());
-$('#dialogSave').addEventListener('click', () => saveCurrent());
+$('#saveButton').addEventListener('click', showSave);
+$('#dialogSave').addEventListener('click', showSave);
 $('#loadButton').addEventListener('click', showLoad);
 $('#helpButton').addEventListener('click', () => { if (state) showTutorial(); });
 $('#backgroundButton').addEventListener('click', () => { if (state) showBackground(); });
@@ -475,9 +522,9 @@ document.addEventListener('click', (event) => {
 }, { capture: true });
 $('#debugPanel').hidden = !debug;
 window.addEventListener('storage', (event) => {
-  if (event.key === CampusSave.KEYS.primary) {
-    $('#sessionNote').textContent = '另一个标签页更新了存档。当前游戏仍可继续，保存前请读取最新存档。';
-    showToast('检测到其他标签页保存了进度');
+  if (activeSaveSlot !== null && (event.key === null || event.key === CampusSave.getSlotKeys(activeSaveSlot).primary)) {
+    $('#sessionNote').textContent = '另一个标签页更新了栏位 ' + activeSaveSlot + '。当前游戏仍可继续，保存前请读取最新存档。';
+    showToast('当前存档栏位发生变化，请先读取最新存档');
   }
 });
 dialog.addEventListener('cancel', (event) => {

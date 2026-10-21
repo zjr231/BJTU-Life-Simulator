@@ -285,6 +285,17 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 #dialogBody li { margin-bottom: 6px; }
 .background-bonus { color: #286646 !important; }
 .save-description { border-top: 1px solid var(--line); }
+.save-slot-list { display: grid; gap: 12px; margin: 16px 0; }
+.save-slot { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 6px; background: #fffdf6; overflow-wrap: anywhere; }
+.save-slot.is-current { border-color: #597d58; }
+.save-slot h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+.save-slot h3 span { padding: 3px 7px; border-radius: 4px; background: #e5eddf; color: #296248; font-size: 11px; font-weight: 400; }
+.save-slot p { margin: 6px 0; }
+.save-slot-backup { font-size: 12px; color: #626a62; }
+.save-slot-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.save-slot-actions button { min-height: 40px; padding: 10px 14px; border: 1px solid var(--deep); border-radius: 4px; background: var(--deep); color: var(--paper); font: inherit; font-size: 13px; cursor: pointer; }
+.save-slot-actions button.secondary { background: transparent; color: var(--deep); }
+.save-slot-actions button:disabled { border-color: #d6d9d1; background: #d6d9d1; color: #626a62; cursor: not-allowed; }
 #debugPanel { padding-top: 12px; border-top: 1px solid var(--line); font-size: 10px; }
 .toast { max-width: calc(100vw - 32px); z-index: 50; }
 @media (min-width: 1050px) { .map-screen { height: auto; min-height: max(100svh, 820px); grid-template-rows: auto minmax(640px, 1fr) auto; } }
