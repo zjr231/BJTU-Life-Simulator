@@ -275,6 +275,13 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 #admissionForm label { font-size: 13px; font-weight: 700; }
 #admissionForm input { width: 100%; min-width: 0; padding: 12px; border: 1px solid #aabb9e; border-radius: 4px; font: inherit; font-size: 16px; color: var(--ink); background: #fffdf6; }
 #admissionForm button, .ending-card button { border: 0; border-radius: 4px; padding: 12px 16px; background: var(--deep); color: var(--paper); font: inherit; font-size: 13px; cursor: pointer; }
+#loginForm { display: grid; gap: 10px; margin: 20px 0; }
+#loginForm label { font-size: 13px; font-weight: 700; }
+#loginForm input { width: 100%; min-width: 0; padding: 12px; border: 1px solid #aabb9e; border-radius: 4px; font: inherit; font-size: 16px; color: var(--ink); background: #fffdf6; }
+#loginForm button[type="submit"] { border: 0; border-radius: 4px; padding: 12px 16px; background: var(--deep); color: var(--paper); font: inherit; font-size: 13px; cursor: pointer; }
+.login-row { display: flex; gap: 8px; align-items: stretch; }
+.login-row input { flex: 1; }
+#smsSendButton { flex: 0 0 auto; white-space: nowrap; font-size: 12px; padding: 8px 12px; }
 .ending-card button:disabled { background: #d6d9d1; color: #626a62; cursor: not-allowed; }
 .ending-list { display: grid; gap: 14px; }
 .ending-card { padding: 16px; border: 1px solid var(--line); border-radius: 6px; }
@@ -304,7 +311,7 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
   .term-dialog { max-height: 90vh; max-height: min(90svh, calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px)); padding: 18px; }
   .dialog-buttons button { flex: 1 1 140px; }
   .course-table { font-size: 11px; }
-  .action-card button, .event-choice button, .dialog-buttons button, .utility-button, .back-button, .end-term-button, .history-button, #admissionForm button, .ending-card button { min-height: 44px; }
+  .action-card button, .event-choice button, .dialog-buttons button, .utility-button, .back-button, .end-term-button, .history-button, #admissionForm button, #loginForm button[type="submit"], .ending-card button { min-height: 44px; }
 }
 
 /* Fallback notice for engines without <dialog> support. */
