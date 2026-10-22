@@ -13,6 +13,12 @@ const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
 try { storage = window.localStorage; } catch (_) { /* Play remains available without storage. */ }
 const saves = CampusSave.createSlotService(storage);
+const sms = typeof CampusSms !== 'undefined' ? CampusSms : null;
+const LOGIN_KEY = 'bjtu-life:login';
+let loginSession = null;
+let loginSkipped = false;
+let smsCountdown = null;
+try { loginSession = JSON.parse(storage?.getItem(LOGIN_KEY)) || null; } catch (_) {}
 let activeSaveSlot = null;
 let saveTarget = null;
 let state = null;
@@ -168,7 +174,7 @@ function renderState() {
   $('#directionBrief').innerHTML = '<div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
   $('#endTermButton').textContent = ({ eventPending: '处理当前事件', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果' })[state.phase] || '结束学期';
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
-  $('#dialogSave').hidden = ['admission', 'restart', 'save', 'load', 'confirmSave'].includes(dialogMode);
+  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave'].includes(dialogMode);
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
@@ -226,13 +232,14 @@ function closePlace() {
 }
 function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
+  stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', admission: '入学', enrollment: '入学', endingChoice: '毕业方向', finished: '四年手账' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', admission: '入学', enrollment: '入学', login: '登录', endingChoice: '毕业方向', finished: '四年手账' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
   $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
-  $('#dialogSave').hidden = !state || ['admission', 'restart', 'save', 'load', 'confirmSave'].includes(mode);
+  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave'].includes(mode);
   if (!dialog.open) dialog.showModal();
   (dialog.querySelector('input') || $('#dialogTitle')).focus({ preventScroll: true });
   dialog.scrollTop = 0;
@@ -324,12 +331,67 @@ function finishSave(slotId) {
   showToast(result.warning || '已保存到栏位 ' + slotId);
 }
 function showAdmission() {
+  if (!loginSession && !loginSkipped) {
+    if (!sms) loginSkipped = true;
+    else { showLogin(); return; }
+  }
   const info = saves.inspect();
-  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p><form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="最多 12 个字符" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form><h3>或选择存档继续</h3>' + slotCards(info, 'load') + '<p class="dialog-note">共有 3 个存档栏位，新局首次保存时可自主选择。旧版存档位于栏位 1。</p>');
+  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p>' + (loginSession ? '<p class="dialog-note">已登录：<b>' + h(loginSession.phone) + '</b>' + (loginSession.nickname ? ' · ' + h(loginSession.nickname) : '') + '</p>' : '') + '<form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="最多 12 个字符" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form><h3>或选择存档继续</h3>' + slotCards(info, 'load') + '<p class="dialog-note">共有 3 个存档栏位，新局首次保存时可自主选择。旧版存档位于栏位 1。</p>', loginSession ? [{ id: 'switchAccount', text: '切换账号', secondary: true }] : []);
+}
+function showLogin() {
+  stopSmsCountdown();
+  showDialog('login', '手机验证码登录', '<p>输入手机号获取验证码，登录后进入入学流程。</p><form id="loginForm"><label for="phoneInput">手机号</label><input id="phoneInput" name="phone" inputmode="numeric" maxlength="11" placeholder="11 位手机号" autocomplete="tel" required><label for="codeInput">验证码</label><div class="login-row"><input id="codeInput" name="code" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" required><button type="button" class="utility-button" id="smsSendButton">获取验证码</button></div><p id="loginError" class="action-reason" role="alert"></p><button type="submit">登录</button></form><p class="dialog-note">尚未接入短信通道，当前为演示模式：验证码会直接显示在提示中。</p>', [{ id: 'loginSkip', text: '暂不登录，直接入学', secondary: true }]);
+}
+async function requestSmsCode() {
+  const phone = $('#phoneInput').value.trim();
+  const checked = sms.validatePhone(phone);
+  if (!checked.ok) { $('#loginError').textContent = checked.reason; audio?.play('deny'); return; }
+  const result = await sms.send(phone);
+  if (!result.ok) { $('#loginError').textContent = result.reason; audio?.play('deny'); return; }
+  $('#loginError').textContent = '';
+  showToast(result.demoCode ? '演示模式：验证码 ' + result.demoCode + '（接入短信通道后发送到手机）' : '验证码已发送，请注意查收');
+  audio?.play('info');
+  startSmsCountdown(result.resendAfter || 60);
+}
+async function doLogin() {
+  const phone = $('#phoneInput').value.trim();
+  const code = $('#codeInput').value.trim();
+  const checked = sms.validatePhone(phone);
+  if (!checked.ok) { $('#loginError').textContent = checked.reason; return; }
+  const result = sms.verify(phone, code);
+  if (!result.ok) { $('#loginError').textContent = result.reason; audio?.play('deny'); return; }
+  loginSession = { phone, nickname: '', at: Date.now() };
+  try { storage?.setItem(LOGIN_KEY, JSON.stringify(loginSession)); } catch (_) {}
+  stopSmsCountdown();
+  audio?.play('success');
+  showToast('登录成功');
+  showAdmission();
+}
+function startSmsCountdown(seconds) {
+  stopSmsCountdown();
+  const button = $('#smsSendButton');
+  if (!button || typeof setInterval !== 'function') return;
+  let remaining = seconds;
+  button.disabled = true;
+  button.textContent = '重新获取(' + remaining + 's)';
+  smsCountdown = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) stopSmsCountdown();
+    else button.textContent = '重新获取(' + remaining + 's)';
+  }, 1000);
+}
+function stopSmsCountdown() {
+  if (smsCountdown !== null) {
+    if (typeof clearInterval === 'function') clearInterval(smsCountdown);
+    smsCountdown = null;
+  }
+  const button = $('#smsSendButton');
+  if (button) { button.disabled = false; button.textContent = '获取验证码'; }
 }
 function startGame() {
   const checked = game.validateNickname($('#nicknameInput').value);
   if (!checked.ok) { $('#admissionError').textContent = checked.reason; return; }
+  if (loginSession) { loginSession.nickname = checked.value; try { storage?.setItem(LOGIN_KEY, JSON.stringify(loginSession)); } catch (_) {} }
   const seed = debug ? $('#seedInput').value : (window.crypto?.getRandomValues ? String(window.crypto.getRandomValues(new Uint32Array(1))[0]) : String(Date.now()));
   try { state = game.createGame({ nickname: checked.value, seed }); } catch (error) { $('#admissionError').textContent = error.message; return; }
   savedRevision = -1;
@@ -448,6 +510,7 @@ function exportLog() {
 }
 $('#dialogBody').addEventListener('submit', (event) => {
   if (event.target.id === 'admissionForm') { event.preventDefault(); startGame(); }
+  else if (event.target.id === 'loginForm') { event.preventDefault(); doLogin(); }
 });
 $('#actionList').addEventListener('click', (event) => {
   const button = event.target.closest('[data-action]');
@@ -461,6 +524,7 @@ $('#actionList').addEventListener('click', (event) => {
 $('#dialogBody').addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
+  if (button.id === 'smsSendButton') { requestSmsCode(); return; }
   if (button.dataset.saveSlot) {
     if (dialogMode === 'save') selectSaveSlot(Number(button.dataset.saveSlot));
   } else if (button.dataset.loadSlot) {
@@ -482,6 +546,8 @@ $('#dialogButtons').addEventListener('click', (event) => {
   const id = button.dataset.dialogAction;
   if (id === 'resume') { if (dialogMode === 'finished') dialog.close(); else if (dialogMode === 'enrollment') showTutorial(); else resumePhase(); }
   else if (id === 'admission') showAdmission();
+  else if (id === 'switchAccount') { loginSession = null; try { storage?.removeItem(LOGIN_KEY); } catch (_) {} showLogin(); }
+  else if (id === 'loginSkip') { loginSkipped = true; showAdmission(); }
   else if (id === 'confirmSave' && dialogMode === 'confirmSave' && saveTarget !== null) finishSave(saveTarget);
   else if (id === 'backToSave') showSave();
   else if (id === 'settle' && dialogMode === 'confirm') { if (runCommand('endTerm', null, button.dataset.revision)) { saveCurrent(true); showSummary(); } }
@@ -532,7 +598,7 @@ window.addEventListener('storage', (event) => {
   }
 });
 dialog.addEventListener('cancel', (event) => {
-  if (!state || ['eventPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'restart', 'enrollment'].includes(dialogMode)) event.preventDefault();
+  if (!state || ['eventPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment'].includes(dialogMode)) event.preventDefault();
 });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && activePlace && !dialog.open) closePlace();
