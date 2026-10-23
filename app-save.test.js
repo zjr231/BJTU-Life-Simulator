@@ -8,12 +8,13 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const game = require('./game.js');
 const saves = require('./save.js');
+const sms = require('./sms.js');
 
 function memory() {
   const data = new Map();
   return { data, getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
 }
-function app(storage = memory()) {
+function app(storage = memory(), withSms = false) {
   const elements = new Map();
   function element(selector) {
     if (!elements.has(selector)) {
@@ -35,12 +36,14 @@ function app(storage = memory()) {
   let sequence = 0;
   const window = element('window');
   window.localStorage = storage;
-  const context = vm.createContext({ CampusGame: game, CampusSave: saves, window,
+  const globals = { CampusGame: game, CampusSave: saves, window,
     HTMLDialogElement: class { showModal() {} },
     document: { querySelector: element, querySelectorAll: () => [], body: { style: {} }, addEventListener() {} },
     location: { search: '' }, URLSearchParams, Uint32Array,
     setTimeout(callback) { timers.set(++sequence, callback); return sequence; },
-    clearTimeout(id) { timers.delete(id); } });
+    clearTimeout(id) { timers.delete(id); } };
+  if (withSms) globals.CampusSms = sms;
+  const context = vm.createContext(globals);
   vm.runInContext(fs.readFileSync(require.resolve('./app.js'), 'utf8'), context);
   const evaluate = expression => vm.runInContext(expression, context);
   function click(selector, dataset = {}) {
@@ -57,6 +60,42 @@ function app(storage = memory()) {
     },
     flush() { const jobs = [...timers.values()]; timers.clear(); jobs.forEach(callback => callback()); } };
 }
+
+test('暂不登录偏好刷新后保留，可返回登录，登录和切换账号清除跳过偏好', async () => {
+  const storage = memory();
+  const first = app(storage, true);
+  assert.equal(first.evaluate('dialogMode'), 'login');
+  first.click('#dialogButtons', { dialogAction: 'loginSkip' });
+  assert.equal(first.evaluate('dialogMode'), 'admission');
+  assert.equal(storage.getItem('bjtu-life:login:skipped'), '1');
+
+  const reloaded = app(storage, true);
+  assert.equal(reloaded.evaluate('loginSkipped'), true);
+  assert.equal(reloaded.evaluate('dialogMode'), 'admission');
+  assert.match(reloaded.element('#dialogButtons').innerHTML, /data-dialog-action="loginPrompt"/);
+  reloaded.click('#dialogButtons', { dialogAction: 'loginPrompt' });
+  assert.equal(reloaded.evaluate('dialogMode'), 'login');
+  assert.equal(storage.getItem('bjtu-life:login:skipped'), null);
+  assert.equal(app(storage, true).evaluate('dialogMode'), 'login');
+
+  reloaded.click('#dialogButtons', { dialogAction: 'loginSkip' });
+  const sent = await sms.send('13800138000');
+  assert.equal(sent.ok, true);
+  reloaded.element('#phoneInput').value = '13800138000';
+  reloaded.element('#codeInput').value = sent.demoCode;
+  await reloaded.evaluate('doLogin()');
+  assert.equal(reloaded.evaluate('dialogMode'), 'admission');
+  assert.equal(reloaded.evaluate('loginSkipped'), false);
+  assert.equal(storage.getItem('bjtu-life:login:skipped'), null);
+
+  const account = app(storage, true);
+  storage.setItem('bjtu-life:login:skipped', '1');
+  account.click('#dialogButtons', { dialogAction: 'switchAccount' });
+  assert.equal(account.evaluate('dialogMode'), 'login');
+  assert.equal(storage.getItem('bjtu-life:login:skipped'), null);
+  assert.equal(storage.getItem('bjtu-life:login'), null);
+  assert.equal(app(storage, true).evaluate('dialogMode'), 'login');
+});
 
 test('保存按钮打开三个栏位，选择空栏位后保存并标记为当前栏位', () => {
   const ui = app();

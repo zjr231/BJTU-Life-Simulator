@@ -15,10 +15,12 @@ try { storage = window.localStorage; } catch (_) { /* Play remains available wit
 const saves = CampusSave.createSlotService(storage);
 const sms = typeof CampusSms !== 'undefined' ? CampusSms : null;
 const LOGIN_KEY = 'bjtu-life:login';
+const LOGIN_SKIP_KEY = 'bjtu-life:login:skipped';
 let loginSession = null;
 let loginSkipped = false;
 let smsCountdown = null;
 try { loginSession = JSON.parse(storage?.getItem(LOGIN_KEY)) || null; } catch (_) {}
+try { loginSkipped = storage?.getItem(LOGIN_SKIP_KEY) === '1'; } catch (_) {}
 let activeSaveSlot = null;
 let saveTarget = null;
 let state = null;
@@ -336,7 +338,10 @@ function showAdmission() {
     else { showLogin(); return; }
   }
   const info = saves.inspect();
-  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p>' + (loginSession ? '<p class="dialog-note">已登录：<b>' + h(loginSession.phone) + '</b>' + (loginSession.nickname ? ' · ' + h(loginSession.nickname) : '') + '</p>' : '') + '<form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="最多 12 个字符" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form><h3>或选择存档继续</h3>' + slotCards(info, 'load') + '<p class="dialog-note">共有 3 个存档栏位，新局首次保存时可自主选择。旧版存档位于栏位 1。</p>', loginSession ? [{ id: 'switchAccount', text: '切换账号', secondary: true }] : []);
+  const accountButtons = sms
+    ? [{ id: loginSession ? 'switchAccount' : 'loginPrompt', text: loginSession ? '切换账号' : '手机登录', secondary: true }]
+    : [];
+  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p>' + (loginSession ? '<p class="dialog-note">已登录：<b>' + h(loginSession.phone) + '</b>' + (loginSession.nickname ? ' · ' + h(loginSession.nickname) : '') + '</p>' : '') + '<form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="最多 12 个字符" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form><h3>或选择存档继续</h3>' + slotCards(info, 'load') + '<p class="dialog-note">共有 3 个存档栏位，新局首次保存时可自主选择。旧版存档位于栏位 1。</p>', accountButtons);
 }
 function showLogin() {
   stopSmsCountdown();
@@ -361,7 +366,11 @@ async function doLogin() {
   const result = sms.verify(phone, code);
   if (!result.ok) { $('#loginError').textContent = result.reason; audio?.play('deny'); return; }
   loginSession = { phone, nickname: '', at: Date.now() };
-  try { storage?.setItem(LOGIN_KEY, JSON.stringify(loginSession)); } catch (_) {}
+  loginSkipped = false;
+  try {
+    storage?.setItem(LOGIN_KEY, JSON.stringify(loginSession));
+    storage?.removeItem(LOGIN_SKIP_KEY);
+  } catch (_) {}
   stopSmsCountdown();
   audio?.play('success');
   showToast('登录成功');
@@ -546,8 +555,18 @@ $('#dialogButtons').addEventListener('click', (event) => {
   const id = button.dataset.dialogAction;
   if (id === 'resume') { if (dialogMode === 'finished') dialog.close(); else if (dialogMode === 'enrollment') showTutorial(); else resumePhase(); }
   else if (id === 'admission') showAdmission();
-  else if (id === 'switchAccount') { loginSession = null; try { storage?.removeItem(LOGIN_KEY); } catch (_) {} showLogin(); }
-  else if (id === 'loginSkip') { loginSkipped = true; showAdmission(); }
+  else if (id === 'loginPrompt') { loginSkipped = false; try { storage?.removeItem(LOGIN_SKIP_KEY); } catch (_) {} showLogin(); }
+  else if (id === 'switchAccount') {
+    loginSession = null;
+    loginSkipped = false;
+    try { storage?.removeItem(LOGIN_KEY); storage?.removeItem(LOGIN_SKIP_KEY); } catch (_) {}
+    showLogin();
+  }
+  else if (id === 'loginSkip') {
+    loginSkipped = true;
+    try { storage?.setItem(LOGIN_SKIP_KEY, '1'); } catch (_) {}
+    showAdmission();
+  }
   else if (id === 'confirmSave' && dialogMode === 'confirmSave' && saveTarget !== null) finishSave(saveTarget);
   else if (id === 'backToSave') showSave();
   else if (id === 'settle' && dialogMode === 'confirm') { if (runCommand('endTerm', null, button.dataset.revision)) { saveCurrent(true); showSummary(); } }
