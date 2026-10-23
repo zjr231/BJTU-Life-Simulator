@@ -43,7 +43,7 @@ function nextTerm(state, choices = {}) {
 test('军训和歌手链在不同行动间推进，存档不重复经历或奖励', () => {
   const choices = { military1: 'join', military2: 'perform', singer1: 'signup', singer2: 'advance', singer3: 'perform' };
   let state = game.createGame({ seed: 'new-events' });
-  for (let i = 0; i < 6; i++) state = act(state, 'rest', choices);
+  for (const id of ['walk', 'walk', 'walk', 'chat', 'chat', 'rest']) state = act(state, id, choices);
   assert.deepEqual(state.experiences.map(item => item.type), ['military', 'singer']);
   for (const id of Object.keys(choices)) assert.equal(state.eventHistory.filter(item => item.event === id).length, 1, id);
   assert.equal(game.submitEventChoice(roundtrip(state), 'perform').ok, false);
@@ -68,7 +68,7 @@ test('订票在秋季末，返校与分享在下一春季初，存档后顺序�
   state = nextTerm(state, choices);
   assert.equal(state.eventHistory.at(-1).event, 'ticket2');
   assert.equal(state.eventHistory.some(item => item.event === 'ticket3'), false);
-  state = study(study(state, choices), choices);
+  state = act(state, 'chat', choices);
   assert.deepEqual(state.eventHistory.filter(item => /^ticket/.test(item.event)).map(item => [item.event, item.term]),
     [['ticket1', 1], ['ticket2', 2], ['ticket3', 2]]);
   state = nextTerm(state, choices);
@@ -170,7 +170,7 @@ test('没有订票或未确认返校，不会凭空进入特产分享节点', ()
   assert.equal(noTicket.eventHistory.some(item => /^ticket/.test(item.event)), false);
   const declined = nextTerm(bookedAutumn(), { ticket2: 'later' });
   assert.equal(declined.eventHistory.at(-1).choice, 'later');
-  const continued = study(study(declined));
+  const continued = act(act(declined, 'chat'), 'chat');
   assert.equal(continued.eventHistory.some(item => item.event === 'ticket3'), false);
   assert.equal(continued.experiences.some(item => item.type === 'trip'), false);
 });

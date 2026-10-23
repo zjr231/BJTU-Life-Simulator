@@ -125,7 +125,7 @@
     if (triggerAction === 'exercise' && next.term % 2 === 0 && next.fitness >= RULES.fitnessThreshold) enqueue('fitnessTest');
     for (const [id, chain] of Object.entries(next.chains)) {
       if (triggerAction === 'apply' + id[0].toUpperCase() + id.slice(1)) enqueue(id + 'Offer');
-      if (chain.status === 'active' && chain.progress === 2 && next.term >= chain.reviewAfter && (id === 'internship' || next.term > chain.startedTerm)) enqueue(id + 'Review');
+      if (chain.status === 'active' && chain.progress === 2 && next.term >= chain.reviewAfter && (id === 'internship' || id === 'club' || next.term > chain.startedTerm)) enqueue(id + 'Review');
     }
     if (next.term >= 2 && next.courses.length && next.courses.at(-1).term === next.term - 1 && !next.courses.at(-1).passed) enqueue('retake');
     // Choosing an event option never starts another optional campus event.
@@ -134,7 +134,7 @@
     if ((isAction || triggerAction === 'newTerm') && !next.pendingEvent && !next.eventQueue.length) {
       const eligible = Object.keys(CAMPUS_SCHEDULE).filter(id => {
         const rule = CAMPUS_SCHEDULE[id];
-        return inWindow(rule) && (isAction || id === 'ticket2') && termActions >= (rule.minActions || 0)
+        return inWindow(rule) && (isAction || id === 'ticket2') && (!rule.actions || rule.actions.includes(triggerAction)) && termActions >= (rule.minActions || 0)
           && !did(id, undefined, 0) && (!rule.unless || !did(rule.unless))
           && (!rule.after || did(...rule.after)) && (!rule.actionGap || actionsAfter(rule.after[0]) >= rule.actionGap);
       }).sort((a, b) => EVENTS[a].priority - EVENTS[b].priority);
