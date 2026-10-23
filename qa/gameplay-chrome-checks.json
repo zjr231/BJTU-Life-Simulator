@@ -1,0 +1,112 @@
+{
+  "version": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/155.0.8059.85",
+    "revision": "@0e66b94549a8bd85f03fbdf189b752d6e7b63c32",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "jsVersion": "15.5.35.25"
+  },
+  "checkpoints": [
+    {
+      "label": "desktop goals",
+      "page": [
+        1425,
+        1425
+      ],
+      "dialog": [
+        618,
+        618
+      ],
+      "horizontal": 0
+    },
+    {
+      "label": "mobile goals",
+      "page": [
+        390,
+        390
+      ],
+      "dialog": [
+        350,
+        350
+      ],
+      "horizontal": 0
+    },
+    {
+      "label": "mobile event clubLeadership",
+      "page": [
+        390,
+        390
+      ],
+      "dialog": [
+        350,
+        350
+      ],
+      "horizontal": 0
+    },
+    {
+      "label": "mobile event roommateTrip",
+      "page": [
+        390,
+        390
+      ],
+      "dialog": [
+        350,
+        350
+      ],
+      "horizontal": 0
+    },
+    {
+      "label": "mobile six endings",
+      "page": [
+        390,
+        390
+      ],
+      "dialog": [
+        350,
+        350
+      ],
+      "horizontal": 0
+    },
+    {
+      "label": "desktop six endings",
+      "page": [
+        1425,
+        1425
+      ],
+      "dialog": [
+        603,
+        603
+      ],
+      "horizontal": 0
+    },
+    {
+      "label": "desktop growth and result",
+      "page": [
+        1425,
+        1425
+      ],
+      "dialog": [
+        603,
+        603
+      ],
+      "horizontal": 0
+    },
+    {
+      "label": "small mobile restored result",
+      "page": [
+        360,
+        360
+      ],
+      "dialog": [
+        320,
+        320
+      ],
+      "horizontal": 0
+    }
+  ],
+  "errors": [],
+  "result": "campusLeader",
+  "semesters": 8,
+  "restored": true,
+  "replayMatched": true
+}

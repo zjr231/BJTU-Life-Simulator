@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.3.1', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.4.0', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
   const TERM_NAMES = ['大一上', '大一下', '大二上', '大二下', '大三上', '大三下', '大四上', '大四下'];
   // These are deliberately simplified game backgrounds, not real degree programmes.
   const BACKGROUNDS = [
@@ -21,52 +21,65 @@
     dorm: { title: '宿舍', kicker: '生活与休息', description: '上铺的帘子拉着，桌上摊着半袋零食。熄灯前半小时，是这里一天中最像家的时间。' },
     hotel: { title: '红果园宾馆', kicker: '接待与交流', description: '前台偶尔有人办入住，多是返校的校友。行李箱的轮子在地砖上轻轻响。' }
   };
+  const RELATIONSHIPS = {
+    roommate: { title: '室友', description: '一起生活的人，最先看见你的状态。' },
+    mentor: { title: '指导老师', description: '会把机会递到你面前，也会记得你有没有接住。' },
+    clubmate: { title: '社团伙伴', description: '一起搬桌子、熬活动和收拾残局的人。' }
+  };
+  const GOALS = {
+    scholar: { title: '学业冲刺', description: '把本学期学习进度做到 67 以上。', target: 67, reward: { furtherStudy: 10 }, rewardText: '深造准备 +10' },
+    community: { title: '连接校园', description: '完成 2 次交流、社团或校友活动。', target: 2, reward: { social: 6 }, rewardText: '社交 +6' },
+    practice: { title: '积累实践', description: '完成 2 次兼职、项目、社团或实习投入。', target: 2, reward: { jobPreparation: 10 }, rewardText: '求职准备 +10' },
+    wellbeing: { title: '照顾自己', description: '学期结束时保持心情 70、体能 55。', target: 2, reward: { mood: 5, fitness: 3 }, rewardText: '心情 +5、体能 +3' },
+    explore: { title: '走出熟悉区', description: '本学期尝试 4 种不同的行动。', target: 4, reward: { mood: 5, social: 5 }, rewardText: '心情 +5、社交 +5' }
+  };
+  const STORY_FLAG_IDS = ['mentorReferral', 'clubLeadership', 'roommateTrip'];
   const ACTIONS = {
-    study: { place: 'think', title: '课程学习', description: '踩着铃声进教室，摊开今天要讲的那一章。一学期下来，笔记越写越厚。', time: 2, energy: 15, money: 0, preparation: 20, mood: -3, limit: 4 },
-    tutoring: { place: 'think', title: '课程补习', description: '约了学长把卡住的章节讲透。两个小时，白板擦了又写。', time: 2, energy: 10, money: 100, preparation: 25, limit: 2 },
-    selfStudy: { place: 'library', title: '自主学习', description: '图书馆靠窗的位子，耳机一戴，按自己的节奏过一遍。', time: 2, energy: 12, money: 0, preparation: 20, limit: 3 },
+    study: { place: 'think', title: '课程学习', description: '踩着铃声进教室，摊开今天要讲的那一章。一学期下来，笔记越写越厚。', time: 2, energy: 15, money: 0, preparation: 20, mood: -3, relationships: { mentor: 1 }, limit: 4 },
+    tutoring: { place: 'think', title: '课程补习', description: '约了学长把卡住的章节讲透。两个小时，白板擦了又写。', time: 2, energy: 10, money: 100, preparation: 25, relationships: { mentor: 2 }, limit: 2 },
+    selfStudy: { place: 'library', title: '自主学习', description: '图书馆靠窗的位子，耳机一戴，按自己的节奏过一遍。', time: 2, energy: 12, money: 0, preparation: 20, relationships: { mentor: 1 }, limit: 3 },
     furtherStudy: { place: 'library', title: '深造准备', description: '目标院校的招生简章打印出来，一张张贴进计划本，用荧光笔标好时间线。', time: 1, energy: 8, money: 0, furtherStudy: 20, minTerm: 5, limit: 2 },
     work: { place: 'gate', title: '校内勤工助学', description: '在值班室坐一个下午。来人办事就登记，没人就翻书。月底有一笔工资到账。', time: 2, energy: 20, money: 0, income: 200, social: 2, mood: -5, limit: 3 },
     jobPreparation: { place: 'gate', title: '求职准备', description: '简历逐行改过，面试常见题抄了半本。对着镜子练自我介绍，练到不再卡壳。', time: 1, energy: 8, money: 0, jobPreparation: 20, minTerm: 5, limit: 2 },
     rest: { place: 'dorm', title: '休息调整', description: '拉上帘子睡一觉。再睁眼，天都擦黑了。', time: 1, energy: 0, money: 0, recovery: 30, mood: 3 },
-    chat: { place: 'dorm', title: '室友交流', description: '熄灯前的卧谈，从选课聊到食堂的菜，越聊越精神。', time: 1, energy: 5, money: 0, social: 5, mood: 8, limit: 2 },
+    chat: { place: 'dorm', title: '室友交流', description: '熄灯前的卧谈，从选课聊到食堂的菜，越聊越精神。', time: 1, energy: 5, money: 0, social: 5, mood: 8, relationships: { roommate: 5 }, limit: 2 },
     exercise: { place: 'track', title: '锻炼', description: '去操场跑几圈，出一身汗。晚风吹在脸上，很凉快。', time: 1, energy: 10, money: 0, fitness: 6, mood: 4, limit: 4 },
     walk: { place: 'ginkgo', title: '散步', description: '沿着银杏大道慢慢走，脑子里什么都不装。', time: 1, energy: 0, money: 0, recovery: 10, mood: 10, limit: 3 },
     applyProject: { place: 'yifu', title: '申请校园项目', description: '把简历和想法递到老师桌上。老师说：回去等消息。', time: 1, energy: 5, money: 0, minTerm: 2, maxTerm: 6, minPreparation: 40, chain: 'project', kind: 'apply' },
     projectWork: { place: 'yifu', title: '项目投入', description: '例会开到晚上，方案改到第七版，白板上的箭头越画越多。', time: 2, energy: 15, money: 0, preparation: 10, chain: 'project', kind: 'work', limit: 2 },
-    applyClub: { place: 'activity', title: '参与社团招新', description: '百团大战的摊位一眼望不到头。报名表递出去，扫码进群。', time: 1, energy: 5, money: 0, minTerm: 1, maxTerm: 6, autumnOnly: true, chain: 'club', kind: 'apply' },
-    clubWork: { place: 'activity', title: '社团投入', description: '搬桌子、贴海报、盯签到，忙到嗓子发干。', time: 1, energy: 8, money: 0, social: 8, chain: 'club', kind: 'work', limit: 2 },
+    applyClub: { place: 'activity', title: '参与社团招新', description: '百团大战的摊位一眼望不到头。报名表递出去，扫码进群。', time: 1, energy: 5, money: 0, relationships: { clubmate: 4 }, minTerm: 1, maxTerm: 6, autumnOnly: true, chain: 'club', kind: 'apply' },
+    clubWork: { place: 'activity', title: '社团投入', description: '搬桌子、贴海报、盯签到，忙到嗓子发干。', time: 1, energy: 8, money: 0, social: 8, relationships: { clubmate: 7 }, chain: 'club', kind: 'work', limit: 2 },
     applyInternship: { place: 'gate', title: '申请实习经历', description: '成绩单和简历装进同一个文件袋，交上去。对方说，两周内回复。', time: 1, energy: 5, money: 0, minTerm: 5, maxTerm: 7, minAverage: 60, chain: 'internship', kind: 'apply' },
     internshipWork: { place: 'gate', title: '实习投入', description: '打卡，整理材料，跑腿送文件。下班走出大楼，天刚擦黑。', time: 2, energy: 15, money: 0, income: 100, chain: 'internship', kind: 'work', limit: 2 },
     checkup: { place: 'hospital', title: '体检', description: '挂号、量血压、抽血。医生看着单子说：各项指标正常。', time: 1, energy: 5, money: 50, fitness: 3, mood: 2, limit: 1 },
     sickVisit: { place: 'hospital', title: '看病开药', description: '在候诊区等了半小时。校医开了药，叮嘱按时吃、别熬夜。', time: 1, energy: 3, money: 60, mood: 8, limit: 2 },
-    alumniVolunteer: { place: 'hotel', title: '校友接待志愿', description: '给返校校友签到、指路、搬资料。听他们聊起当年的北交，好像比现在还要热闹。', time: 2, energy: 10, money: 0, social: 5, mood: 3, limit: 2 },
+    alumniVolunteer: { place: 'hotel', title: '校友接待志愿', description: '给返校校友签到、指路、搬资料。听他们聊起当年的北交，好像比现在还要热闹。', time: 2, energy: 10, money: 0, social: 5, mood: 3, relationships: { mentor: 3 }, limit: 2 },
     show: { place: 'auditorium', title: '看演出', description: '会堂今晚有演出。灯暗下来的时候，你才想起上次看戏还是高中。', time: 1, energy: 2, money: 40, mood: 8, social: 2, limit: 3 }
   };
   const EVENTS = {
     roommateCare: { priority: 10, title: '室友的关心', description: '晚上十一点，室友从对面上铺探下头，说你今天回来得挺早。沉默几秒，他问，要不要一起下楼吃点东西。', trigger: '你最近回宿舍越来越晚，话也越来越少', choices: [
-      { id: 'talk', title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 15, social: 3 },
-      { id: 'later', title: '先自己调整', description: '说声不用了，戴上耳机。今晚想一个人待着。' }
+      { id: 'talk', title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 15, social: 3, relationships: { roommate: 10 } },
+      { id: 'later', title: '先自己调整', description: '说声不用了，戴上耳机。今晚想一个人待着。', relationships: { roommate: -2 } }
     ] },
     fitnessTest: { priority: 20, title: '体测报名', description: '体育老师翻着点名册看了你一眼：这学期底子不错，体测的名额给你留一个。', trigger: '点名册上，你的锻炼出勤画得挺满', choices: [
       { id: 'participate', title: '参加体测', description: '报上名，上跑道。跑完这次，体测这一关就算过了。', time: 1, energy: 10, mood: 5, minFitness: 60, experience: 'fitnessTest' },
       { id: 'later', title: '这次暂不参加', description: '这次先不跑。跑道一直都在，下次再说。' }
     ] },
     projectOffer: { priority: 30, chain: 'project', node: 'application', title: '项目组的邀请', description: '课间，老师把你叫到走廊，说有个项目缺人手，问你要不要来。跟着做下去，下个学期把成果摆出来，简历上能多一行。', trigger: '你之前递出去的那份申请，有回音了', choices: [
-      { id: 'accept', title: '加入项目', description: '答应下来。这学期开工，下个学期见成果。', chainEffect: 'accept' },
-      { id: 'later', title: '下一学期再考虑', description: '说手头太满，婉拒。以后想清楚了还可以再申请。', chainEffect: 'defer' }
+      { id: 'accept', title: '加入项目', description: '答应下来。这学期开工，下个学期见成果。', chainEffect: 'accept', relationships: { mentor: 8 } },
+      { id: 'later', title: '下一学期再考虑', description: '说手头太满，婉拒。以后想清楚了还可以再申请。', chainEffect: 'defer', relationships: { mentor: -3 } }
     ] },
     projectReview: { priority: 31, chain: 'project', node: 'review', title: '答辩日', description: '项目到了收尾的时候。老师把演示时间定在周五下午，PPT 在电脑里改了七版。', trigger: '结题的材料，你准备得差不多了', choices: [
-      { id: 'complete', title: '展示成果', description: '上台，讲完，等答辩结束。这段经历会留在你的简历上。', mood: 5, chainEffect: 'complete', experience: 'project' },
+      { id: 'complete', title: '展示成果', description: '上台，讲完，等答辩结束。这段经历会留在你的简历上。', mood: 5, chainEffect: 'complete', experience: 'project', relationships: { mentor: 6 } },
       { id: 'later', title: '延到下一学期', description: '再打磨一学期。前提是，这不是最后一个学期。', chainEffect: 'postpone' },
       { id: 'abandon', title: '放弃展示', description: '把文件归档，不展示了。做过的事还在，只是简历上没有这一行。', chainEffect: 'abandon' }
     ] },
     clubOffer: { priority: 40, chain: 'club', node: 'recruitment', title: '百团大战', description: '摊位之间挤满了人，一个社团的学姐拉住你：我们下个活动正缺人，进群聊聊？', trigger: '你报名的社团，来消息了', choices: [
-      { id: 'accept', title: '加入社团', description: '扫码进群，把报名表发过去。筹办组的任务从此开始。', chainEffect: 'accept' },
-      { id: 'later', title: '先专注其他安排', description: '摆摆手说再看看。来年秋天的招新还在这里。', chainEffect: 'defer' }
+      { id: 'accept', title: '加入社团', description: '扫码进群，把报名表发过去。筹办组的任务从此开始。', chainEffect: 'accept', relationships: { clubmate: 8 } },
+      { id: 'later', title: '先专注其他安排', description: '摆摆手说再看看。来年秋天的招新还在这里。', chainEffect: 'defer', relationships: { clubmate: -2 } }
     ] },
     clubReview: { priority: 41, chain: 'club', node: 'activity', title: '活动结束的那个晚上', description: '散场后，你和其他人把最后一把椅子叠起来。灯一盏盏灭掉，群里已经开始有人发「辛苦大家」。', trigger: '活动散了场，收尾的事轮到你了', choices: [
-      { id: 'complete', title: '发总结收尾', description: '把签到表、照片和总结发进群。大家排队回「收到」。', social: 5, mood: 5, chainEffect: 'complete', experience: 'club' },
+      { id: 'complete', title: '发总结收尾', description: '把签到表、照片和总结发进群。大家排队回「收到」。', social: 5, mood: 5, chainEffect: 'complete', experience: 'club', relationships: { clubmate: 8 } },
       { id: 'later', title: '推到下学期', description: '再准备一学期，办得更像样些。只要这学期不是最后一个。', chainEffect: 'postpone' },
       { id: 'abandon', title: '退出活动', description: '不再跟了，把任务交给下一届。忙过的事自己知道。', chainEffect: 'abandon' }
     ] },
@@ -96,7 +109,7 @@
       { id: 'later', title: '留在原专业', description: '想想又算了。现在这个方向，其实也没那么差。' }
     ] },
     seminar: { priority: 71, title: '深造宣讲会', description: '报告厅门口排起长队，海报写着：深造经验分享会。台上坐着几个去年上岸的学长学姐。', trigger: '报告厅门口排起了长队', choices: [
-      { id: 'attend', title: '进去听一听', description: '记了半页笔记，也记下了几个名字。', time: 1, energy: 3, furtherStudy: 8 },
+      { id: 'attend', title: '进去听一听', description: '记了半页笔记，也记下了几个名字。', time: 1, energy: 3, furtherStudy: 8, relationships: { mentor: 4 } },
       { id: 'later', title: '路过，不进去', description: '人太多了。以后找同学要份笔记。' }
     ] },
     retake: { priority: 72, title: '补考通知', description: '新学期第一周，教务系统弹出一条提醒：你有一门课未通过，补考安排在下周。', trigger: '教务系统弹出一条提醒', choices: [
@@ -194,15 +207,27 @@
       { id: 'later', title: '看个海报就好', description: '你拍下剧名，想着下次早点买票。' }
     ] },
     alumniStory: { priority: 79, title: '校友分享会', description: '红果园宾馆的宴会厅在办校友返校会。一个学长端着杯子，讲他毕业后的第一份工作。', trigger: '宴会厅里传来掌声', choices: [
-      { id: 'listen', title: '坐下来听', description: '散场前，学长留了联系方式，说欢迎去他那实习。', time: 1, energy: 2, social: 4, mood: 3 },
+      { id: 'listen', title: '坐下来听', description: '散场前，学长留了联系方式，说欢迎去他那实习。', time: 1, energy: 2, social: 4, mood: 3, relationships: { mentor: 6 } },
       { id: 'later', title: '不打扰他们', description: '你穿过大堂，去办自己的事。' }
     ] },
     frontDesk: { priority: 80, title: '周末帮工', description: '宾馆前台贴着招周末帮工的启事。时薪还行，就是得早起。', trigger: '前台贴着招工启事', choices: [
       { id: 'apply', title: '去应聘', description: '换床单、摆毛巾，干了一整天。结钱的时候，手有点抖。', time: 1, income: 150, mood: -3 },
       { id: 'later', title: '看看就好', description: '时薪是还行。但周末，你想睡懒觉。' }
+    ] },
+    roommateTrip: { priority: 16, title: '室友的周末计划', description: '室友把两张车票拍在桌上：周末去趟郊外？你最近一直在忙，出去透口气也好。', trigger: '室友把周末计划摊到你面前', choices: [
+      { id: 'go', title: '一起出发', description: '赶上清早的车。风从车窗灌进来，你们一路聊到目的地。', time: 1, mood: 10, social: 6, relationships: { roommate: 10 }, storyFlag: 'roommateTrip', experience: 'roommateTrip' },
+      { id: 'later', title: '下次一定', description: '你把车票推回去。室友点点头，说那就下次。', relationships: { roommate: -4 } }
+    ] },
+    mentorReferral: { priority: 35, title: '老师递来的机会', description: '老师在课后叫住你，说有位校友正在找学生做研究助理。你的名字，他已经提过了。', trigger: '老师把一位校友的联系方式发给你', choices: [
+      { id: 'accept', title: '认真准备', description: '你把项目经历整理成一页纸，约好下周去聊。', preparation: 8, furtherStudy: 12, relationships: { mentor: 8 }, storyFlag: 'mentorReferral', experience: 'mentorReferral' },
+      { id: 'later', title: '先顾好眼前', description: '你谢过老师，暂时不接这个机会。', relationships: { mentor: -3 } }
+    ] },
+    clubLeadership: { priority: 45, title: '活动主理人', description: '社团伙伴把活动策划案递给你：这次你来牵头？大家都愿意配合。', trigger: '社团伙伴把策划案和名单一起交给你', choices: [
+      { id: 'lead', title: '接下主理', description: '场地、流程、人员一项项排好。活动结束时，大家都在喊你的名字。', time: 1, social: 10, jobPreparation: 8, relationships: { clubmate: 10 }, storyFlag: 'clubLeadership', experience: 'clubLeadership' },
+      { id: 'later', title: '让别人负责', description: '你帮忙提了几个建议，把主位让给更有空的人。', relationships: { clubmate: 2 } }
     ] }
   };
-  const ENDINGS = { graduationAverage: 60, passedTerms: 6, furtherStudyAverage: 80, furtherStudyPreparation: 60, jobPreparation: 60 };
+  const ENDINGS = { graduationAverage: 60, passedTerms: 6, furtherStudyAverage: 80, furtherStudyPreparation: 60, jobPreparation: 60, campusLeaderSocial: 55, innovatorAverage: 70 };
   const RANDOM_POOL = ['campusDiscussion', 'cat', 'canteen', 'card', 'wall', 'seat', 'snow', 'parcel', 'night', 'injury', 'flu', 'insomnia', 'lecture', 'drama', 'alumniStory', 'frontDesk'];
   // Elapsed time is an estimate of semester progress, not a week/day calendar.
   const CAMPUS_SCHEDULE = {
@@ -218,7 +243,10 @@
     contest2: { terms: [5], after: ['contest1', 'join', 0], actionGap: 1 },
     transfer: { terms: [3], minElapsed: 4, maxElapsed: 7 },
     seminar: { terms: [6], minElapsed: 4, maxElapsed: 7 },
-    graduation: { terms: [8], minElapsed: 9 }
+    graduation: { terms: [8], minElapsed: 9 },
+    roommateTrip: { terms: [2, 4, 6], minElapsed: 2, maxElapsed: 10, relationship: ['roommate', 45], unlessFlag: 'roommateTrip' },
+    mentorReferral: { terms: [3, 4, 5, 6], minElapsed: 3, maxElapsed: 10, relationship: ['mentor', 35], unlessFlag: 'mentorReferral' },
+    clubLeadership: { terms: [3, 5], minElapsed: 3, maxElapsed: 10, relationship: ['clubmate', 30], chainStatus: ['club', ['active', 'completed']], unlessFlag: 'clubLeadership' }
   };
   const RANDOM_CONTEXTS = {
     campusDiscussion: { actions: ['selfStudy'] },
@@ -238,7 +266,7 @@
     alumniStory: { actions: ['alumniVolunteer'] },
     frontDesk: { actions: ['alumniVolunteer'] }
   };
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS };
+  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, GOALS, RELATIONSHIPS, STORY_FLAG_IDS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

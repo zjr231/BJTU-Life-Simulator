@@ -28,8 +28,9 @@
       if (envelope.saveFormatVersion !== game.RULES.saveFormatVersion || envelope.rulesVersion !== game.RULES.version) return { ok: false, reason: '存档格式或规则版本不兼容；本轮不迁移旧规则档案' };
       if (typeof envelope.appVersion !== 'string' || !envelope.appVersion.length || envelope.appVersion.length > 64) return { ok: false, reason: '程序版本标记无效' };
       if (!Number.isSafeInteger(envelope.saveSequence) || envelope.saveSequence < 1 || typeof envelope.savedAt !== 'string' || !Number.isFinite(Date.parse(envelope.savedAt))) return { ok: false, reason: '存档序号或保存时间无效' };
-      const checked = game.validateState(envelope.state);
-      return checked.ok ? { ok: true, state: envelope.state, savedAt: envelope.savedAt, saveSequence: envelope.saveSequence } : checked;
+      const state = game.normalizeState(envelope.state);
+      const checked = game.validateState(state);
+      return checked.ok ? { ok: true, state, savedAt: envelope.savedAt, saveSequence: envelope.saveSequence } : checked;
     } catch (_) { return { ok: false, reason: '存档 JSON 损坏或字段缺失' }; }
   }
   function createSaveService(storage, options = {}) {

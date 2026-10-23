@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function validate(state, game, random) {
-    const { RULES, ACTIONS, EVENTS, TERM_NAMES, CHAIN_NAMES } = game;
+    const { RULES, ACTIONS, EVENTS, TERM_NAMES, CHAIN_NAMES, GOALS, RELATIONSHIPS, STORY_FLAG_IDS, ENDING_IDS } = game;
     const fail = (reason) => ({ ok: false, reason: '存档状态无效：' + reason });
     const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
     const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -14,10 +14,13 @@
       if (!game.validateNickname(state.nickname).ok || state.nickname !== state.nickname.trim()) return fail('昵称');
       if (!integer(state.term, 1, 8) || !['playing', 'eventPending', 'summary', 'endingChoice', 'finished'].includes(state.phase) || !integer(state.revision, 0, 2000)) return fail('学期、阶段或状态版本');
       for (const [key, max] of [['time', 12], ['energy', 100], ['money', 1000000], ['social', 100], ['fitness', 100], ['mood', 100], ['preparation', 100], ['furtherStudy', 100], ['jobPreparation', 100]]) if (!integer(state[key], 0, max)) return fail(key);
+      if (!object(state.relationships) || Object.keys(state.relationships).length !== Object.keys(RELATIONSHIPS).length || Object.entries(state.relationships).some(([id, value]) => !Object.hasOwn(RELATIONSHIPS, id) || !integer(value, 0, 100))) return fail('人物关系');
+      if (!object(state.storyFlags) || Object.keys(state.storyFlags).length !== STORY_FLAG_IDS.length || STORY_FLAG_IDS.some((id) => state.storyFlags[id] !== true && state.storyFlags[id] !== false)) return fail('剧情标记');
+      if (state.semesterGoal !== null && (!object(state.semesterGoal) || !Object.hasOwn(GOALS, state.semesterGoal.id) || state.semesterGoal.term !== state.term || state.semesterGoal.title !== GOALS[state.semesterGoal.id].title || state.semesterGoal.description !== GOALS[state.semesterGoal.id].description)) return fail('学期目标');
       if (!object(state.rng) || state.rng.algorithm !== 'mulberry32-v1' || typeof state.rng.seed !== 'string' || !state.rng.seed.length || state.rng.seed.length > 64 || !integer(state.rng.value, 0, 4294967295) || !integer(state.rng.calls, 2, 100)) return fail('随机数状态');
       if (state.rng.value !== ((random.create(state.rng.seed).value + Math.imul(0x6D2B79F5, state.rng.calls)) >>> 0)) return fail('随机数调用位置');
       if (!same(state.background, game.createGame({ nickname: state.nickname, seed: state.rng.seed }).background)) return fail('入学背景');
-      for (const key of ['courses', 'history', 'eventQueue', 'eventHistory', 'experiences', 'processedCommands']) if (!Array.isArray(state[key]) || state[key].length > 2000) return fail(key);
+      for (const key of ['courses', 'history', 'eventQueue', 'eventHistory', 'experiences', 'processedCommands', 'goalHistory']) if (!Array.isArray(state[key]) || state[key].length > 2000) return fail(key);
       if (!object(state.counts) || !object(state.eventFlags) || !object(state.chains)) return fail('次数、事件标记或事件链');
       const validCounts = (counts) => object(counts) && Object.entries(counts).every(([id, count]) => own(ACTIONS, id) && integer(count, 0, ACTIONS[id].limit || 12));
       if (!validCounts(state.counts)) return fail('行动次数');
@@ -25,15 +28,40 @@
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (!['executeAction', 'submitEventChoice', 'endTerm', 'continueGame', 'chooseEnding'].includes(command.operation)) return fail('历史操作类型');
+        if (!['executeAction', 'submitEventChoice', 'chooseGoal', 'endTerm', 'continueGame', 'chooseEnding'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'executeAction' && !own(ACTIONS, command.id)) return fail('历史行动');
         if (command.operation === 'submitEventChoice' && (!own(EVENTS, entry.event) || !EVENTS[entry.event].choices.some((choice) => choice.id === command.id) || command.eventInstanceId !== entry.instanceId)) return fail('历史事件');
-        if (command.operation === 'chooseEnding' && !['ordinary', 'employment', 'furtherStudy', 'notQualified'].includes(command.id)) return fail('历史方向');
+        if (command.operation === 'chooseGoal' && !Object.hasOwn(GOALS, command.id)) return fail('历史目标');
+        if (command.operation === 'chooseEnding' && !ENDING_IDS.includes(command.id)) return fail('历史方向');
         for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'summary', 'endingChoice', 'finished'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !integer(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 100)) return fail('历史状态摘要');
       }
       const expectedCourses = ['summary', 'endingChoice', 'finished'].includes(state.phase) ? state.term : state.term - 1;
       if (state.courses.length !== expectedCourses) return fail('课程记录数量与阶段不符');
-      if (!state.courses.every((course, index) => object(course) && course.term === index + 1 && course.name === TERM_NAMES[index] && integer(course.preparation, 0, 100) && course.grade === Math.round(40 + course.preparation * 0.6) && course.passed === (course.grade >= 60) && course.livingCost === 300 && integer(course.aid, 0, 300) && integer(course.moneyAfter, 0, 1000000) && integer(course.unusedTime, 0, 12) && validCounts(course.counts) && Array.isArray(course.notices) && course.notices.every((note) => typeof note === 'string' && note.length < 200) && object(course.attributes) && ['social', 'fitness', 'mood'].every((key) => integer(course.attributes[key], 0, 100)))) return fail('成绩记录');
+      const validGoalRecord = (goal) => {
+        if (!object(goal) || !integer(goal.term, 1, state.term)) return false;
+        if (goal.id === null) return same(goal, game.evaluateGoal({ term: goal.term, phase: 'playing', semesterGoal: null }));
+        if (!own(GOALS, goal.id)) return false;
+        const definition = GOALS[goal.id];
+        return goal.title === definition.title && goal.description === definition.description && goal.target === definition.target
+          && integer(goal.progress, 0, goal.target) && goal.completed === (goal.progress === goal.target)
+          && same(goal.reward, goal.completed ? definition.reward : {}) && goal.rewardText === (goal.completed ? definition.rewardText : '');
+      };
+      if (!state.goalHistory.every((goal, index) => validGoalRecord(goal) && goal.term === index + 1)) return fail('目标记录');
+      if (state.goalHistory.length !== state.courses.length) return fail('目标记录数量');
+      if (!state.courses.every((course, index) => object(course) && course.term === index + 1 && course.name === TERM_NAMES[index] && integer(course.preparation, 0, 100) && course.grade === Math.round(40 + course.preparation * 0.6) && course.passed === (course.grade >= 60) && course.livingCost === 300 && integer(course.aid, 0, 300) && integer(course.moneyAfter, 0, 1000000) && integer(course.unusedTime, 0, 12) && validCounts(course.counts) && Array.isArray(course.notices) && course.notices.every((note) => typeof note === 'string' && note.length < 200) && object(course.attributes) && ['social', 'fitness', 'mood'].every((key) => integer(course.attributes[key], 0, 100)) && (course.goal === undefined || validGoalRecord(course.goal)))) return fail('成绩记录');
+      for (const [index, course] of state.courses.entries()) {
+        const goal = state.goalHistory[index];
+        if (course.goal === undefined ? goal.id !== null : !same(goal, course.goal)) return fail('目标与成绩记录不一致');
+        const expected = game.evaluateGoal({ ...course.attributes, preparation: course.preparation, counts: course.counts, term: course.term, phase: 'playing', semesterGoal: goal.id === null ? null : { id: goal.id } });
+        if (!same(goal, expected)) return fail('目标进度与行动记录不一致');
+      }
+      const goalSelections = state.history.filter((entry) => entry.command.operation === 'chooseGoal');
+      if (new Set(goalSelections.map((entry) => entry.term)).size !== goalSelections.length) return fail('重复选择学期目标');
+      for (let term = 1; term <= state.term; term++) {
+        const selected = goalSelections.find((entry) => entry.term === term)?.command.id || null;
+        if (term === state.term && (state.semesterGoal?.id || null) !== selected) return fail('当前目标与操作记录不一致');
+        if (state.goalHistory[term - 1] && state.goalHistory[term - 1].id !== selected) return fail('目标历史与操作记录不一致');
+      }
       if (['summary', 'endingChoice', 'finished'].includes(state.phase)) {
         if (!same(state.summary, state.courses.at(-1)) || state.money !== state.summary.moneyAfter || state.preparation !== state.summary.preparation) return fail('学期总结');
       } else if (state.summary !== null) return fail('未结算阶段存在总结');
@@ -60,13 +88,19 @@
       if (Object.keys(state.chains).length !== 3) return fail('未知事件链');
       const experienceIds = new Set();
       for (const item of state.experiences) {
-        if (!object(item) || !integer(item.term, 1, state.term) || !['fitnessTest', 'project', 'club', 'internship', 'military', 'singer', 'trip', 'contest'].includes(item.type)) return fail('经历');
+        if (!object(item) || !integer(item.term, 1, state.term) || !['fitnessTest', 'project', 'club', 'internship', 'military', 'singer', 'trip', 'contest', 'roommateTrip', 'mentorReferral', 'clubLeadership'].includes(item.type)) return fail('经历');
         const key = item.type === 'fitnessTest' ? item.type + ':' + item.term : item.type;
         if (experienceIds.has(key)) return fail('重复经历');
         experienceIds.add(key);
         if (item.type === 'fitnessTest' && (item.term % 2 !== 0 || !integer(item.fitness, 60, 100))) return fail('体测经历');
       }
       for (const id of Object.keys(CHAIN_NAMES)) if ((state.chains[id].status === 'completed') !== experienceIds.has(id)) return fail('事件链与经历不一致');
+      for (const id of STORY_FLAG_IDS) {
+        const choice = EVENTS[id].choices.find((item) => item.storyFlag === id);
+        const accepted = state.eventHistory.find((entry) => entry.event === id && entry.choice === choice.id);
+        const experience = state.experiences.find((item) => item.type === id);
+        if (state.storyFlags[id] !== Boolean(accepted) || Boolean(experience) !== Boolean(accepted) || (experience && experience.term !== accepted.term)) return fail('剧情选择、标记与经历不一致');
+      }
       for (const instance of instances) {
         const event = EVENTS[instance.id];
         if (event.chain && (instance.id.endsWith('Offer') ? !['idle', 'deferred'].includes(state.chains[event.chain].status) : state.chains[event.chain].status !== 'active' || state.chains[event.chain].progress !== 2)) return fail('事件与事件链不一致');

@@ -159,6 +159,13 @@ function statsMarkup() {
   ];
   return items.map(([name, value, note, style]) => '<div class="attribute ' + style + '"><span class="attribute-name">' + h(name) + '</span><b>' + h(value) + '</b><small>' + h(note) + '</small></div>').join('');
 }
+function relationshipMarkup() {
+  const hints = { roommate: '关系达到 45：春季周末出行', mentor: '关系达到 35：大二至大三的推荐机会', clubmate: '关系达到 30 且已加入社团：大二或大三上主理活动' };
+  return '<div class="relationship-panel"><h3>人物关系</h3><div class="relationship-grid">' + Object.entries(game.RELATIONSHIPS).map(([id, item]) => '<div class="relationship-item"><span>' + h(item.title) + '</span><b>' + state.relationships[id] + '<small> / 100</small></b><small>' + h(item.description) + '</small><small>' + h(hints[id]) + '</small></div>').join('') + '</div></div>';
+}
+function goalMarkup(goal) {
+  return '<div class="goal-panel"><div><span class="panel-label">本学期目标</span><h3>' + h(goal.title) + '</h3><p>' + h(goal.description) + '</p></div><strong>' + (goal.target ? goal.progress + ' / ' + goal.target : '未选择') + '</strong></div>';
+}
 function chainLabel(chain) {
   const labels = { idle: '未申请', active: '进行中', deferred: '暂缓申请', completed: '已完成', missed: '未完成' };
   return labels[chain.status] + (['active', 'missed'].includes(chain.status) ? ' · ' + chain.progress + '/2 次投入' : '');
@@ -173,7 +180,8 @@ function renderState() {
   $('#preparationValue').textContent = state.preparation + ' / 100';
   $('#preparationMeter').value = state.preparation;
   $('#placeStats').innerHTML = '<div class="place-resources"><span>时间 <b>' + state.time + ' / 12</b></span><span>精力 <b>' + state.energy + ' / 100</b></span><span>学习进度 <b>' + state.preparation + ' / 100</b></span></div><div class="place-attributes">' + statsMarkup() + '</div>';
-  $('#directionBrief').innerHTML = '<div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
+  const goal = game.evaluateGoal(state);
+  $('#directionBrief').innerHTML = '<div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('') + '<div>目标 <b>' + h(goal.title) + ' ' + (goal.target ? goal.progress + '/' + goal.target : '尚未选择') + '</b></div>';
   $('#endTermButton').textContent = ({ eventPending: '处理当前事件', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果' })[state.phase] || '结束学期';
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
   $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave'].includes(dialogMode);
@@ -181,18 +189,22 @@ function renderState() {
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
 function changeText(changes) {
-  const names = { time: '时间', energy: '精力', money: '钱包', preparation: '学习进度', social: '社交', fitness: '体能', mood: '心情', furtherStudy: '深造准备', jobPreparation: '求职准备' };
+  const names = { time: '时间', energy: '精力', money: '钱包', preparation: '学习进度', social: '社交', fitness: '体能', mood: '心情', furtherStudy: '深造准备', jobPreparation: '求职准备', roommate: '室友关系', mentor: '导师关系', clubmate: '社团关系' };
   return Object.entries(changes || {}).filter(([, value]) => value !== 0).map(([key, value]) => names[key] + ' ' + (value > 0 ? '+' : '−') + Math.abs(value) + (key === 'money' ? ' 元' : '')).join(' · ') || '没什么明显变化';
 }
 function gains(effect) {
   const changes = game.previewChanges(state, effect);
+  const relationshipChanges = game.previewRelationshipChanges(state, effect);
   const positives = Object.fromEntries(Object.entries(changes).filter(([, value]) => value > 0));
+  const positiveRelationships = Object.fromEntries(Object.entries(relationshipChanges).filter(([, value]) => value > 0));
   if (effect.kind === 'apply') return '申请后选择是否加入';
   const chainEffect = { accept: '事件链开启', defer: '暂缓申请', postpone: '投入保留，延后一学期', complete: '经历完成', abandon: '投入记录保留，放弃完成经历' }[effect.chainEffect];
-  return [Object.keys(positives).length ? changeText(positives) : '', effect.kind === 'work' ? '事件链投入 +1' : '', chainEffect || ''].filter(Boolean).join(' · ') || '保留资源，继续安排';
+  const storyEffect = { roommateTrip: '留下室友出行经历', mentorReferral: '解锁创新实践者的一项条件', clubLeadership: '解锁校园组织者的一项条件' }[effect.storyFlag];
+  return [Object.keys(positives).length ? changeText(positives) : '', Object.keys(positiveRelationships).length ? changeText(positiveRelationships) : '', effect.kind === 'work' ? '事件链投入 +1' : '', chainEffect || '', storyEffect || ''].filter(Boolean).join(' · ') || '保留资源，继续安排';
 }
 function costs(effect) {
-  return [(effect.time ? '时间 −' + effect.time : ''), (effect.energy ? '精力 −' + effect.energy : ''), (effect.money ? '钱包 −' + effect.money + ' 元' : ''), (effect.mood < 0 ? '心情 −' + Math.min(state.mood, Math.abs(effect.mood)) : '')].filter(Boolean).join(' · ') || '不消耗资源';
+  const relationships = Object.fromEntries(Object.entries(game.previewRelationshipChanges(state, effect)).filter(([, value]) => value < 0));
+  return [(effect.time ? '时间 −' + effect.time : ''), (effect.energy ? '精力 −' + effect.energy : ''), (effect.money ? '钱包 −' + effect.money + ' 元' : ''), (effect.mood < 0 ? '心情 −' + Math.min(state.mood, Math.abs(effect.mood)) : ''), Object.keys(relationships).length ? changeText(relationships) : ''].filter(Boolean).join(' · ') || '不消耗资源';
 }
 function renderActions() {
   const actions = Object.keys(game.ACTIONS).filter((id) => game.ACTIONS[id].place === activePlace);
@@ -250,19 +262,20 @@ function lockUi() {
   uiLocked = true;
   clearTimeout(unlockTimer);
   if (activePlace) renderActions();
-  dialog.querySelectorAll('[data-dialog-action], [data-event-choice], [data-ending]').forEach((button) => { button.disabled = true; });
+  dialog.querySelectorAll('[data-dialog-action], [data-event-choice], [data-ending], [data-goal]').forEach((button) => { button.disabled = true; });
   unlockTimer = setTimeout(() => {
     uiLocked = false;
     if (activePlace) renderActions();
     dialog.querySelectorAll('[data-dialog-action]').forEach((button) => { button.disabled = false; });
     dialog.querySelectorAll('[data-event-choice]').forEach((button) => { button.disabled = !game.eventAvailability(state, button.dataset.eventChoice, button.dataset.instance).ok; });
     dialog.querySelectorAll('[data-ending]').forEach((button) => { button.disabled = !state.endingOptions.options.find((item) => item.id === button.dataset.ending)?.available; });
+    dialog.querySelectorAll('[data-goal]').forEach((button) => { button.disabled = state.phase !== 'playing' || Boolean(state.semesterGoal); });
   }, 300);
 }
 function runCommand(operation, id, expectedRevision, eventInstanceId) {
   if (!state || uiLocked) return null;
   const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId };
-  const result = ['executeAction', 'submitEventChoice', 'chooseEnding'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const result = ['executeAction', 'submitEventChoice', 'chooseGoal', 'chooseEnding'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');
@@ -418,7 +431,12 @@ function showEnrollment() {
   showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p><p class="dialog-note">背景只影响一项行动加成，不会锁死你的毕业路线。入学后可在「入学背景」里随时查看。</p>', [{ id: 'resume', text: '看看怎么安排' }]);
 }
 function showTutorial() {
-  showDialog('tutorial', '八学期怎么安排', '<ol><li>点击地图上的地点，先看成本和收益，再决定做不做。逛逛、返回都不花钱。</li><li>学习和自学都攒同一个学习进度；期末成绩 = round(40 + 学习进度 × 0.6)，60 分达标。</li><li>每学期 12 点时间。休息能回精力，回不了时间；长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目和社团的成果在之后的学期确认。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
+  showDialog('tutorial', '八学期怎么安排', '<ol><li>点击地图上的地点，先看成本和收益，再决定做不做。逛逛、返回都不花钱。</li><li>学习和自学都攒同一个学习进度；期末成绩 = round(40 + 学习进度 × 0.6)，60 分达标。</li><li>每学期先选一个目标。目标完成后在结算时领奖励，目标也会记录进成长档案。</li><li>室友、指导老师、社团伙伴会记得你的选择。关系达到门槛后会出现专属事件，选择会留下剧情标记。</li><li>项目、社团、实习，各要一次申请加两次投入。项目和社团的成果在之后的学期确认。</li><li>毕业时除了普通、深造和就业，还可能解锁校园组织者、身心平衡、创新实践者等结局。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
+}
+function showGoals() {
+  if (!state || state.phase !== 'playing' || state.semesterGoal) return;
+  const cards = Object.entries(game.GOALS).map(([id, goal]) => '<article class="goal-choice"><h3>' + h(goal.title) + '</h3><p>' + h(goal.description) + '</p><span>完成奖励：' + h(goal.rewardText) + '</span><button type="button" data-goal="' + id + '" data-revision="' + state.revision + '"' + (uiLocked ? ' disabled' : '') + '>选择目标</button></article>').join('');
+  showDialog('goal', game.TERM_NAMES[state.term - 1] + ' · 选择本学期目标', '<p>每学期选择一次，确定后不能更换。完成后在学期结算时获得奖励，未完成没有额外惩罚。</p><div class="goal-choice-list">' + cards + '</div>');
 }
 function showBackground() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
@@ -435,7 +453,7 @@ function showEvent() {
   showDialog('event', event.title, '<p>' + h(event.description) + '</p><p class="dialog-note">' + h(event.trigger) + '。先做个选择，再继续。事件进行中也可以保存。</p><div class="event-choice-list">' + choices + '</div>');
 }
 function summaryMarkup(summary) {
-  return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>学习进度 ' + summary.preparation + ' / 100。期末成绩按 40 + 学习进度 × 0.6 计算。</p><div class="summary-lines"><span>生活费 <b>−300 元</b></span><span>补助 <b>+' + summary.aid + ' 元</b></span><span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
+  return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>学习进度 ' + summary.preparation + ' / 100。期末成绩按 40 + 学习进度 × 0.6 计算。</p>' + (summary.goal ? '<div class="dialog-note">目标：' + h(summary.goal.title) + ' · ' + (summary.goal.completed ? '已完成，' + h(summary.goal.rewardText) : '未完成') + '</div>' : '') + '<div class="summary-lines"><span>生活费 <b>−300 元</b></span><span>补助 <b>+' + summary.aid + ' 元</b></span><span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
 }
 function requestEndTerm() {
   if (!state) return;
@@ -459,17 +477,20 @@ function showEndings() {
   showDialog('endingChoice', '选择毕业方向', '<p>八学期平均成绩 ' + state.endingOptions.average.toFixed(1) + '，达标 ' + state.endingOptions.passed + '/8 学期。</p><div class="ending-list">' + state.endingOptions.options.map((item) => '<article class="ending-card"><h3>' + h(item.title) + '</h3>' + requirementsMarkup(item.requirements) + '<button type="button" data-ending="' + item.id + '" data-revision="' + state.revision + '"' + (!item.available || uiLocked ? ' disabled' : '') + '>' + (item.available ? '选择' + h(item.title) : '条件未满足') + '</button></article>').join('') + '</div>');
 }
 const EXPERIENCE_LABELS = {
-  project: '校园项目完成', club: '社团活动经历', internship: '实习经历完成', fitnessTest: '体测体验达标',
+  project: '校园项目完成', club: '社团活动经历', internship: '实习经历完成', fitnessTest: '体测体验达标', roommateTrip: '室友周末出行', mentorReferral: '导师推荐机会', clubLeadership: '社团主理经历',
   military: '军训汇演完成', singer: '歌手大赛经历', trip: '返乡分享经历', contest: '学科竞赛经历'
 };
 function growthRecord() {
-  return courseTable() + '<h3>校园经历</h3>' + (state.experiences.length ? '<ul>' + state.experiences.map((item) => '<li>' + game.TERM_NAMES[item.term - 1] + '：' + h(EXPERIENCE_LABELS[item.type] || '校园经历') + '</li>').join('') + '</ul>' : '<p>还没有拿得出手的经历。</p>') + '<h3>事件链进度</h3><ul>' + Object.entries(state.chains).map(([id, chain]) => '<li>' + game.CHAIN_NAMES[id] + '：' + chainLabel(chain) + (chain.status === 'active' ? '，预计第 ' + chain.deadline + ' 学期出结果' : '') + '</li>').join('') + '</ul><h3>毕业条件进度</h3>' + game.evaluateEndings(state).options.filter((item) => item.id !== 'notQualified').map((item) => '<h4>' + h(item.title) + '</h4>' + requirementsMarkup(item.requirements)).join('');
+  return courseTable() + relationshipMarkup() + '<h3>学期目标</h3>' + (state.goalHistory.length ? '<ul>' + state.goalHistory.map((item) => '<li>' + game.TERM_NAMES[item.term - 1] + '：' + h(item.title) + ' · ' + (item.completed ? '完成，' + h(item.rewardText) : '未完成') + '</li>').join('') + '</ul>' : '<p>还没有选择过学期目标。</p>') + '<h3>校园经历</h3>' + (state.experiences.length ? '<ul>' + state.experiences.map((item) => '<li>' + game.TERM_NAMES[item.term - 1] + '：' + h(EXPERIENCE_LABELS[item.type] || '校园经历') + '</li>').join('') + '</ul>' : '<p>还没有拿得出手的经历。</p>') + '<h3>事件链进度</h3><ul>' + Object.entries(state.chains).map(([id, chain]) => '<li>' + game.CHAIN_NAMES[id] + '：' + chainLabel(chain) + (chain.status === 'active' ? '，预计第 ' + chain.deadline + ' 学期出结果' : '') + '</li>').join('') + '</ul><h3>毕业条件进度</h3>' + game.evaluateEndings(state).options.filter((item) => item.id !== 'notQualified').map((item) => '<h4>' + h(item.title) + '</h4>' + requirementsMarkup(item.requirements)).join('');
 }
 const ENDING_TEXT = {
   ordinary: '毕业典礼的台子搭在操场边上，学士服领到手的时候还带着消毒水味。你想起大一第一次进校门，行李箱的轮子在石板路上响了一路。四年的账算下来不复杂：八张成绩单、几场活动、一次体测、几个没说出口的遗憾。有人去了远方，有人留在北京，你选了最稳的一条路。稳妥不是妥协，是你一个学期一个学期攒出来的底气。银杏大道下个秋天还会金黄，只是看它的人换了一批。行李打包完，你在宿舍门口站了会儿，把钥匙放在了宿管阿姨的窗口。出门的时候，风里有北京秋天常有的那种凉。你回头看了一眼，楼还是那栋楼。',
   furtherStudy: '录取结果出来的那天，你在图书馆的老位置上坐了很久。窗外银杏叶还没黄透，键盘边摊着你四年攒下的成绩单和项目结题报告。你想起实验室改到熄灯的晚上，想起答辩前手心出的汗，想起自习室里陌生人给你留的半张桌子。深造的路，是一次次「再来一遍」铺出来的。秋天你还会回到这间图书馆，只是身份换了：从占座的人，变成写论文的人。导师的邮件躺在邮箱里，回复写了又删，最后发出去一句「收到，谢谢老师」。窗外有鸟落在窗台上。你忽然想，四年前那个拖着行李箱的你，大概想不到今天。',
   employment: '三方协议签完那天，你在食堂吃了最后一顿窗口的饭。熟悉的打菜阿姨问你毕业去哪，你说了个城市名。实习时的通勤路线、改过七版的简历、面试官问倒你的那个问题，都成了档案里薄薄的几页。校门口的行李托运点排着长队，四年生活被打包成两三个纸箱。你最后看了一眼南门，知道下次回来，这里会叫你校友。手机亮了，是入职通知，提醒你下周一报到。你关掉屏幕，把手机塞进口袋，往地铁站走去。进站的风吹起衣角，晚高峰的人流把你卷了进去，和这座城市里的其他人一样。',
-  notQualified: '有些学期过得潦草，成绩单上有几行空着。收拾行李的时候你才发现，四年比想象中结束得快。遗憾是真的：欠下的课、没递出的申请、拖到最后的复习。但走过的路也不算白走——认识的人、熬过的夜、银杏大道上散过的步，都还是你的。人生不只有一张毕业证那么窄的路。先把这段日子收好，接下来怎么走，决定权还在你手里。远处操场传来口哨声，和四年前开学那天一样。你拉着箱子走向校门，门口的风把几张旧纸吹得翻起来。天还亮着。'
+  notQualified: '有些学期过得潦草，成绩单上有几行空着。收拾行李的时候你才发现，四年比想象中结束得快。遗憾是真的：欠下的课、没递出的申请、拖到最后的复习。但走过的路也不算白走——认识的人、熬过的夜、银杏大道上散过的步，都还是你的。人生不只有一张毕业证那么窄的路。先把这段日子收好，接下来怎么走，决定权还在你手里。远处操场传来口哨声，和四年前开学那天一样。你拉着箱子走向校门，门口的风把几张旧纸吹得翻起来。天还亮着。',
+  campusLeader: '你没有离开校园太远。毕业手续办完后，社团群里还在讨论下一届的活动，你顺手把交接文档又检查了一遍。有人说你像是把一所小学校园装进了自己的通讯录。未来的工作还没定，但你知道怎样把陌生人组织成一支队伍。',
+  balanced: '你把毕业照放在相册里，也把跑道、宿舍和银杏大道放在记忆里。成绩不是最耀眼的那一项，但你学会了照顾身体、保持心情，也学会在忙碌里给朋友留位置。四年没有被某一个目标吞掉，走出来时，你还认得自己。',
+  innovator: '老师在毕业前把你的项目报告转给了校友。你知道下一段路还会有不确定，但也知道如何把一个想法变成可以交付的东西。校园的实验楼熄灯了，新的项目正等着你打开第一盏灯。'
 };
 function showResult() {
   audio?.play('fanfare');
@@ -481,6 +502,7 @@ function resumePhase() {
   else if (state.phase === 'summary') showSummary();
   else if (state.phase === 'endingChoice') showEndings();
   else if (state.phase === 'finished') showResult();
+  else if (state.phase === 'playing' && !state.semesterGoal) showGoals();
   else dialog.close();
 }
 function showLoad() {
@@ -544,7 +566,13 @@ $('#dialogBody').addEventListener('click', (event) => {
     audio?.play('success');
     const feedback = EVENT_CHOICE_FLAVOR[result.entry.event + ':' + result.entry.choice] || result.entry.title + '。';
     $('#actionFeedback').textContent = feedback;
-    if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; } else { dialog.close(); showToast(feedback); }
+    if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; } else if (!state.semesterGoal) { showGoals(); $('#dialogNotice').textContent = feedback; } else { dialog.close(); showToast(feedback); }
+  } else if (button.dataset.goal) {
+    const result = runCommand('chooseGoal', button.dataset.goal, button.dataset.revision);
+    if (!result) return;
+    dialog.close();
+    renderState();
+    showToast('已选择目标：' + result.entry.title);
   } else if (button.dataset.ending) {
     if (runCommand('chooseEnding', button.dataset.ending, button.dataset.revision)) { saveCurrent(true); showResult(); }
   }
@@ -593,6 +621,7 @@ $('#dialogSave').addEventListener('click', showSave);
 $('#loadButton').addEventListener('click', showLoad);
 $('#helpButton').addEventListener('click', () => { if (state) showTutorial(); });
 $('#backgroundButton').addEventListener('click', () => { if (state) showBackground(); });
+$('#goalButton').addEventListener('click', () => { if (state && state.phase === 'playing') state.semesterGoal ? showDialog('goal', '本学期目标', goalMarkup(game.evaluateGoal(state)) + relationshipMarkup(), [{ id: 'resume', text: '继续安排' }]) : showGoals(); });
 $('#restartButton').addEventListener('click', () => { if (state) askRestart(); });
 $('#historyButton').addEventListener('click', () => { if (state) showDialog('history', '四年成长记录', growthRecord(), [{ id: 'resume', text: '继续安排' }]); });
 $('#exportLogButton').addEventListener('click', () => { if (state) exportLog(); });
@@ -617,7 +646,7 @@ window.addEventListener('storage', (event) => {
   }
 });
 dialog.addEventListener('cancel', (event) => {
-  if (!state || ['eventPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment'].includes(dialogMode)) event.preventDefault();
+  if (!state || ['eventPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment'].includes(dialogMode) || (dialogMode === 'goal' && !state.semesterGoal)) event.preventDefault();
 });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && activePlace && !dialog.open) closePlace();

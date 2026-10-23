@@ -50,13 +50,18 @@ function app(storage = memory(), withSms = false) {
     element(selector).emit('click', { target: { closest: () => ({ dataset }) } });
   }
   return { storage, element, evaluate, click, window,
-    start() {
+    start(goal = 'explore') {
       element('#nicknameInput').value = '界面测试';
       evaluate('startGame()');
       assert.equal(evaluate('dialogMode'), 'enrollment');
       click('#dialogButtons', { dialogAction: 'resume' });
       assert.equal(evaluate('dialogMode'), 'tutorial');
       click('#dialogButtons', { dialogAction: 'resume' });
+      assert.equal(evaluate('dialogMode'), 'goal');
+      if (goal) {
+        click('#dialogBody', { goal, revision: String(evaluate('state.revision')) });
+        this.flush();
+      }
     },
     flush() { const jobs = [...timers.values()]; timers.clear(); jobs.forEach(callback => callback()); } };
 }
@@ -147,7 +152,7 @@ test('新局未选栏位时结算保留内存，首次选栏后后续结算只�
   const ui = app();
   ui.start();
   ui.click('#endTermButton');
-  ui.click('#dialogButtons', { dialogAction: 'settle', revision: '0' });
+  ui.click('#dialogButtons', { dialogAction: 'settle', revision: String(ui.evaluate('state.revision')) });
   assert.equal(ui.evaluate('state.phase'), 'summary');
   assert.equal(ui.storage.data.size, 0);
   assert.match(ui.element('#dialogBody').innerHTML, /尚未选择存档栏位/);
@@ -202,7 +207,7 @@ for (const state of phaseStates()) {
       ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
       assert.equal(ui.evaluate('activeSaveSlot'), 2);
       assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state)')), state);
-      const mode = { eventPending: 'event', summary: 'summary', endingChoice: 'endingChoice', finished: 'finished' }[state.phase];
+      const mode = { playing: 'goal', eventPending: 'event', summary: 'summary', endingChoice: 'endingChoice', finished: 'finished' }[state.phase];
       if (mode) assert.equal(ui.evaluate('dialogMode'), mode);
       else assert.equal(ui.element('#termDialog').open, false);
       ui.click('#saveButton');
@@ -306,4 +311,59 @@ test('新增校园经历从存档恢复后显示中文名称，成长记录不�
   const html = ui.element('#dialogBody').innerHTML;
   for (const name of ['军训', '歌手大赛', '返乡', '竞赛']) assert.ok(html.includes(name), name);
   assert.doesNotMatch(html, /undefined/);
+});
+
+test('目标选择弹窗可保存未选目标，读档后继续选择；选择只执行一次并可查看关系', () => {
+  const ui = app();
+  ui.start(null);
+  assert.equal((ui.element('#dialogBody').innerHTML.match(/data-goal=/g) || []).length, 5);
+  ui.click('#dialogSave'); ui.click('#dialogBody', { saveSlot: '2' });
+  assert.equal(ui.evaluate('dialogMode'), 'goal');
+  assert.equal(saves.createSlotService(ui.storage).load(2).state.semesterGoal, null);
+  const restored = app(ui.storage);
+  restored.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(restored.evaluate('dialogMode'), 'goal');
+  restored.click('#dialogBody', { goal: 'community', revision: '0' });
+  assert.equal(restored.evaluate('state.semesterGoal.id'), 'community');
+  assert.equal(restored.element('#termDialog').open, false);
+  restored.click('#dialogBody', { goal: 'practice', revision: '0' });
+  assert.equal(restored.evaluate('state.revision'), 1);
+  restored.flush();
+  restored.click('#goalButton');
+  const html = restored.element('#dialogBody').innerHTML;
+  for (const label of ['连接校园', '室友', '指导老师', '社团伙伴']) assert.ok(html.includes(label), label);
+  assert.doesNotMatch(html, /undefined/);
+  assert.equal((html.match(/data-goal=/g) || []).length, 0);
+  restored.click('#dialogButtons', { dialogAction: 'resume' });
+  assert.equal(restored.element('#termDialog').open, false);
+});
+
+test('学期总结展示目标结果，下一学期先处理必需事件再选择新目标', () => {
+  const ui = app();
+  ui.start('scholar');
+  ui.click('#endTermButton');
+  ui.click('#dialogButtons', { dialogAction: 'settle', revision: String(ui.evaluate('state.revision')) });
+  assert.match(ui.element('#dialogBody').innerHTML, /学业冲刺.*未完成/);
+  ui.flush();
+  ui.click('#dialogButtons', { dialogAction: 'next', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'event');
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'retake');
+  ui.flush();
+  ui.click('#dialogBody', { eventChoice: 'later', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  assert.equal(ui.evaluate('dialogMode'), 'goal');
+  assert.match(ui.element('#dialogTitle').textContent, /大一下/);
+  ui.flush();
+  ui.click('#dialogBody', { goal: 'wellbeing', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.semesterGoal.id'), 'wellbeing');
+  ui.flush(); ui.click('#historyButton');
+  assert.match(ui.element('#dialogBody').innerHTML, /大一上：学业冲刺.*未完成/);
+});
+
+test('关系事件预览展示拒绝的关系成本及接受后的结局条件', () => {
+  const ui = app();
+  ui.start();
+  const html = ui.evaluate('costs(game.EVENTS.mentorReferral.choices[1])');
+  assert.match(html, /导师关系 −3/);
+  assert.match(ui.evaluate('gains(game.EVENTS.mentorReferral.choices[0])'), /创新实践者/);
+  assert.match(ui.evaluate('gains(game.EVENTS.clubLeadership.choices[0])'), /校园组织者/);
 });
