@@ -133,17 +133,29 @@ test('commandId、revision 和事件实例共同阻止重复或过期操作', ()
   assert.equal(game.submitEventChoice(accepted.state, 'accept').ok, false);
 });
 
-test('项目和社团跨学期确认；社团链能完成并记录一次经历', () => {
+test('社团投入完成当学期收尾并记录经历；项目成果在之后的学期确认', () => {
   let state = game.createGame({ seed: 'club' });
   state = act(state, 'applyClub');
   state = act(state, 'clubWork');
-  state = act(state, 'clubWork');
-  assert.equal(state.chains.club.status, 'active');
-  assert.equal(state.pendingEvent, null);
-  state = nextTerm(roundtrip(state));
+  state = game.executeAction(state, 'clubWork').state;
+  assert.equal(state.pendingEvent.id, 'clubReview');
+  state = resolve(state);
   assert.equal(state.chains.club.status, 'completed');
   assert.equal(state.experiences.filter((item) => item.type === 'club').length, 1);
   assert.equal(game.executeAction(state, 'clubWork').ok, false);
+  // 项目：第二学期完成两次投入，成果确认到下一学期才出现
+  state = nextTerm(roundtrip(state));
+  state = act(state, 'study');
+  state = act(state, 'study');
+  state = act(state, 'applyProject');
+  state = act(state, 'projectWork');
+  state = act(state, 'projectWork');
+  assert.equal(state.pendingEvent, null);
+  assert.equal(state.chains.project.status, 'active');
+  state = nextTerm(roundtrip(state));
+  assert.equal(state.chains.project.status, 'completed');
+  assert.equal(state.experiences.filter((item) => item.type === 'project').length, 1);
+  assert.equal(game.executeAction(state, 'projectWork').ok, false);
 });
 
 test('申请延期和到期延期都有继续路径；最后学期未完成会留下说明', () => {
@@ -338,7 +350,13 @@ test('两标签页冲突拒绝覆盖，主动读取后可保存；临时档不�
 
 test('成果确认可以免费延期或放弃；最后学期仍有免费放弃路径', () => {
   let state = game.createGame();
-  for (const id of ['applyClub', 'clubWork', 'clubWork']) state = act(state, id);
+  for (const id of ['applyClub', 'clubWork']) state = act(state, id);
+  state = game.executeAction(state, 'clubWork').state;
+  assert.equal(state.pendingEvent.id, 'clubReview');
+  state = game.submitEventChoice(state, 'later').state;
+  assert.equal(state.chains.club.progress, 2);
+  assert.equal(state.chains.club.reviewAfter, 2);
+  while (state.pendingEvent) state = game.submitEventChoice(state, 'later').state;
   state = game.continueGame(game.endTerm(state).state).state;
   for (let term = 2; term < 8; term++) {
     assert.equal(state.pendingEvent.id, 'clubReview');

@@ -44,7 +44,7 @@
     show: { place: 'auditorium', title: '看演出', description: '会堂今晚有演出。灯暗下来的时候，你才想起上次看戏还是高中。', time: 1, energy: 2, money: 40, mood: 8, social: 2, limit: 3 }
   };
   const EVENTS = {
-    roommateCare: { priority: 10, title: '室友的关心', description: '晚上十一点，室友从对面上铺探下头，说你今天回来得挺早。沉默几秒，他问，要不要一起下楼吃点东西。', trigger: '你最近回宿舍越来越晚，话也越来越少', choices: [
+    roommateCare: { priority: 10, title: '室友的关心', description: '晚上十一点，室友发来消息，说看你最近状态不太对，问要不要一起下楼吃点东西。消息后面跟了一个拍一拍。', trigger: '你最近回宿舍越来越晚，话也越来越少', choices: [
       { id: 'talk', title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 15, social: 3 },
       { id: 'later', title: '先自己调整', description: '说声不用了，戴上耳机。今晚想一个人待着。' }
     ] },
@@ -95,7 +95,7 @@
       { id: 'apply', title: '递交转专业申请', description: '打印成绩单，填表，交到教务处。心里七上八下。', time: 2, energy: 10, mood: 4, social: 1 },
       { id: 'later', title: '留在原专业', description: '想想又算了。现在这个方向，其实也没那么差。' }
     ] },
-    seminar: { priority: 71, title: '深造宣讲会', description: '报告厅门口排起长队，海报写着：深造经验分享会。台上坐着几个去年上岸的学长学姐。', trigger: '报告厅门口排起了长队', choices: [
+    seminar: { priority: 71, title: '深造宣讲会', description: '教学楼下贴出深造经验分享会的海报：去年上岸的学长学姐来分享，群里已经开始接龙报名。', trigger: '报告厅门口排起了长队', choices: [
       { id: 'attend', title: '进去听一听', description: '记了半页笔记，也记下了几个名字。', time: 1, energy: 3, furtherStudy: 8 },
       { id: 'later', title: '路过，不进去', description: '人太多了。以后找同学要份笔记。' }
     ] },
@@ -132,7 +132,7 @@
       { id: 'share', title: '分给室友', description: '特产摆了一桌，大家边吃边聊起各自的家乡。', time: 1, energy: 3, social: 6, mood: 6, experience: 'trip' },
       { id: 'later', title: '留着自己吃', description: '味道是家的味道，谁也分不走。' }
     ] },
-    contest1: { priority: 55, title: '竞赛招募', description: '实验楼公告栏贴出全国竞赛校内选拔通知。上次的项目老师路过，朝你扬了扬下巴：组个队？', trigger: '公告栏贴出竞赛选拔通知', choices: [
+    contest1: { priority: 55, title: '竞赛招募', description: '教学楼下公告栏贴出全国竞赛校内选拔通知。上次的项目老师路过，朝你扬了扬下巴：组个队？', trigger: '公告栏贴出竞赛选拔通知', choices: [
       { id: 'join', title: '组队报名', description: '队伍拉起来了，队名想了一晚上。', time: 2, energy: 8 },
       { id: 'later', title: '这学期太忙', description: '和老师道了谢，摆摆手。' }
     ] },
@@ -140,11 +140,11 @@
       { id: 'compete', title: '全力以赴', description: '答辩结束，评委多问了一句：你们是哪个学校的。', time: 2, energy: 12, preparation: 8, social: 5, mood: 6, experience: 'contest' },
       { id: 'later', title: '弃权', description: '交了半成品。下次再来。' }
     ] },
-    cat: { priority: 61, title: '台阶上的猫', description: '图书馆门口的台阶上卧着一只橘猫，尾巴慢慢扫。它抬头看了你一眼，又趴下了。', trigger: '一只橘猫卧在台阶上', choices: [
+    cat: { priority: 61, title: '台阶上的猫', description: '路边的台阶上卧着一只橘猫，尾巴慢慢扫。它抬头看了你一眼，又趴下了。', trigger: '一只橘猫卧在台阶上', choices: [
       { id: 'feed', title: '买根火腿肠喂它', description: '它凑过来，吃完蹭了蹭你的裤脚。', time: 1, money: 10, mood: 5 },
       { id: 'later', title: '赶时间，先走了', description: '你绕开它。它也不恼，继续晒太阳。' }
     ] },
-    canteen: { priority: 62, title: '食堂新窗口', description: '食堂三楼开了新窗口，队伍拐了两个弯。前面的同学说，招牌菜每天都卖断货。', trigger: '新窗口的队伍拐了两个弯', choices: [
+    canteen: { priority: 62, title: '食堂新窗口', description: '群里有人发来消息：食堂三楼开了新窗口，队伍拐了两个弯，招牌菜每天都卖断货。', trigger: '新窗口的队伍拐了两个弯', choices: [
       { id: 'queue', title: '排队尝一尝', description: '排到窗口，阿姨手一抖，多给了半勺。', time: 1, money: 20, mood: 6, energy: 3 },
       { id: 'later', title: '人太多，改天', description: '拍了张菜单照片，发给室友。' }
     ] },
@@ -153,7 +153,7 @@
       { id: 'later', title: '放回原处', description: '你把它放回原地。' },
       { id: 'pocket', title: '装进口袋', description: '揣进兜里。晚上睡觉前，你把卡塞到了枕头下面。', income: 50, mood: -8 }
     ] },
-    wall: { priority: 64, title: '表白墙点名', description: '表白墙上有人发了你：今天在图书馆遇到的穿灰卫衣的同学。室友把截图甩进群里，连发三个问号。', trigger: '室友把截图甩进了群里', choices: [
+    wall: { priority: 64, title: '表白墙点名', description: '表白墙上有人发了你：今天在校园里遇到的穿灰卫衣的同学。室友把截图甩进群里，连发三个问号。', trigger: '室友把截图甩进了群里', choices: [
       { id: 'reply', title: '在群里否认', description: '群里闹了一晚上，最后也没人猜出是谁发的。', time: 1, social: 4, mood: 4 },
       { id: 'later', title: '装没看见', description: '你退出群聊，过了一会儿又点进来。' }
     ] },
@@ -161,11 +161,11 @@
       { id: 'argue', title: '把书挪开坐下', description: '书的主人回来，瞪了你一眼。你没有让。', time: 1, energy: 3, mood: -4, social: 2 },
       { id: 'later', title: '换个位子', description: '多走两步的事。' }
     ] },
-    snow: { priority: 66, season: 'autumn', title: '北京初雪', description: '北京初雪，落在银杏叶还没扫尽的路上。宿舍楼下一片惊呼声。', trigger: '北京初雪', choices: [
+    snow: { priority: 66, season: 'autumn', title: '北京初雪', description: '北京初雪，落在银杏叶还没扫尽的路上。校园里一片惊呼声。', trigger: '北京初雪', choices: [
       { id: 'play', title: '下楼踩雪', description: '你在雪地里走了两圈，鞋湿了，心里很痛快。', time: 1, recovery: 2, mood: 8 },
       { id: 'later', title: '隔窗看看', description: '窗户上哈了口气，画了个笑脸。' }
     ] },
-    parcel: { priority: 67, season: 'autumn', title: '快递爆仓', description: '双十一的快递堆成了山。快递点的货架根本不够用，纸箱一路码到门口。', trigger: '快递点的纸箱码到了门口', choices: [
+    parcel: { priority: 67, season: 'autumn', title: '快递爆仓', description: '双十一的快递堆成了山。室友发来消息：快递点的货架不够用，纸箱一路码到门口，你的包裹也到了。', trigger: '快递点的纸箱码到了门口', choices: [
       { id: 'find', title: '在纸箱堆里找快递', description: '翻了二十分钟，你的包裹在最底层。', time: 1, energy: 3, mood: -4, social: 2 },
       { id: 'later', title: '过两天再说', description: '让它先躺着。' }
     ] },
@@ -173,7 +173,7 @@
       { id: 'join', title: '加入话题', description: '聊到凌晨两点，谁也没看时间。', time: 1, social: 5, mood: 6 },
       { id: 'later', title: '闭眼装睡', description: '你翻了个身，慢慢真的睡着了。' }
     ] },
-    injury: { priority: 74, title: '球场上的崴脚', description: '打球抢篮板，落地的时候脚踝咔地响了一声。现在肿起来了，走路一瘸一拐。', trigger: '脚踝肿起来了', choices: [
+    injury: { priority: 74, title: '操场上的崴脚', description: '跑圈冲刺的时候，脚踝咔地响了一声。现在肿起来了，走路一瘸一拐。', trigger: '脚踝肿起来了', choices: [
       { id: 'treat', title: '去校医院处理', description: '冰袋敷上，校医说没伤到骨头，静养一周。', time: 1, energy: 3, money: 50, mood: 5 },
       { id: 'later', title: '贴个膏药忍着', description: '膏药味冲鼻子。疼是疼，课还是得去上。' }
     ] },
@@ -208,16 +208,17 @@
   const CAMPUS_SCHEDULE = {
     military1: { terms: [1], minActions: 2, maxElapsed: 4 },
     military2: { terms: [1], maxElapsed: 7, after: ['military1', 'join', 0], actionGap: 1 },
-    singer1: { season: 'autumn', minElapsed: 4, maxElapsed: 7, unless: 'singer3' },
+    // actions 限定事件只在与文案相符的行动后触发；结果类事件（复赛、汇演、答辩等）不限，因为玩家已报名参加。
+    singer1: { season: 'autumn', minElapsed: 4, maxElapsed: 7, unless: 'singer3', actions: ['clubWork', 'walk', 'chat'] },
     singer2: { season: 'autumn', after: ['singer1', 'signup', 0], actionGap: 1 },
     singer3: { season: 'autumn', after: ['singer2', 'advance', 0], actionGap: 1 },
     ticket1: { season: 'autumn', minElapsed: 9, unless: 'ticket3' },
     ticket2: { season: 'spring', maxElapsed: 4, after: ['ticket1', 'buy', 1] },
-    ticket3: { season: 'spring', maxElapsed: 6, after: ['ticket2', 'board', 0], actionGap: 1 },
-    contest1: { terms: [5], minElapsed: 4, maxElapsed: 7, unless: 'contest2' },
+    ticket3: { season: 'spring', maxElapsed: 6, after: ['ticket2', 'board', 0], actionGap: 1, actions: ['chat'] },
+    contest1: { terms: [5], minElapsed: 4, maxElapsed: 7, unless: 'contest2', actions: ['study', 'applyProject', 'projectWork'] },
     contest2: { terms: [5], after: ['contest1', 'join', 0], actionGap: 1 },
-    transfer: { terms: [3], minElapsed: 4, maxElapsed: 7 },
-    seminar: { terms: [6], minElapsed: 4, maxElapsed: 7 },
+    transfer: { terms: [3], minElapsed: 4, maxElapsed: 7, actions: ['study'] },
+    seminar: { terms: [6], minElapsed: 4, maxElapsed: 7, actions: ['study', 'show'] },
     graduation: { terms: [8], minElapsed: 9 }
   };
   const RANDOM_CONTEXTS = {
