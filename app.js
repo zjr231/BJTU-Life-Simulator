@@ -30,6 +30,16 @@ let dialogMode = null;
 let uiLocked = false;
 let unlockTimer;
 let toastTimer;
+let placeEnterTimer;
+// 校园偶遇 NPC：纯逻辑在 npc.js，渲染与点击对话在这里；属于观感层，不进入存档格式。
+const npc = typeof CampusNpc !== 'undefined' ? CampusNpc : null;
+let npcSystem = null;
+let npcTimer = null;
+let npcTalking = null;
+const npcFades = new Map();
+const npcNodes = new Map();
+const npcTalkIndex = new Map();
+const npcChatLogs = new Map();
 let commandSequence = 0;
 let savedRevision = -1;
 let savedAt = '';
@@ -69,8 +79,8 @@ const ACTION_FLAVOR = {
 const EVENT_CHOICE_FLAVOR = {
   'roommateCare:talk': '烤串摊的灯很亮。你把最近的破事倒了一桌子，说到最后，自己先笑了。',
   'roommateCare:later': '你戴上耳机。室友没再说话，只把顶灯调暗了一格。',
-  'fitnessTest:participate': '冲线的时候腿有点软。体育老师低头在名单上画了个勾。',
-  'fitnessTest:later': '这次没报名。跑道一直都在，下次再说。',
+  'fitnessTest:later': '假条开好了，医务室老师签了字。你走出校医院，听见操场上隐约的哨声。',
+  'fitnessRetest:later': '通知被划进「稍后处理」。它会在消息列表里，一直等到你点开为止。',
   'projectOffer:accept': '你在报名表上签了字。当晚，项目群里多了条欢迎消息。',
   'projectOffer:later': '你婉拒了。老师摆摆手：随时欢迎回来。',
   'projectReview:complete': '答辩结束，台下有人鼓掌。你把 PPT 拖进了「结题」文件夹。',
@@ -88,12 +98,18 @@ const EVENT_CHOICE_FLAVOR = {
   'internshipReview:abandon': '没办证明。通勤路上的晚霞，你自己记得。',
   'campusDiscussion:discuss': '三个人的草稿纸拼到一张桌上，那道题终于有了第三种解法。',
   'campusDiscussion:later': '你低头继续看书。那桌的声音小了下去。',
+  'military1:tug': '麻绳绷直的那一刻，你听见全连在喊号子。手心的茧，是军训留给你的第一枚勋章。',
+  'military1:choir': '几百人的合唱把操场都震了震。教官说，唱得比走正步齐。',
   'military1:join': '迷彩服领到手，裤腿长了一截。你把鞋带系得比高考还紧。',
   'military1:later': '假条交上去了。你在树荫下看他们踢正步。',
-  'military2:perform': '方阵走过主席台，你的正步一个都没错。掌声响起来的时候，你才发现手心全是汗。',
+  'military2:march': '方阵走过主席台，你的正步一个都没错。掌声响起来的时候，你才发现手心全是汗。',
+  'military2:choir': '合唱方队上台，你站在第二排。台下跟着打拍子，比排练时齐多了。',
   'military2:later': '你跟在队伍最后。走过主席台时，也把腰挺了挺。',
   'transfer:apply': '材料递进窗口。之后的日子，你路过通知栏都会多看两眼。',
   'transfer:later': '你把通知拍下来，存进相册，再没打开。',
+  'transferResult:later': '你把手机扣在桌上。通知栏的红点，等会儿再看。',
+  'sportsMeet:fun': '两人三足摔成一团，全班笑到岔气。名次不重要，照片全是表情包。',
+  'sportsMeet:later': '你在看台递了一下午的水。加油喊得嗓子哑了，比自己上场还累。',
   'seminar:attend': '散场后你在报告厅门口站了会儿。有个学长加了你微信，说资料发你。',
   'seminar:later': '你从队伍旁绕过去，回头看了一眼海报。',
   'retake:retake': '报名确认短信到了。你把教材重新包了书皮。',
@@ -147,8 +163,61 @@ const EVENT_CHOICE_FLAVOR = {
   'alumniStory:listen': '学长递来名片。你说，先加个微信。',
   'alumniStory:later': '你从人群边上走过。杯盘碰撞声里，混着几句旧日里的校名。',
   'frontDesk:apply': '结账的时候手有点抖。回家的路上，你给自己买了瓶汽水。',
-  'frontDesk:later': '你盯着启事看了两秒，最后被床的召唤打败了。'
+  'frontDesk:later': '你盯着启事看了两秒，最后被床的召唤打败了。',
+  'ginkgo:photo': '一阵风过，银杏叶落了你一头。照片发出去，家里人说：北京的秋天真好看。',
+  'ginkgo:later': '你在树下站了一会儿，风把叶子吹到你肩膀上。',
+  'hawthorn:take': '山楂酸得人眯眼睛。同学说，这就是「小红果」的来历。',
+  'hawthorn:later': '你绕开摊位。身后的笑声和山楂味一起飘过来。',
+  'alumniFair:browse': '老校友翻出当年的饭票，你翻出手机里的校园地图。差了二十年，聊的还是一座园子。',
+  'alumniFair:later': '今天人太多了。你说改天再来，转身走进了大堂。',
+  'rollCall:cover': '「到！」你喊得中气十足。老师推了推眼镜，没抬头。',
+  'rollCall:later': '你低头翻书。讲台上传来一个名字，不是你的。',
+  'jobFair:browse': '展位图拍下来，二维码扫了七八个。有些岗位的名字，你第一次听说。',
+  'jobFair:later': '你摆摆手。离毕业还早，海报上的字以后再认。',
+  'medicalInsurance:register': '参保回执折好放进钱包。从此看病买药，能报一点是一点。',
+  'medicalInsurance:later': '想着身体还行，先把这事放一放。',
+  'labNight:join': '凌晨两点的实验室，咖啡和键盘声都很响。师兄说：谢谢你，数据跑完了。',
+  'labNight:later': '你拉上外套。逸夫楼的灯在身后，亮成一片。',
+  'danceParty:join': '从僵硬到放开，一晚上下来嗓子哑了。回宿舍路上，彩灯还在晃。',
+  'danceParty:later': '音乐挺好听。你在门口听了一会儿，转身走了。',
+  'memorial129:watch': '谢幕时全场起立。身边有人小声说：这台晚会排了三个月。',
+  'memorial129:later': '你拍了张节目单。横幅上的字被风吹得猎猎响。'
 };
+// NPC 2D 小人：同一套基础身型（头、袖、上衣、下摆、腿）加各职位配件，班车单独绘制。
+function npcBody(options) {
+  const skin = options.skin || '#f2c9a0';
+  const top = options.top;
+  return '<circle cx="20" cy="12" r="7" fill="' + skin + '"/>'
+    + '<rect x="9" y="21" width="3" height="11" rx="1.5" fill="' + top + '"/>'
+    + '<rect x="28" y="21" width="3" height="11" rx="1.5" fill="' + top + '"/>'
+    + '<rect x="12" y="20" width="16" height="16" rx="4" fill="' + top + '"/>'
+    + '<rect x="13" y="28" width="14" height="6" rx="2" fill="' + (options.bottom || '#3c4450') + '"/>'
+    + (options.accessory || '')
+    + '<rect x="14" y="36" width="4" height="9" rx="2" fill="' + (options.legs || '#333a45') + '"/>'
+    + '<rect x="22" y="36" width="4" height="9" rx="2" fill="' + (options.legs || '#333a45') + '"/>';
+}
+const NPC_HAIR = '<path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#2b2b33"/>';
+const NPC_HAIR_GREY = '<path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#c9ccd1"/>';
+const NPC_GLASSES = '<circle cx="16" cy="12" r="2.2" fill="none" stroke="#22262b" stroke-width="1.1"/><circle cx="24" cy="12" r="2.2" fill="none" stroke="#22262b" stroke-width="1.1"/><path d="M18.2 12h3.6" stroke="#22262b" stroke-width="1.1"/>';
+const NPC_FIGURES = {
+  student: npcBody({ top: '#2e6fae', bottom: '#f4f4f4', accessory: NPC_HAIR + '<rect x="29" y="21" width="7" height="14" rx="2.5" fill="#7c4a21"/>' }),
+  senior: npcBody({ top: '#5b6b7c', bottom: '#8a97a5', accessory: NPC_HAIR + NPC_GLASSES + '<rect x="29" y="21" width="7" height="14" rx="2.5" fill="#6b4a2b"/>' }),
+  canteen: npcBody({ skin: '#f0c39a', top: '#f7f7f2', bottom: '#f7f7f2', accessory: NPC_HAIR + '<rect x="12" y="2" width="16" height="7" rx="2" fill="#f7f7f2"/><rect x="12" y="2" width="16" height="3" rx="1.5" fill="#d94f4f"/>' }),
+  lecturer: npcBody({ top: '#3f5c77', bottom: '#333a45', accessory: NPC_HAIR + '<path d="M19 21l2 6-2 1-2-1z" fill="#b03a2e"/>' }),
+  staff: npcBody({ top: '#6f7f8f', bottom: '#4c5866', accessory: NPC_HAIR + '<rect x="17" y="21" width="6" height="2" fill="#c26a2e"/><rect x="18" y="23" width="4" height="5" rx="0.8" fill="#f7f7f2"/>' }),
+  security: npcBody({ top: '#2b3440', bottom: '#2b3440', accessory: '<rect x="11" y="3" width="18" height="5" rx="2" fill="#2b3440"/><rect x="9" y="7" width="22" height="2" rx="1" fill="#1c232c"/>' }),
+  courier: npcBody({ top: '#f0a020', bottom: '#d9d9d9', accessory: '<rect x="13" y="3" width="14" height="4.5" rx="2" fill="#f0a020"/><rect x="12" y="20" width="16" height="3" rx="1" fill="#b37000"/>' }),
+  professor: npcBody({ top: '#4a4a55', bottom: '#333a45', accessory: NPC_HAIR_GREY + NPC_GLASSES + '<rect x="4" y="25" width="5" height="8" rx="1" fill="#8d5524"/>' }),
+  international: npcBody({ skin: '#8a5a3b', top: '#e84393', bottom: '#d63384', accessory: '<circle cx="14" cy="7" r="2.6" fill="#1d1d24"/><circle cx="20" cy="5.5" r="3" fill="#1d1d24"/><circle cx="26" cy="7" r="2.6" fill="#1d1d24"/>' }),
+  bus: '<rect x="3" y="9" width="34" height="27" rx="5" fill="#d94f4f"/>'
+    + '<rect x="6" y="13" width="11" height="9" rx="1.5" fill="#cfeef7"/><rect x="23" y="13" width="11" height="9" rx="1.5" fill="#cfeef7"/>'
+    + '<rect x="6" y="25" width="28" height="3.5" rx="1.5" fill="#a33333"/><rect x="6" y="31" width="28" height="2" rx="1" fill="#7d1f1f"/>'
+    + '<circle cx="12" cy="39" r="4.5" fill="#26272b"/><circle cx="12" cy="39" r="1.8" fill="#8f9296"/>'
+    + '<circle cx="28" cy="39" r="4.5" fill="#26272b"/><circle cx="28" cy="39" r="1.8" fill="#8f9296"/>'
+};
+function npcFigureSvg(figure) {
+  return '<svg class="npc-svg" viewBox="0 0 40 48" aria-hidden="true">' + (NPC_FIGURES[figure] || NPC_FIGURES.student) + '</svg>';
+}
 function statsMarkup() {
   const latest = state.courses.at(-1);
   const items = [
@@ -176,7 +245,7 @@ function renderState() {
   $('#directionBrief').innerHTML = '<div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
   $('#endTermButton').textContent = ({ eventPending: '处理当前事件', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果' })[state.phase] || '结束学期';
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
-  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave'].includes(dialogMode);
+  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc'].includes(dialogMode);
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
@@ -214,34 +283,188 @@ function openPlace(key, hotspot) {
   $('#placeDescription').textContent = game.PLACES[key].description;
   $('#actionFeedback').textContent = '逛逛不花资源。收益接近上限时，显示实际增加的数值。';
   hotspots.forEach((item) => item.classList.toggle('is-active', item.dataset.place === key));
-  $('#placeScreen').classList.add('is-open');
-  $('#placeScreen').setAttribute('aria-hidden', 'false');
-  $('#placeScreen').inert = false;
+  // 过场动画：地图聚焦压暗离场，场所屏入场时内容错落升起；入场标记随后清理，避免每次行动重绘都重播动画。
+  $('#mapScreen').classList.add('is-leaving');
+  const placeScreen = $('#placeScreen');
+  placeScreen.classList.add('is-open');
+  placeScreen.classList.add('is-entering');
+  if (typeof clearTimeout === 'function') clearTimeout(placeEnterTimer);
+  if (typeof setTimeout === 'function') placeEnterTimer = setTimeout(() => placeScreen.classList.remove('is-entering'), 1300);
+  placeScreen.setAttribute('aria-hidden', 'false');
+  placeScreen.inert = false;
   $('#mapScreen').inert = true;
   document.body.style.overflow = 'hidden';
   renderState();
   $('#backButton').focus();
 }
 function closePlace() {
-  $('#placeScreen').classList.remove('is-open');
-  $('#placeScreen').setAttribute('aria-hidden', 'true');
-  $('#placeScreen').inert = true;
+  const placeScreen = $('#placeScreen');
+  placeScreen.classList.remove('is-open');
+  placeScreen.classList.remove('is-entering');
+  if (typeof clearTimeout === 'function') clearTimeout(placeEnterTimer);
+  $('#mapScreen').classList.remove('is-leaving');
+  placeScreen.setAttribute('aria-hidden', 'true');
+  placeScreen.inert = true;
   $('#mapScreen').inert = false;
   hotspots.forEach((item) => item.classList.remove('is-active'));
   document.body.style.overflow = '';
   activePlace = null;
   if (!dialog.open) lastHotspot?.focus();
 }
+function resetNpcSystem() {
+  if (!npc) return;
+  npcSystem = npc.createSystem({ random: () => Math.random() });
+  npcFades.clear();
+  npcTalkIndex.clear();
+  npcChatLogs.clear();
+  npcTalking = null;
+  for (const node of npcNodes.values()) node.remove();
+  npcNodes.clear();
+  const layer = $('#npcLayer');
+  if (layer) layer.innerHTML = '';
+}
+function npcDisplayList() {
+  const entries = [];
+  if (npcSystem && state) for (const npc of npcSystem.active()) entries.push({ npc, fading: false });
+  const now = Date.now();
+  for (const [id, entry] of npcFades) {
+    if (now - entry.since >= 700) npcFades.delete(id);
+    else entries.push({ npc: entry.npc, fading: true });
+  }
+  return entries;
+}
+function renderNpcLayer() {
+  const layer = $('#npcLayer');
+  if (!layer) return;
+  if (typeof document.createElement !== 'function') {
+    // 没有节点构造能力的环境（自动化测试）：输出等价的文本标记。
+    layer.innerHTML = npcDisplayList().map((entry) => '<button class="npc-figure' + (entry.fading ? ' is-fading' : '') + '" data-npc-id="' + entry.npc.id + '">' + npcFigureSvg(entry.npc.figure) + '<span class="npc-label">' + h(entry.npc.label) + '</span></button>').join('');
+    return;
+  }
+  const wanted = new Set();
+  for (const entry of npcDisplayList()) {
+    wanted.add(entry.npc.id);
+    let node = npcNodes.get(entry.npc.id);
+    if (!node) {
+      node = document.createElement('button');
+      node.type = 'button';
+      node.className = 'npc-figure';
+      node.dataset.npcId = entry.npc.id;
+      node.setAttribute('aria-label', '和' + entry.npc.label + '搭话');
+      node.innerHTML = npcFigureSvg(entry.npc.figure) + '<span class="npc-label">' + h(entry.npc.label) + '</span>';
+      layer.appendChild(node);
+      npcNodes.set(entry.npc.id, node);
+      // 离场淡出：先按不透明插入，强制一次布局后再加淡出类，让过渡动起来。
+      if (entry.fading) {
+        try { node.getBoundingClientRect(); } catch (_) {}
+        node.classList.add('is-fading');
+      }
+    }
+    node.style.left = entry.npc.x + '%';
+    node.style.top = entry.npc.y + '%';
+    if (entry.fading) node.classList.add('is-fading');
+    else node.classList.remove('is-fading');
+  }
+  for (const [id, node] of npcNodes) {
+    if (wanted.has(id)) continue;
+    node.remove();
+    npcNodes.delete(id);
+  }
+}
+function npcTick() {
+  if (npcSystem && state) {
+    const events = npcSystem.tick(Date.now());
+    for (const npc of events.removed) npcFades.set(npc.id, { npc, since: Date.now() });
+  }
+  renderNpcLayer();
+  if (typeof setTimeout === 'function') npcTimer = setTimeout(npcTick, 300);
+}
+function talkToNpc(npcId) {
+  if (!npcSystem || !state || dialog.open) return;
+  const found = npcSystem.active().find((item) => item.id === npcId);
+  if (!found) return;
+  npcTalking = { id: found.id, identityId: found.identityId, label: found.label, figure: found.figure };
+  audio?.play('npc');
+  showNpcLine();
+}
+function showNpcLine() {
+  const lines = npc.linesFor(npcTalking.identityId);
+  const index = npcTalkIndex.get(npcTalking.id) || 0;
+  npcTalkIndex.set(npcTalking.id, index + 1);
+  const line = lines[index % lines.length];
+  // 配置了在线对话中转地址时，附加打字输入框：发送走云函数转 DeepSeek，失败自动回退本地台词。
+  const chatForm = game.AI_CHAT && game.AI_CHAT.relay
+    ? '<form id="npcChatForm" class="npc-chat-form"><label for="npcChatInput">' + h(npcTalking.label) + '就在眼前，想说点什么？</label><div class="npc-chat-row"><input id="npcChatInput" maxlength="200" placeholder="比如：最近校园里有什么新鲜事？" autocomplete="off"><button type="submit" class="utility-button">发送</button></div></form>'
+    : '';
+  showDialog('npc', npcTalking.label, '<div class="npc-dialog-figure">' + npcFigureSvg(npcTalking.figure) + '</div><p class="npc-dialog-line">' + h(line) + '</p><p class="dialog-note">校园里的人会随机出现，聊几句不消耗资源。</p>' + chatForm, [{ id: 'npcTalk', text: '再聊一句' }, { id: 'resume', text: '先走了', secondary: true }]);
+}
+// 在线对话的玩家背景速写，随学期推进变化，让人物回答更贴合当前处境。
+function npcPlayerContext() {
+  if (!state) return '一名新生';
+  const grades = state.courses.filter((item) => item.passed).length;
+  const stage = ({ eventPending: '正在处理校园事件', summary: '正在看学期总结', endingChoice: '正在做毕业方向选择', finished: '已经毕业' })[state.phase] || '正常校园生活';
+  return '昵称' + state.nickname + '，' + (state.background ? state.background.major : '') + '专业，' + game.TERM_NAMES[state.courses.length - 1] + '，已通过' + grades + '学期成绩，深造准备' + state.furtherStudy + '，求职准备' + state.jobPreparation + '，' + stage;
+}
+async function sendNpcChat() {
+  if (!npcTalking || dialogMode !== 'npc') return;
+  const input = $('#npcChatInput');
+  const text = String(input?.value || '').trim();
+  if (!text) { input?.focus(); return; }
+  const relay = game.AI_CHAT && game.AI_CHAT.relay;
+  if (!relay || typeof fetch !== 'function') { showNpcLine(); $('#dialogNotice').textContent = '在线对话通道没连上，先用本地台词聊吧。'; return; }
+  // 清掉已离场人物的聊天记录，控制总量；每条对话保留最近 12 条消息。
+  if (npcSystem) {
+    const activeIds = new Set(npcSystem.active().map((item) => item.id));
+    for (const id of [...npcChatLogs.keys()]) if (!activeIds.has(id)) npcChatLogs.delete(id);
+  }
+  const persona = npc.IDENTITIES.find((item) => item.id === npcTalking.identityId);
+  const history = npcChatLogs.get(npcTalking.id) || [];
+  const messages = [
+    { role: 'system', content: '你是《北交人生》校园游戏地图上的一位NPC：' + npcTalking.label + '。用中文回答，两三句以内，口语化，符合你的身份。不要用列表和表情包，不要透露你是AI。你常说的话例如：' + persona.lines.join('') },
+    { role: 'system', content: '正在和你说话的是北京交通大学的学生：' + npcPlayerContext() },
+    ...history,
+    { role: 'user', content: text }
+  ];
+  const sendButton = $('#npcChatForm button[type="submit"]');
+  const buttonText = sendButton ? sendButton.textContent : '';
+  if (input) input.disabled = true;
+  if (sendButton) { sendButton.disabled = true; sendButton.textContent = '对方正在输入…'; }
+  let controller = null;
+  let timeoutTimer = null;
+  if (typeof AbortController !== 'undefined') {
+    controller = new AbortController();
+    timeoutTimer = setTimeout(() => controller.abort(), game.AI_CHAT.timeoutMs || 15000);
+  }
+  try {
+    const response = await fetch(relay, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }), signal: controller ? controller.signal : undefined });
+    const data = await response.json();
+    const reply = typeof data?.reply === 'string' ? data.reply.trim() : '';
+    if (!response.ok || !reply) throw new Error('bad relay response');
+    history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
+    npcChatLogs.set(npcTalking.id, history.slice(-12));
+    const line = document.querySelector('.npc-dialog-line');
+    if (line) line.textContent = reply;
+    $('#dialogNotice').textContent = '';
+    if (input) { input.value = ''; input.disabled = false; input.focus(); }
+    if (sendButton) { sendButton.disabled = false; sendButton.textContent = buttonText; }
+  } catch (_) {
+    // 中转不可达或服务异常：回退本地台词，聊天不中断；输入框随弹窗重建。
+    showNpcLine();
+    $('#dialogNotice').textContent = '在线对话通道没连上，先用本地台词聊吧。';
+  } finally {
+    if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+  }
+}
 function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
   stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', admission: '入学', enrollment: '入学', login: '登录', endingChoice: '毕业方向', finished: '四年手账' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', admission: '入学', enrollment: '入学', login: '登录', endingChoice: '毕业方向', finished: '四年手账', npc: '校园偶遇' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
   $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
-  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave'].includes(mode);
+  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc'].includes(mode);
   if (!dialog.open) dialog.showModal();
   (dialog.querySelector('input') || $('#dialogTitle')).focus({ preventScroll: true });
   dialog.scrollTop = 0;
@@ -341,7 +564,7 @@ function showAdmission() {
   const accountButtons = sms
     ? [{ id: loginSession ? 'switchAccount' : 'loginPrompt', text: loginSession ? '切换账号' : '手机登录', secondary: true }]
     : [];
-  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p>' + (loginSession ? '<p class="dialog-note">已登录：<b>' + h(loginSession.phone) + '</b>' + (loginSession.nickname ? ' · ' + h(loginSession.nickname) : '') + '</p>' : '') + '<form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="最多 12 个字符" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form><h3>或选择存档继续</h3>' + slotCards(info, 'load') + '<p class="dialog-note">共有 3 个存档栏位，新局首次保存时可自主选择。旧版存档位于栏位 1。</p>', accountButtons);
+  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p>' + (loginSession ? '<p class="dialog-note">已登录：<b>' + h(loginSession.phone) + '</b>' + (loginSession.nickname ? ' · ' + h(loginSession.nickname) : '') + '</p>' : '') + '<form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="2～12 个字符，汉字/字母/数字，不能全是数字" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form><h3>或选择存档继续</h3>' + slotCards(info, 'load') + '<p class="dialog-note">共有 3 个存档栏位，新局首次保存时可自主选择。旧版存档位于栏位 1。</p>', accountButtons);
 }
 function showLogin() {
   stopSmsCountdown();
@@ -410,6 +633,7 @@ function startGame() {
   failures.length = 0;
   audio?.play('success');
   audio?.startBgm();
+  resetNpcSystem();
   renderState();
   showEnrollment();
 }
@@ -460,7 +684,8 @@ function showEndings() {
 }
 const EXPERIENCE_LABELS = {
   project: '校园项目完成', club: '社团活动经历', internship: '实习经历完成', fitnessTest: '体测体验达标',
-  military: '军训汇演完成', singer: '歌手大赛经历', trip: '返乡分享经历', contest: '学科竞赛经历'
+  military: '军训汇演完成', singer: '歌手大赛经历', trip: '返乡分享经历', contest: '学科竞赛经历',
+  sportsMeet: '运动会经历', transfer: '转专业经历'
 };
 function growthRecord() {
   return courseTable() + '<h3>校园经历</h3>' + (state.experiences.length ? '<ul>' + state.experiences.map((item) => '<li>' + game.TERM_NAMES[item.term - 1] + '：' + h(EXPERIENCE_LABELS[item.type] || '校园经历') + '</li>').join('') + '</ul>' : '<p>还没有拿得出手的经历。</p>') + '<h3>事件链进度</h3><ul>' + Object.entries(state.chains).map(([id, chain]) => '<li>' + game.CHAIN_NAMES[id] + '：' + chainLabel(chain) + (chain.status === 'active' ? '，预计第 ' + chain.deadline + ' 学期出结果' : '') + '</li>').join('') + '</ul><h3>毕业条件进度</h3>' + game.evaluateEndings(state).options.filter((item) => item.id !== 'notQualified').map((item) => '<h4>' + h(item.title) + '</h4>' + requirementsMarkup(item.requirements)).join('');
@@ -499,6 +724,7 @@ function loadGame(slotId, source = 'primary') {
   clearTimeout(unlockTimer);
   uiLocked = false;
   failures.length = 0;
+  resetNpcSystem();
   audio?.play('load');
   audio?.startBgm();
   renderState();
@@ -520,6 +746,7 @@ function exportLog() {
 $('#dialogBody').addEventListener('submit', (event) => {
   if (event.target.id === 'admissionForm') { event.preventDefault(); startGame(); }
   else if (event.target.id === 'loginForm') { event.preventDefault(); doLogin(); }
+  else if (event.target.id === 'npcChatForm') { event.preventDefault(); sendNpcChat(); }
 });
 $('#actionList').addEventListener('click', (event) => {
   const button = event.target.closest('[data-action]');
@@ -542,7 +769,7 @@ $('#dialogBody').addEventListener('click', (event) => {
     const result = runCommand('submitEventChoice', button.dataset.eventChoice, button.dataset.revision, button.dataset.instance);
     if (!result) return;
     audio?.play('success');
-    const feedback = EVENT_CHOICE_FLAVOR[result.entry.event + ':' + result.entry.choice] || result.entry.title + '。';
+    const feedback = EVENT_CHOICE_FLAVOR[result.entry.event + ':' + result.entry.choice] || (result.entry.outcome ? result.entry.outcome + '。' : result.entry.title + '。');
     $('#actionFeedback').textContent = feedback;
     if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; } else { dialog.close(); showToast(feedback); }
   } else if (button.dataset.ending) {
@@ -567,6 +794,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
     try { storage?.setItem(LOGIN_SKIP_KEY, '1'); } catch (_) {}
     showAdmission();
   }
+  else if (id === 'npcTalk' && dialogMode === 'npc') showNpcLine();
   else if (id === 'confirmSave' && dialogMode === 'confirmSave' && saveTarget !== null) finishSave(saveTarget);
   else if (id === 'backToSave') showSave();
   else if (id === 'settle' && dialogMode === 'confirm') { if (runCommand('endTerm', null, button.dataset.revision)) { saveCurrent(true); showSummary(); } }
@@ -574,6 +802,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
   else if (id === 'restart') askRestart();
   else if (id === 'confirmRestart') {
     closePlace();
+    resetNpcSystem();
     audio?.stopBgm();
     state = null;
     activeSaveSlot = null;
@@ -586,6 +815,14 @@ $('#dialogButtons').addEventListener('click', (event) => {
   }
 });
 hotspots.forEach((hotspot) => hotspot.addEventListener('click', () => openPlace(hotspot.dataset.place, hotspot)));
+const npcLayer = $('#npcLayer');
+if (npc && npcLayer) {
+  npcLayer.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-npc-id]');
+    if (button) talkToNpc(button.dataset.npcId);
+  });
+  npcTick();
+}
 $('#backButton').addEventListener('click', closePlace);
 $('#endTermButton').addEventListener('click', requestEndTerm);
 $('#saveButton').addEventListener('click', showSave);

@@ -2,15 +2,21 @@
   'use strict';
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
-  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS } = config;
+  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT } = config;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const clamp = (value, max) => Math.max(0, Math.min(max, value));
   function validateNickname(value) {
+    // 按主流游戏昵称规则：2～12 个字符，只能使用汉字、字母、数字与 · - _，不能全是数字或符号。
     if (typeof value !== 'string' || !value.trim()) return { ok: false, reason: '先填一个昵称吧' };
-    if ([...value.trim()].length > 12 || /[\u0000-\u001f\u007f]/.test(value)) return { ok: false, reason: '昵称最多 12 个字符，不能包含控制字符' };
-    return { ok: true, value: value.trim() };
+    const name = value.trim();
+    if ([...name].length < 2 || [...name].length > 12) return { ok: false, reason: '昵称需要 2～12 个字符' };
+    if (/[\u0000-\u001f\u007f]/.test(name)) return { ok: false, reason: '昵称不能包含控制字符' };
+    if (!/^[\p{L}\p{M}\p{Nd}·\-_ ]+$/u.test(name)) return { ok: false, reason: '昵称只能使用汉字、字母、数字和 · - _' };
+    if (/^[\p{Nd}]+$/u.test(name)) return { ok: false, reason: '昵称不能全是数字' };
+    if (/^[\p{P}\p{S} ]+$/u.test(name)) return { ok: false, reason: '昵称不能全是符号' };
+    return { ok: true, value: name };
   }
   function createGame(options = {}) {
     const nickname = validateNickname(options.nickname === undefined ? '北交同学' : options.nickname);
@@ -122,7 +128,6 @@
       return 0;
     };
     if (next.mood < RULES.lowMood) enqueue('roommateCare');
-    if (triggerAction === 'exercise' && next.term % 2 === 0 && next.fitness >= RULES.fitnessThreshold) enqueue('fitnessTest');
     for (const [id, chain] of Object.entries(next.chains)) {
       if (triggerAction === 'apply' + id[0].toUpperCase() + id.slice(1)) enqueue(id + 'Offer');
       if (chain.status === 'active' && chain.progress === 2 && next.term >= chain.reviewAfter && (id === 'internship' || id === 'club' || next.term > chain.startedTerm)) enqueue(id + 'Review');
@@ -135,7 +140,7 @@
       const eligible = Object.keys(CAMPUS_SCHEDULE).filter(id => {
         const rule = CAMPUS_SCHEDULE[id];
         return inWindow(rule) && (isAction || id === 'ticket2') && (!rule.actions || rule.actions.includes(triggerAction)) && termActions >= (rule.minActions || 0)
-          && !did(id, undefined, 0) && (!rule.unless || !did(rule.unless))
+          && !did(id, undefined, 0) && (!rule.unless || !did(rule.unless)) && (!rule.flag || next.eventFlags[rule.flag])
           && (!rule.after || did(...rule.after)) && (!rule.actionGap || actionsAfter(rule.after[0]) >= rule.actionGap);
       }).sort((a, b) => EVENTS[a].priority - EVENTS[b].priority);
       if (eligible.length) enqueue(eligible[0]);
@@ -188,6 +193,11 @@
     if (choice.chainEffect === 'postpone' && state.term === 8) return { ok: false, reason: '最后一个学期了，把经历确认了吧' };
     return resourceCheck(state, choice);
   }
+  function resolveOutcome(state, choice) {
+    if (!choice.outcomeBy) return null;
+    const metric = choice.outcomeBy.metric === 'average' ? averageGrade(state) : state[choice.outcomeBy.metric];
+    return metric >= choice.outcomeBy.threshold ? choice.outcomeBy.pass : choice.outcomeBy.fail;
+  }
   function submitEventChoice(state, choiceId, options = {}) {
     const command = commandCheck(state, options, 'event:' + choiceId);
     if (!command.ok) return command;
@@ -196,8 +206,15 @@
     const pending = state.pendingEvent;
     const event = EVENTS[pending.id];
     const choice = event.choices.find((item) => item.id === choiceId);
-    const changes = previewChanges(state, choice);
-    const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, changes };
+    // 条件结果（outcomeBy）在提交时按当前数值判定，效果叠加在选项效果之上。
+    const outcome = resolveOutcome(state, choice) || {};
+    // 结果效果与选项效果叠加：数值类相加，标题、经历、标记等以结果为准。
+    const effect = { ...choice, ...outcome };
+    for (const key of ['time', 'energy', 'recovery', 'money', 'income', 'preparation', 'social', 'fitness', 'mood', 'furtherStudy', 'jobPreparation']) {
+      effect[key] = (choice[key] || 0) + (outcome[key] || 0);
+    }
+    const changes = previewChanges(state, effect);
+    const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, outcome: outcome.title || null, changes };
     let next = { ...applyChanges(state, changes), pendingEvent: null, phase: 'playing', eventFlags: { ...state.eventFlags, [pending.instanceId]: true }, eventHistory: [...state.eventHistory, entry] };
     if (event.chain) {
       const chain = { ...state.chains[event.chain] };
@@ -208,7 +225,24 @@
       if (choice.chainEffect === 'abandon') chain.status = 'missed';
       next.chains = { ...state.chains, [event.chain]: chain };
     }
-    if (choice.experience) next.experiences = [...state.experiences, { term: state.term, type: choice.experience, ...(choice.experience === 'fitnessTest' ? { fitness: state.fitness } : {}) }];
+    const experience = outcome.experience || choice.experience;
+    if (experience) next.experiences = [...state.experiences, { term: state.term, type: experience, ...(experience === 'fitnessTest' ? { fitness: state.fitness } : {}) }];
+    const flag = outcome.flag || choice.flag;
+    const clearFlag = outcome.clearFlag || choice.clearFlag;
+    if (flag || clearFlag) {
+      const flags = { ...next.eventFlags };
+      if (clearFlag) delete flags[clearFlag];
+      if (flag) flags[flag] = true;
+      next = { ...next, eventFlags: flags };
+    }
+    if (outcome.changeBackground) {
+      // 转专业成功：换到另一个学院方向，随机抽取专业；学院加成随新背景生效。
+      const candidates = BACKGROUNDS.filter((item) => item.id !== state.background.id);
+      const pickRoll = random.draw(next.rng);
+      const picked = candidates[Math.min(candidates.length - 1, Math.floor(pickRoll.number * candidates.length))];
+      const majorRoll = random.draw(pickRoll.rng);
+      next = { ...next, rng: majorRoll.rng, background: { id: picked.id, college: picked.college, major: picked.majors[Math.min(picked.majors.length - 1, Math.floor(majorRoll.number * picked.majors.length))] } };
+    }
     next = attachEvents(next, 'eventChoice');
     return commit(state, next, { operation: 'submitEventChoice', id: choiceId, eventInstanceId: pending.instanceId }, entry, command.commandId);
   }
@@ -295,7 +329,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, CHAIN_NAMES, createGame, validateNickname, getAction, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, endTerm, continueGame, evaluateEndings, chooseEnding, validateState, stateBrief, replay, getTermStage };
+  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, CHAIN_NAMES, AI_CHAT, createGame, validateNickname, getAction, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, endTerm, continueGame, evaluateEndings, chooseEnding, validateState, stateBrief, replay, getTermStage };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

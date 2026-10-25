@@ -14,7 +14,7 @@ function memory() {
   const data = new Map();
   return { data, getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
 }
-function app(storage = memory(), withSms = false) {
+function app(storage = memory(), withSms = false, withNpc = false) {
   const elements = new Map();
   function element(selector) {
     if (!elements.has(selector)) {
@@ -22,7 +22,7 @@ function app(storage = memory(), withSms = false) {
       const classes = new Set();
       elements.set(selector, {
         innerHTML: '', textContent: '', value: '', open: false, hidden: false, style: {},
-        classList: { add: name => classes.add(name), remove: name => classes.delete(name),
+        classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name),
           toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); } },
         addEventListener: (type, callback) => listeners.set(type, callback),
         emit(type, event = {}) { listeners.get(type)?.(event); },
@@ -43,6 +43,7 @@ function app(storage = memory(), withSms = false) {
     setTimeout(callback) { timers.set(++sequence, callback); return sequence; },
     clearTimeout(id) { timers.delete(id); } };
   if (withSms) globals.CampusSms = sms;
+  if (withNpc) globals.CampusNpc = require('./npc.js');
   const context = vm.createContext(globals);
   vm.runInContext(fs.readFileSync(require.resolve('./app.js'), 'utf8'), context);
   const evaluate = expression => vm.runInContext(expression, context);
@@ -267,7 +268,8 @@ test('其他栏位的 storage 变化不提示当前栏位冲突，当前栏位�
 
 test('旧档显示为栏位 1，昵称转义，存储不可用时仍可开始游戏', () => {
   const storage = memory();
-  saves.createSaveService(storage).save(game.createGame({ nickname: '<x>' }));
+  // 旧版昵称规则宽松，旧档可能带 HTML 特殊字符；新规则只约束创建，加载时保持宽松并转义显示。
+  saves.createSaveService(storage).save({ ...game.createGame({ nickname: '旧档玩家' }), nickname: '<x>' });
   const ui = app(storage);
   const html = ui.element('#dialogBody').innerHTML;
   assert.match(html, /&lt;x&gt;/);
@@ -278,6 +280,103 @@ test('旧档显示为栏位 1，昵称转义，存储不可用时仍可开始游
   denied.start(); denied.click('#saveButton');
   assert.equal((denied.element('#dialogBody').innerHTML.match(/disabled/g) || []).length, 3);
   assert.equal(denied.evaluate('state.phase'), 'playing');
+});
+
+test('进入场所时地图离场、入场动画标记按定时清理，返回时恢复', () => {
+  const ui = app(memory());
+  ui.start();
+  ui.evaluate('openPlace("think")');
+  const mapScreen = ui.element('#mapScreen');
+  const placeScreen = ui.element('#placeScreen');
+  assert.equal(mapScreen.classList.contains('is-leaving'), true);
+  assert.equal(placeScreen.classList.contains('is-open'), true);
+  assert.equal(placeScreen.classList.contains('is-entering'), true);
+  // 入场动画播完后清除标记，之后执行行动重绘列表不会重播整屏动画。
+  ui.flush();
+  assert.equal(placeScreen.classList.contains('is-entering'), false);
+  ui.evaluate('closePlace()');
+  assert.equal(mapScreen.classList.contains('is-leaving'), false);
+  assert.equal(placeScreen.classList.contains('is-open'), false);
+  assert.equal(placeScreen.classList.contains('is-entering'), false);
+  // 未到定时结束就返回时，入场标记立即清理，重新进入会重播动画。
+  ui.evaluate('openPlace("dorm")');
+  assert.equal(placeScreen.classList.contains('is-entering'), true);
+  ui.evaluate('closePlace()');
+  assert.equal(placeScreen.classList.contains('is-entering'), false);
+  ui.evaluate('openPlace("dorm")');
+  assert.equal(placeScreen.classList.contains('is-entering'), true);
+});
+
+test('地图上的偶遇 NPC 渲染与点击搭话轮换台词，离场保留淡出', () => {
+  const ui = app(memory(), false, true);
+  ui.start();
+  // 换成立即生成、间隔为 0 的引擎，避免依赖真实时钟；场上限两人由引擎保证。
+  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
+  ui.flush(); ui.flush();
+  const html = ui.element('#npcLayer').innerHTML;
+  assert.match(html, /npc-figure/);
+  assert.match(html, /npc-svg/);
+  assert.match(html, /npc-label/);
+  assert.equal((html.match(/data-npc-id=/g) || []).length, 2);
+  const id = ui.evaluate('npcSystem.active()[0].id');
+  const label = ui.evaluate('npcSystem.active()[0].label');
+  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
+  assert.equal(ui.evaluate('dialogMode'), 'npc');
+  assert.match(ui.element('#dialogBody').innerHTML, /npc-dialog-line/);
+  assert.equal(ui.element('#dialogTitle').textContent, label);
+  assert.match(ui.element('#dialogButtons').innerHTML, /data-dialog-action="npcTalk"/);
+  const firstLine = ui.element('#dialogBody').innerHTML;
+  ui.click('#dialogButtons', { dialogAction: 'npcTalk' });
+  assert.notEqual(ui.element('#dialogBody').innerHTML, firstLine);
+  ui.click('#dialogButtons', { dialogAction: 'resume' });
+  assert.equal(ui.element('#termDialog').open, false);
+  // 引擎判定离场后，NPC 保留淡出标记并渲染出 is-fading（模拟 npcTick 对离场事件的记录）。
+  const removed = ui.evaluate('(() => { const events = npcSystem.tick(Date.now() + 80000); for (const npc of events.removed) npcFades.set(npc.id, { npc, since: Date.now() }); return events.removed.length; })()');
+  assert.ok(removed > 0);
+  ui.flush();
+  assert.match(ui.element('#npcLayer').innerHTML, /is-fading/);
+});
+
+test('NPC 在线对话：配置中转地址后发送消息走云端回复，历史保留且输入复位', async () => {
+  const ui = app(memory(), false, true);
+  ui.start();
+  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
+  ui.flush(); ui.flush();
+  const id = ui.evaluate('npcSystem.active()[0].id');
+  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
+  assert.equal(ui.evaluate('dialogMode'), 'npc');
+  // 首次对话在配置中转之前打开，没有输入框；配置后换一句台词即带上。
+  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
+  ui.evaluate('fetch = async (url, options) => ({ ok: true, json: async () => ({ reply: "AI 测试回复：同学好！" }) })');
+  ui.click('#dialogButtons', { dialogAction: 'npcTalk' });
+  ui.element('#npcChatInput').value = '你好呀';
+  await ui.evaluate('sendNpcChat()');
+  assert.equal(ui.element('.npc-dialog-line').textContent, 'AI 测试回复：同学好！');
+  assert.equal(ui.element('#npcChatInput').value, '', '发送后输入框清空');
+  assert.equal(ui.element('#npcChatInput').disabled, false, '发送完成后输入框恢复可用');
+  assert.equal(ui.evaluate('npcChatLogs.get(' + JSON.stringify(id) + ').length'), 2, '一问一答进入聊天记录');
+});
+
+test('NPC 在线对话：中转不可达时回退本地台词并提示，聊天不中断', async () => {
+  const ui = app(memory(), false, true);
+  ui.start();
+  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
+  ui.flush(); ui.flush();
+  const id = ui.evaluate('npcSystem.active()[0].id');
+  const identityId = ui.evaluate('npcSystem.active()[0].identityId');
+  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
+  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
+  ui.evaluate('fetch = async () => { throw new Error("offline"); }');
+  ui.click('#dialogButtons', { dialogAction: 'npcTalk' });
+  const before = ui.element('#dialogBody').innerHTML;
+  ui.element('#npcChatInput').value = '在吗';
+  await ui.evaluate('sendNpcChat()');
+  assert.match(ui.element('#dialogNotice').textContent, /本地台词/);
+  const after = ui.element('#dialogBody').innerHTML;
+  assert.notEqual(before, after, '弹窗重建为下一句台词');
+  const shown = (after.match(/<p class="npc-dialog-line">([^<]*)<\/p>/) || [])[1];
+  const lines = ui.evaluate('CampusNpc.linesFor(' + JSON.stringify(identityId) + ')').join('');
+  assert.ok(lines.includes(shown), '回退台词来自该身份台词库');
 });
 
 test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当前进度和目标新档', () => {

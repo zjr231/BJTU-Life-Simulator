@@ -86,6 +86,25 @@ test('昵称与种子校验；固定种子重复产生同一入学背景和初�
   assert.equal(Object.hasOwn(state, 'professionalAbility'), false);
 });
 
+test('昵称按主流游戏规则校验：长度 2～12，禁纯数字、纯符号和特殊字符', () => {
+  // 拒绝：单个字符、纯数字（含全角）、纯符号、emoji、零宽字符、混合特殊字符。
+  for (const nickname of ['张', '1', '123456', '１２３', '!!!', '···', '😀😀', 'a​b', '同学🚀', '张@三', '名字'.repeat(6) + '名']) {
+    const checked = game.validateNickname(nickname);
+    assert.equal(checked.ok, false, nickname);
+  }
+  assert.equal(game.validateNickname('123456').reason, '昵称不能全是数字');
+  assert.equal(game.validateNickname('!!!').reason, '昵称只能使用汉字、字母、数字和 · - _');
+  assert.equal(game.validateNickname('张').reason, '昵称需要 2～12 个字符');
+  // 接受：汉字、字母数字混合、分隔符，首尾空格会被去掉。
+  for (const nickname of ['张三丰', 'zhang3', '张·三', 'a_b-c', '张三 丰', '张三123', '  测试玩家  ']) {
+    const checked = game.validateNickname(nickname);
+    assert.equal(checked.ok, true, nickname);
+    assert.equal(checked.value, nickname.trim());
+  }
+  assert.equal(game.validateNickname('北交同学').ok, true);
+  assert.equal(game.createGame().nickname, '北交同学');
+});
+
 test('三个简化背景各有可执行的行动差异', () => {
   const collected = new Map();
   for (let seed = 0; seed < 100; seed++) {
@@ -227,18 +246,18 @@ test('保存覆盖行动后、待选事件、总结、方向选择与最终结�
 test('两个同时满足的事件完整入队，读档后顺序和奖励一致', () => {
   let state = game.createGame();
   state = nextTerm(state);
-  // Boundary fixture keeps the actual phase and course count valid.
-  state = { ...state, mood: 20, fitness: 60 };
-  const pending = game.executeAction(state, 'exercise').state;
+  // 心情过低触发室友关心，同时申请项目触发项目邀请：两个事件按优先级完整入队。
+  state = { ...state, mood: 20, preparation: 40 };
+  const pending = game.executeAction(state, 'applyProject').state;
   assert.equal(pending.pendingEvent.id, 'roommateCare');
-  assert.equal(pending.eventQueue[0].id, 'fitnessTest');
+  assert.equal(pending.eventQueue[0].id, 'projectOffer');
   const restored = roundtrip(pending);
   const afterFirst = game.submitEventChoice(restored, 'later').state;
-  assert.equal(afterFirst.pendingEvent.id, 'fitnessTest');
-  const afterSecond = game.submitEventChoice(roundtrip(afterFirst), 'participate').state;
-  assert.equal(afterSecond.eventHistory.filter((entry) => ['roommateCare', 'fitnessTest'].includes(entry.event)).length, 2);
-  assert.equal(afterSecond.experiences.length, 1);
-  assert.equal(game.submitEventChoice(afterSecond, 'participate').ok, false);
+  assert.equal(afterFirst.pendingEvent.id, 'projectOffer');
+  const afterSecond = game.submitEventChoice(roundtrip(afterFirst), 'accept').state;
+  assert.equal(afterSecond.chains.project.status, 'active');
+  assert.equal(afterSecond.eventHistory.filter((entry) => ['roommateCare', 'projectOffer'].includes(entry.event)).length, 2);
+  assert.equal(game.submitEventChoice(afterSecond, 'accept').ok, false);
 });
 
 test('固定随机机会、预览不消耗随机数，中途读档后随机序列连续', () => {

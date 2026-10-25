@@ -41,7 +41,7 @@ function nextTerm(state, choices = {}) {
 }
 
 test('军训和歌手链在不同行动间推进，存档不重复经历或奖励', () => {
-  const choices = { military1: 'join', military2: 'perform', singer1: 'signup', singer2: 'advance', singer3: 'perform' };
+  const choices = { military1: 'join', military2: 'march', singer1: 'signup', singer2: 'advance', singer3: 'perform' };
   let state = game.createGame({ seed: 'new-events' });
   for (const id of ['walk', 'walk', 'walk', 'chat', 'chat', 'rest']) state = act(state, id, choices);
   assert.deepEqual(state.experiences.map(item => item.type), ['military', 'singer']);
@@ -81,13 +81,35 @@ test('固定通知与竞赛在规定学期出现，八学期后可正常毕业',
   let state = game.createGame({ seed: 'fixed-events' });
   for (let term = 1; term <= 8; term++) {
     assert.equal(state.term, term);
-    state = study(study(state, choices), choices);
-    if ([3, 5].includes(term)) for (let i = 0; i < 2; i++) state = act(state, 'rest', choices);
+    if (term === 4) {
+      // 第 4 学期转专业报名窗仍在，只安排一次学习触发补测；勤工助学攒钱供第 6 学期看演出，
+      // 并把心情休整到 44 以上——否则第 5 学期室友的关心会挤占体测，体测再把竞赛招募顶出报名窗口。
+      state = study(state, choices);
+      state = act(state, 'work', choices);
+      state = act(state, 'work', choices);
+      state = act(state, 'work', choices);
+      state = act(state, 'rest', choices);
+      state = act(state, 'rest', choices);
+      state = act(state, 'rest', choices);
+    } else if (term === 5) {
+      // 体测优先于竞赛招募；再打一次工让结余撑过学期结算。
+      state = study(study(study(state, choices), choices), choices);
+      state = act(state, 'work', choices);
+    } else if (term === 6) {
+      // 决赛占用两天时间，若先学习会挤掉宣讲会窗口：先休息依次处理决赛、补测和运动会，再看演出赶上宣讲会。
+      state = act(state, 'rest', choices);
+      state = act(state, 'rest', choices);
+      state = act(state, 'rest', choices);
+      state = act(state, 'show', choices);
+    } else {
+      state = study(study(state, choices), choices);
+    }
+    if (term === 3) for (let i = 0; i < 2; i++) state = act(state, 'rest', choices);
     if (term === 8) for (let i = 0; i < 5; i++) state = act(state, 'rest', choices);
     state = nextTerm(state, choices);
   }
   assert.equal(state.phase, 'endingChoice');
-  for (const [event, term] of [['transfer', 3], ['contest1', 5], ['contest2', 5], ['seminar', 6], ['graduation', 8]]) {
+  for (const [event, term] of [['transfer', 2], ['contest1', 5], ['contest2', 6], ['seminar', 6], ['graduation', 8]]) {
     assert.deepEqual(state.eventHistory.filter(item => item.event === event).map(item => item.term), [term]);
   }
   assert.equal(state.experiences.filter(item => item.type === 'contest').length, 1);
@@ -96,15 +118,20 @@ test('固定通知与竞赛在规定学期出现，八学期后可正常毕业',
   assert.equal(roundtrip(finished.state).phase, 'finished');
 });
 
-test('16 种随机事件匹配场景和季节，每学期只抽取一次', () => {
+test('25 种随机事件匹配场景和季节，每学期只抽取一次', () => {
   const observed = new Set();
   const scenes = {
     selfStudy: ['campusDiscussion', 'cat', 'canteen', 'card', 'wall', 'seat'],
-    walk: ['cat', 'canteen', 'card', 'snow'],
+    walk: ['cat', 'canteen', 'card', 'snow', 'ginkgo'],
     chat: ['canteen', 'wall', 'night', 'flu', 'insomnia', 'parcel'],
-    exercise: ['canteen', 'card', 'injury'],
-    show: ['lecture', 'drama'],
-    alumniVolunteer: ['alumniStory', 'frontDesk']
+    exercise: ['canteen', 'card', 'injury', 'hawthorn'],
+    show: ['lecture', 'drama', 'memorial129'],
+    alumniVolunteer: ['alumniStory', 'frontDesk', 'alumniFair'],
+    study: ['rollCall'],
+    tutoring: ['rollCall'],
+    checkup: ['medicalInsurance'],
+    sickVisit: ['medicalInsurance'],
+    work: ['jobFair']
   };
   for (let seed = 0; seed < 256; seed++) {
     for (const season of ['autumn', 'spring']) {
@@ -112,7 +139,8 @@ test('16 种随机事件匹配场景和季节，每学期只抽取一次', () =>
         for (const [action, allowed] of Object.entries(scenes)) {
           let state = game.createGame({ seed: 'pool-' + seed });
           if (season === 'spring') state = nextTerm(state);
-          if (late) for (let i = 0; i < 9; i++) state = act(state, 'rest');
+          // 春季运动会“观众席”会把心情顶满，散步等行动会被拒；改报短跑（此时体测未达标，结果必为失利，净收益低）。
+          if (late) for (let i = 0; i < 9; i++) state = act(state, 'rest', { sportsMeet: 'sprint' });
           const calls = state.rng.calls;
           const first = game.executeAction(state, action);
           assert.equal(first.ok, true, action);
@@ -121,9 +149,9 @@ test('16 种随机事件匹配场景和季节，每学期只抽取一次', () =>
           if (first.state.pendingEvent) {
             const id = first.state.pendingEvent.id;
             assert.ok(allowed.includes(id), action + ': ' + id);
-            if (['snow', 'parcel', 'flu'].includes(id)) assert.equal(season, 'autumn');
+            if (['snow', 'parcel', 'flu', 'ginkgo', 'hawthorn', 'memorial129'].includes(id)) assert.equal(season, 'autumn');
             if (id === 'drama') assert.equal(season, 'spring');
-            if (['snow', 'parcel', 'flu', 'drama'].includes(id)) assert.equal(late, true);
+            if (['snow', 'parcel', 'flu', 'drama', 'ginkgo', 'hawthorn', 'memorial129'].includes(id)) assert.equal(late, true);
             observed.add(id);
           }
           state = resolve(first.state);
@@ -131,6 +159,32 @@ test('16 种随机事件匹配场景和季节，每学期只抽取一次', () =>
           if (followup) assert.equal(game.executeAction(state, followup).state.rng.calls, calls + 1);
         }
       }
+    }
+  }
+  // 项目投入与社团投入需要先激活事件链才能抽取，单独准备状态后补充验证。
+  const preparedScenes = { clubWork: ['danceParty'], projectWork: ['labNight'] };
+  for (let seed = 0; seed < 128; seed++) {
+    for (const [action, allowed] of Object.entries(preparedScenes)) {
+      let state = game.createGame({ seed: 'pool-chain-' + seed });
+      if (action === 'clubWork') {
+        // 社团招新后直接投入会撞上军训（本学年第 2 个行动），改到春季学期投入。
+        state = nextTerm(act(state, 'applyClub', { clubOffer: 'accept' }));
+      } else {
+        // 项目申请要求本学期准备度 40，准备度学期末清零：第 2 学期先学习再申请，第 3 学期开学投入。
+        state = nextTerm(study(study(state)));
+        state = study(study(state));
+        state = act(state, 'applyProject', { projectOffer: 'accept' });
+        state = nextTerm(state);
+      }
+      const calls = state.rng.calls;
+      const first = game.executeAction(state, action);
+      assert.equal(first.ok, true, action);
+      assert.equal(first.state.rng.calls, calls + 1);
+      if (first.state.pendingEvent) {
+        assert.ok(allowed.includes(first.state.pendingEvent.id), action + ': ' + first.state.pendingEvent.id);
+        observed.add(first.state.pendingEvent.id);
+      }
+      resolve(first.state);
     }
   }
   assert.deepEqual([...observed].sort(), [...RANDOM_POOL].sort());

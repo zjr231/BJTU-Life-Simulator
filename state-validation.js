@@ -11,12 +11,22 @@
       if (!object(state)) return fail('缺少状态对象');
       if (state.version !== RULES.version || state.rulesVersion !== RULES.version || state.saveFormatVersion !== RULES.saveFormatVersion) return fail('格式或规则版本不兼容');
       if (typeof state.appVersion !== 'string' || !state.appVersion.length || state.appVersion.length > 64) return fail('程序版本标记');
-      if (!game.validateNickname(state.nickname).ok || state.nickname !== state.nickname.trim()) return fail('昵称');
+      // 昵称在创建时严格校验（见 game.validateNickname）；旧档可能含宽松规则的昵称，加载时只做基本检查。
+      if (typeof state.nickname !== 'string' || !state.nickname.trim() || state.nickname !== state.nickname.trim() || [...state.nickname].length > 12 || /[\u0000-\u001f\u007f]/.test(state.nickname)) return fail('昵称');
       if (!integer(state.term, 1, 8) || !['playing', 'eventPending', 'summary', 'endingChoice', 'finished'].includes(state.phase) || !integer(state.revision, 0, 2000)) return fail('学期、阶段或状态版本');
       for (const [key, max] of [['time', 12], ['energy', 100], ['money', 1000000], ['social', 100], ['fitness', 100], ['mood', 100], ['preparation', 100], ['furtherStudy', 100], ['jobPreparation', 100]]) if (!integer(state[key], 0, max)) return fail(key);
       if (!object(state.rng) || state.rng.algorithm !== 'mulberry32-v1' || typeof state.rng.seed !== 'string' || !state.rng.seed.length || state.rng.seed.length > 64 || !integer(state.rng.value, 0, 4294967295) || !integer(state.rng.calls, 2, 100)) return fail('随机数状态');
       if (state.rng.value !== ((random.create(state.rng.seed).value + Math.imul(0x6D2B79F5, state.rng.calls)) >>> 0)) return fail('随机数调用位置');
-      if (!same(state.background, game.createGame({ nickname: state.nickname, seed: state.rng.seed }).background)) return fail('入学背景');
+      // 入学背景核对：转专业成功才会更换学院方向。新存档按操作历史重放精确核对；
+      // 旧版本存档或无法重放的存档退化为结构校验（学院、专业必须与配置一致，未转专业时必须与入学时一致）。
+      // 重放需要创建时合法的新昵称，旧档昵称不合新规则时用默认昵称重放（昵称不参与随机数抽取，入学背景不受影响）。
+      const replayNickname = game.validateNickname(state.nickname).ok ? state.nickname : '北交同学';
+      const initialBackground = game.createGame({ nickname: replayNickname, seed: state.rng.seed }).background;
+      const backgroundReplay = game.replay({ nickname: replayNickname, seed: state.rng.seed, commands: state.history.map((entry) => entry.command) });
+      const transferred = state.eventHistory.some((entry) => entry.event === 'transferResult' && entry.choice === 'check') && state.experiences.some((item) => item.type === 'transfer');
+      const validBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && item.majors.includes(background.major));
+      const backgroundOk = backgroundReplay.ok ? same(state.background, backgroundReplay.state.background) : validBackground(state.background) && (transferred ? state.background.id !== initialBackground.id : same(state.background, initialBackground));
+      if (!backgroundOk) return fail('入学背景');
       for (const key of ['courses', 'history', 'eventQueue', 'eventHistory', 'experiences', 'processedCommands']) if (!Array.isArray(state[key]) || state[key].length > 2000) return fail(key);
       if (!object(state.counts) || !object(state.eventFlags) || !object(state.chains)) return fail('次数、事件标记或事件链');
       const validCounts = (counts) => object(counts) && Object.entries(counts).every(([id, count]) => own(ACTIONS, id) && integer(count, 0, ACTIONS[id].limit || 12));
@@ -49,7 +59,8 @@
         if (!object(entry) || !own(EVENTS, entry.event) || !integer(entry.term, 1, state.term) || entry.instanceId !== (EVENTS[entry.event].chain || 'daily') + ':' + entry.event + ':' + entry.term || !EVENTS[entry.event].choices.some((choice) => choice.id === entry.choice) || state.eventFlags[entry.instanceId] !== true || seen.has(entry.instanceId)) return fail('事件历史');
         seen.add(entry.instanceId);
       }
-      for (const [key, value] of Object.entries(state.eventFlags)) if (value !== true || (!/^randomCampusRoll:[1-8]$/.test(key) && !seen.has(key))) return fail('事件标记与历史不一致');
+      // fitnessRetest 是跨学期的持久标记（体测未达标/请假后设置），不属于事件实例标记。
+      for (const [key, value] of Object.entries(state.eventFlags)) if (value !== true || (!/^randomCampusRoll:[1-8]$/.test(key) && !['fitnessRetest'].includes(key) && !seen.has(key))) return fail('事件标记与历史不一致');
       for (const id of Object.keys(CHAIN_NAMES)) {
         const chain = state.chains[id];
         if (!object(chain) || !['idle', 'active', 'deferred', 'completed', 'missed'].includes(chain.status) || !integer(chain.progress, 0, 2) || !integer(chain.startedTerm, 0, state.term) || !integer(chain.deadline, 0, 8) || !integer(chain.nextEligibleTerm, 1, 9) || !integer(chain.reviewAfter, 0, 8)) return fail('事件链字段');
@@ -60,11 +71,12 @@
       if (Object.keys(state.chains).length !== 3) return fail('未知事件链');
       const experienceIds = new Set();
       for (const item of state.experiences) {
-        if (!object(item) || !integer(item.term, 1, state.term) || !['fitnessTest', 'project', 'club', 'internship', 'military', 'singer', 'trip', 'contest'].includes(item.type)) return fail('经历');
-        const key = item.type === 'fitnessTest' ? item.type + ':' + item.term : item.type;
+        if (!object(item) || !integer(item.term, 1, state.term) || !['fitnessTest', 'project', 'club', 'internship', 'military', 'singer', 'trip', 'contest', 'sportsMeet', 'transfer'].includes(item.type)) return fail('经历');
+        // 体测与运动会每个学年都可能留下经历，按学期区分；其余经历全局唯一。
+        const key = ['fitnessTest', 'sportsMeet'].includes(item.type) ? item.type + ':' + item.term : item.type;
         if (experienceIds.has(key)) return fail('重复经历');
         experienceIds.add(key);
-        if (item.type === 'fitnessTest' && (item.term % 2 !== 0 || !integer(item.fitness, 60, 100))) return fail('体测经历');
+        if (item.type === 'fitnessTest' && !integer(item.fitness, 60, 100)) return fail('体测经历');
       }
       for (const id of Object.keys(CHAIN_NAMES)) if ((state.chains[id].status === 'completed') !== experienceIds.has(id)) return fail('事件链与经历不一致');
       for (const instance of instances) {

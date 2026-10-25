@@ -132,7 +132,7 @@ test('连续八学期完整流程，第八学期只结算一次，不创建第�
       state = result.state;
       while (state.pendingEvent) {
         const eventId = state.pendingEvent.id;
-        const choice = eventId === 'fitnessTest' ? 'participate' : 'later';
+        const choice = { fitnessTest: 'participate', fitnessRetest: 'participate' }[eventId] || 'later';
         const eventResult = game.submitEventChoice(state, choice);
         assert.equal(eventResult.ok, true, `term ${term}: ${eventId}`);
         state = eventResult.state;
@@ -148,10 +148,11 @@ test('连续八学期完整流程，第八学期只结算一次，不创建第�
   state = game.chooseEnding(state, 'ordinary').state;
   assert.equal(state.phase, 'finished');
   assert.equal(state.courses.length, 8);
-  assert.equal(state.social, 76);
+  assert.equal(state.social, 88);
   assert.equal(state.fitness, 98);
   assert.equal(state.mood, 100);
-  assert.equal(state.experiences.length, 4);
+  assert.equal(state.experiences.length, 3);
+  assert.equal(state.experiences.every((item) => item.type === 'fitnessTest'), true);
   assert.equal(state.courses.every((course) => course.grade === 64), true);
   assert.equal(game.endTerm(state).ok, false);
   assert.equal(game.continueGame(state).ok, false);
@@ -255,45 +256,139 @@ test('同一低心情事件每学期至多一次，变化与历史没有重复�
   assert.equal(action.state.history.filter((entry) => entry.command.operation === 'executeAction').length, 2);
 });
 
-test('体测仅偶数学期锻炼达标后触发，参加会留下经历且不重复', () => {
-  const odd = game.executeAction({ ...game.createGame(), fitness: 70 }, 'exercise');
-  assert.equal(odd.state.pendingEvent, null);
-  const insufficient = game.executeAction({ ...game.createGame(), term: 2, fitness: 53 }, 'exercise');
-  assert.equal(insufficient.state.fitness, 59);
-  assert.equal(insufficient.state.pendingEvent, null);
-  const pending = game.executeAction({ ...game.createGame(), term: 2, fitness: 54 }, 'exercise').state;
-  assert.equal(pending.fitness, 60);
+test('体测为秋季学期全员主测：第 3/5/7 学期任意行动触发，春季锻炼不再触发', () => {
+  const springExercise = game.executeAction({ ...game.createGame(), term: 2, fitness: 70 }, 'exercise');
+  assert.equal(springExercise.state.pendingEvent, null);
+  const tooEarly = game.executeAction({ ...game.createGame(), term: 3 }, 'study');
+  assert.equal(tooEarly.state.pendingEvent, null);
+  const pending = game.executeAction(tooEarly.state, 'study').state;
   assert.equal(pending.pendingEvent.id, 'fitnessTest');
-  const result = game.submitEventChoice(pending, 'participate');
+  assert.equal(pending.term, 3);
+});
+
+test('体测达标留经历并记成绩；未达标标记春季补测', () => {
+  const pass = game.executeAction({ ...game.createGame(), term: 3, fitness: 60 }, 'study').state;
+  const passAgain = game.executeAction(pass, 'study').state;
+  assert.equal(passAgain.pendingEvent.id, 'fitnessTest');
+  const passed = game.submitEventChoice(passAgain, 'participate');
+  assert.equal(passed.ok, true);
+  assert.deepEqual(passed.state.experiences, [{ term: 3, type: 'fitnessTest', fitness: 60 }]);
+  assert.equal(passed.state.eventFlags.fitnessRetest, undefined);
+  const fail = game.executeAction({ ...game.createGame(), term: 3, fitness: 59 }, 'study').state;
+  const failPending = game.executeAction(fail, 'study').state;
+  assert.equal(failPending.pendingEvent.id, 'fitnessTest');
+  const failed = game.submitEventChoice(failPending, 'participate');
+  assert.equal(failed.ok, true);
+  assert.equal(failed.state.experiences.length, 0);
+  assert.equal(failed.state.eventFlags.fitnessRetest, true);
+});
+
+test('体测请假直接标记补测，心情略受影响', () => {
+  const state = game.executeAction({ ...game.createGame(), term: 3 }, 'study').state;
+  const pending = game.executeAction(state, 'study').state;
+  assert.equal(pending.pendingEvent.id, 'fitnessTest');
+  const result = game.submitEventChoice(pending, 'later');
   assert.equal(result.ok, true);
-  assert.equal(result.state.time, 10);
-  assert.equal(result.state.energy, 60);
-  assert.equal(result.state.mood, 79);
-  assert.deepEqual(result.state.experiences, [{ term: 2, type: 'fitnessTest', fitness: 60 }]);
-  assert.equal(game.executeAction(result.state, 'exercise').state.pendingEvent, null);
-  assert.equal(game.submitEventChoice(result.state, 'participate').ok, false);
+  assert.equal(result.state.eventFlags.fitnessRetest, true);
+  assert.equal(result.state.mood, 61);
+  assert.equal(result.state.experiences.length, 0);
+});
+
+test('春季补测按标记触发：通过清标记留经历，未通过保留标记明年再测', () => {
+  const base = { ...game.createGame(), term: 4, eventFlags: { fitnessRetest: true } };
+  const pending = game.executeAction(base, 'study').state;
+  assert.equal(pending.pendingEvent.id, 'fitnessRetest');
+  const passed = game.submitEventChoice({ ...pending, fitness: 60 }, 'participate');
+  assert.equal(passed.ok, true);
+  assert.deepEqual(passed.state.experiences, [{ term: 4, type: 'fitnessTest', fitness: 60 }]);
+  assert.equal(passed.state.eventFlags.fitnessRetest, undefined);
+  const failed = game.submitEventChoice({ ...pending, fitness: 59 }, 'participate');
+  assert.equal(failed.ok, true);
+  assert.equal(failed.state.experiences.length, 0);
+  assert.equal(failed.state.eventFlags.fitnessRetest, true);
+  assert.equal(game.executeAction(failed.state, 'rest').state.pendingEvent, null);
 });
 
 test('低心情与体测条件同时满足时，依次处理，不遗漏或提前结算', () => {
-  const pending = game.executeAction({ ...game.createGame(), term: 2, mood: 20, fitness: 60 }, 'exercise').state;
+  const pending = game.executeAction({ ...game.createGame(), term: 3, mood: 20 }, 'study').state;
   assert.equal(pending.pendingEvent.id, 'roommateCare');
   const second = game.submitEventChoice(pending, 'later').state;
-  assert.equal(second.pendingEvent.id, 'fitnessTest');
-  assert.equal(game.endTerm(second).ok, false);
-  const finished = game.submitEventChoice(second, 'later').state;
+  const secondPending = game.executeAction(second, 'study').state;
+  assert.equal(secondPending.pendingEvent.id, 'fitnessTest');
+  assert.equal(game.endTerm(secondPending).ok, false);
+  const finished = game.submitEventChoice(secondPending, 'later').state;
   assert.equal(finished.pendingEvent, null);
   assert.equal(finished.eventHistory.length, 2);
   assert.equal(finished.experiences.length, 0);
+  assert.equal(finished.eventFlags.fitnessRetest, true);
   assert.equal(game.endTerm(finished).ok, true);
 });
 
 test('体测选项精力不足或时间不足时保留事件且提供免费退出', () => {
-  for (const [time, energy] of [[1, 10], [2, 19]]) {
-    const state = { ...game.createGame(), term: 2, fitness: 60, time, energy };
-    const pending = game.executeAction(state, 'exercise').state;
-    const before = structuredClone(pending);
-    assert.equal(game.submitEventChoice(pending, 'participate').ok, false);
-    assert.deepEqual(pending, before);
-    assert.equal(game.submitEventChoice(pending, 'later').ok, true);
+  for (const [time, energy] of [[0, 0], [1, 0], [0, 10]]) {
+    const state = { ...game.createGame(), term: 3, time, energy, phase: 'eventPending', pendingEvent: { id: 'fitnessTest', term: 3, instanceId: 'daily:fitnessTest:3' } };
+    const before = structuredClone(state);
+    assert.equal(game.submitEventChoice(state, 'participate').ok, false);
+    assert.deepEqual(state, before);
+    const declined = game.submitEventChoice(state, 'later');
+    assert.equal(declined.ok, true);
+    assert.equal(declined.state.eventFlags.fitnessRetest, true);
   }
+});
+
+test('转专业结果按平均成绩判定：达标换学院背景并留经历，未达标明年可再试', () => {
+  // 走真实流程：第 2 学期学习触发转专业通知并递交申请，第 3 学期初公示结果。
+  const play = (studiesPerTerm, checkChoice) => {
+    let state = game.createGame();
+    for (let term = 1; term <= 3; term++) {
+      const actions = term === 3 ? ['rest'] : Array(studiesPerTerm).fill('study');
+      for (const id of actions) {
+        state = game.executeAction(state, id).state;
+        while (state.pendingEvent) {
+          const eventId = state.pendingEvent.id;
+          const choice = eventId === 'transfer' ? 'apply' : eventId === 'transferResult' ? checkChoice : 'later';
+          const result = game.submitEventChoice(state, choice);
+          assert.equal(result.ok, true, `term ${term}: ${eventId}`);
+          state = result.state;
+        }
+      }
+      if (term < 3) state = game.continueGame(game.endTerm(state).state).state;
+    }
+    return state;
+  };
+  const original = game.createGame().background;
+  const passed = play(4, 'check');
+  assert.notEqual(passed.background.id, original.id);
+  assert.deepEqual(passed.experiences, [{ term: 3, type: 'transfer' }]);
+  assert.equal(game.validateState(passed).ok, true);
+  const failed = play(3, 'check');
+  assert.equal(failed.background.id, original.id);
+  assert.equal(failed.experiences.length, 0);
+  const skipped = play(4, 'later');
+  assert.equal(skipped.background.id, original.id);
+  assert.equal(skipped.experiences.length, 0);
+});
+
+test('运动会：短跑按体能出结果，趣味项目保底，观众席免费', () => {
+  let state = { ...game.createGame(), term: 2 };
+  for (let index = 0; index < 3; index++) state = game.executeAction(state, 'rest').state;
+  const pending = game.executeAction(state, 'work').state;
+  assert.equal(pending.pendingEvent.id, 'sportsMeet');
+  assert.equal(pending.mood, 74);
+  const sprintPass = game.submitEventChoice({ ...pending, fitness: 60 }, 'sprint');
+  assert.equal(sprintPass.ok, true);
+  assert.deepEqual(sprintPass.state.experiences, [{ term: 2, type: 'sportsMeet' }]);
+  assert.equal(sprintPass.state.mood, 86);
+  const sprintFail = game.submitEventChoice({ ...pending, fitness: 50 }, 'sprint');
+  assert.equal(sprintFail.ok, true);
+  assert.equal(sprintFail.state.experiences.length, 0);
+  assert.equal(sprintFail.state.mood, 76);
+  const fun = game.submitEventChoice(pending, 'fun');
+  assert.equal(fun.ok, true);
+  assert.equal(fun.state.mood, 80);
+  assert.deepEqual(fun.state.experiences, [{ term: 2, type: 'sportsMeet' }]);
+  const audience = game.submitEventChoice(pending, 'later');
+  assert.equal(audience.ok, true);
+  assert.equal(audience.state.mood, 77);
+  assert.equal(audience.state.experiences.length, 0);
 });
