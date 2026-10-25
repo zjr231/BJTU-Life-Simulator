@@ -64,6 +64,10 @@ h1 { margin: 0; font-family: serif; font-size: clamp(25px, 3.5vw, 40px); line-he
 .npc-figure:active { filter: brightness(1.12); }
 .npc-dialog-figure { width: 76px; margin: 2px auto 10px; }
 .npc-dialog-line { margin: 0; font-size: 1.05rem; line-height: 1.8; }
+.npc-chat-form { margin-top: 12px; text-align: left; }
+.npc-chat-form label { display: block; margin-bottom: 6px; font-size: .85rem; color: var(--ink-soft, #5a6a60); }
+.npc-chat-row { display: flex; gap: 8px; align-items: stretch; }
+.npc-chat-row input { flex: 1; }
 @keyframes hotspot-pulse {
   0% { box-shadow:0 0 0 0 rgba(242,208,75,.58); opacity:.94; }
   72%, 100% { box-shadow:0 0 0 15px rgba(242,208,75,0); opacity:.68; }

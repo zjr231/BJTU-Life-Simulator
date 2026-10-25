@@ -39,6 +39,7 @@ let npcTalking = null;
 const npcFades = new Map();
 const npcNodes = new Map();
 const npcTalkIndex = new Map();
+const npcChatLogs = new Map();
 let commandSequence = 0;
 let savedRevision = -1;
 let savedAt = '';
@@ -315,6 +316,7 @@ function resetNpcSystem() {
   npcSystem = npc.createSystem({ random: () => Math.random() });
   npcFades.clear();
   npcTalkIndex.clear();
+  npcChatLogs.clear();
   npcTalking = null;
   for (const node of npcNodes.values()) node.remove();
   npcNodes.clear();
@@ -390,7 +392,68 @@ function showNpcLine() {
   const index = npcTalkIndex.get(npcTalking.id) || 0;
   npcTalkIndex.set(npcTalking.id, index + 1);
   const line = lines[index % lines.length];
-  showDialog('npc', npcTalking.label, '<div class="npc-dialog-figure">' + npcFigureSvg(npcTalking.figure) + '</div><p class="npc-dialog-line">' + h(line) + '</p><p class="dialog-note">校园里的人会随机出现，聊几句不消耗资源。</p>', [{ id: 'npcTalk', text: '再聊一句' }, { id: 'resume', text: '先走了', secondary: true }]);
+  // 配置了在线对话中转地址时，附加打字输入框：发送走云函数转 DeepSeek，失败自动回退本地台词。
+  const chatForm = game.AI_CHAT && game.AI_CHAT.relay
+    ? '<form id="npcChatForm" class="npc-chat-form"><label for="npcChatInput">' + h(npcTalking.label) + '就在眼前，想说点什么？</label><div class="npc-chat-row"><input id="npcChatInput" maxlength="200" placeholder="比如：最近校园里有什么新鲜事？" autocomplete="off"><button type="submit" class="utility-button">发送</button></div></form>'
+    : '';
+  showDialog('npc', npcTalking.label, '<div class="npc-dialog-figure">' + npcFigureSvg(npcTalking.figure) + '</div><p class="npc-dialog-line">' + h(line) + '</p><p class="dialog-note">校园里的人会随机出现，聊几句不消耗资源。</p>' + chatForm, [{ id: 'npcTalk', text: '再聊一句' }, { id: 'resume', text: '先走了', secondary: true }]);
+}
+// 在线对话的玩家背景速写，随学期推进变化，让人物回答更贴合当前处境。
+function npcPlayerContext() {
+  if (!state) return '一名新生';
+  const grades = state.courses.filter((item) => item.passed).length;
+  const stage = ({ eventPending: '正在处理校园事件', summary: '正在看学期总结', endingChoice: '正在做毕业方向选择', finished: '已经毕业' })[state.phase] || '正常校园生活';
+  return '昵称' + state.nickname + '，' + (state.background ? state.background.major : '') + '专业，' + game.TERM_NAMES[state.courses.length - 1] + '，已通过' + grades + '学期成绩，深造准备' + state.furtherStudy + '，求职准备' + state.jobPreparation + '，' + stage;
+}
+async function sendNpcChat() {
+  if (!npcTalking || dialogMode !== 'npc') return;
+  const input = $('#npcChatInput');
+  const text = String(input?.value || '').trim();
+  if (!text) { input?.focus(); return; }
+  const relay = game.AI_CHAT && game.AI_CHAT.relay;
+  if (!relay || typeof fetch !== 'function') { showNpcLine(); $('#dialogNotice').textContent = '在线对话通道没连上，先用本地台词聊吧。'; return; }
+  // 清掉已离场人物的聊天记录，控制总量；每条对话保留最近 12 条消息。
+  if (npcSystem) {
+    const activeIds = new Set(npcSystem.active().map((item) => item.id));
+    for (const id of [...npcChatLogs.keys()]) if (!activeIds.has(id)) npcChatLogs.delete(id);
+  }
+  const persona = npc.IDENTITIES.find((item) => item.id === npcTalking.identityId);
+  const history = npcChatLogs.get(npcTalking.id) || [];
+  const messages = [
+    { role: 'system', content: '你是《北交人生》校园游戏地图上的一位NPC：' + npcTalking.label + '。用中文回答，两三句以内，口语化，符合你的身份。不要用列表和表情包，不要透露你是AI。你常说的话例如：' + persona.lines.join('') },
+    { role: 'system', content: '正在和你说话的是北京交通大学的学生：' + npcPlayerContext() },
+    ...history,
+    { role: 'user', content: text }
+  ];
+  const sendButton = $('#npcChatForm button[type="submit"]');
+  const buttonText = sendButton ? sendButton.textContent : '';
+  if (input) input.disabled = true;
+  if (sendButton) { sendButton.disabled = true; sendButton.textContent = '对方正在输入…'; }
+  let controller = null;
+  let timeoutTimer = null;
+  if (typeof AbortController !== 'undefined') {
+    controller = new AbortController();
+    timeoutTimer = setTimeout(() => controller.abort(), game.AI_CHAT.timeoutMs || 15000);
+  }
+  try {
+    const response = await fetch(relay, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }), signal: controller ? controller.signal : undefined });
+    const data = await response.json();
+    const reply = typeof data?.reply === 'string' ? data.reply.trim() : '';
+    if (!response.ok || !reply) throw new Error('bad relay response');
+    history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
+    npcChatLogs.set(npcTalking.id, history.slice(-12));
+    const line = document.querySelector('.npc-dialog-line');
+    if (line) line.textContent = reply;
+    $('#dialogNotice').textContent = '';
+    if (input) { input.value = ''; input.disabled = false; input.focus(); }
+    if (sendButton) { sendButton.disabled = false; sendButton.textContent = buttonText; }
+  } catch (_) {
+    // 中转不可达或服务异常：回退本地台词，聊天不中断；输入框随弹窗重建。
+    showNpcLine();
+    $('#dialogNotice').textContent = '在线对话通道没连上，先用本地台词聊吧。';
+  } finally {
+    if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+  }
 }
 function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
@@ -683,6 +746,7 @@ function exportLog() {
 $('#dialogBody').addEventListener('submit', (event) => {
   if (event.target.id === 'admissionForm') { event.preventDefault(); startGame(); }
   else if (event.target.id === 'loginForm') { event.preventDefault(); doLogin(); }
+  else if (event.target.id === 'npcChatForm') { event.preventDefault(); sendNpcChat(); }
 });
 $('#actionList').addEventListener('click', (event) => {
   const button = event.target.closest('[data-action]');
