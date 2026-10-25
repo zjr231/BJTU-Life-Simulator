@@ -267,7 +267,8 @@ test('其他栏位的 storage 变化不提示当前栏位冲突，当前栏位�
 
 test('旧档显示为栏位 1，昵称转义，存储不可用时仍可开始游戏', () => {
   const storage = memory();
-  saves.createSaveService(storage).save(game.createGame({ nickname: '<x>' }));
+  // 旧版昵称规则宽松，旧档可能带 HTML 特殊字符；新规则只约束创建，加载时保持宽松并转义显示。
+  saves.createSaveService(storage).save({ ...game.createGame({ nickname: '旧档玩家' }), nickname: '<x>' });
   const ui = app(storage);
   const html = ui.element('#dialogBody').innerHTML;
   assert.match(html, /&lt;x&gt;/);

@@ -86,6 +86,25 @@ test('昵称与种子校验；固定种子重复产生同一入学背景和初�
   assert.equal(Object.hasOwn(state, 'professionalAbility'), false);
 });
 
+test('昵称按主流游戏规则校验：长度 2～12，禁纯数字、纯符号和特殊字符', () => {
+  // 拒绝：单个字符、纯数字（含全角）、纯符号、emoji、零宽字符、混合特殊字符。
+  for (const nickname of ['张', '1', '123456', '１２３', '!!!', '···', '😀😀', 'a​b', '同学🚀', '张@三', '名字'.repeat(6) + '名']) {
+    const checked = game.validateNickname(nickname);
+    assert.equal(checked.ok, false, nickname);
+  }
+  assert.equal(game.validateNickname('123456').reason, '昵称不能全是数字');
+  assert.equal(game.validateNickname('!!!').reason, '昵称只能使用汉字、字母、数字和 · - _');
+  assert.equal(game.validateNickname('张').reason, '昵称需要 2～12 个字符');
+  // 接受：汉字、字母数字混合、分隔符，首尾空格会被去掉。
+  for (const nickname of ['张三丰', 'zhang3', '张·三', 'a_b-c', '张三 丰', '张三123', '  测试玩家  ']) {
+    const checked = game.validateNickname(nickname);
+    assert.equal(checked.ok, true, nickname);
+    assert.equal(checked.value, nickname.trim());
+  }
+  assert.equal(game.validateNickname('北交同学').ok, true);
+  assert.equal(game.createGame().nickname, '北交同学');
+});
+
 test('三个简化背景各有可执行的行动差异', () => {
   const collected = new Map();
   for (let seed = 0; seed < 100; seed++) {

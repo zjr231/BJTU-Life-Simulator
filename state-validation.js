@@ -11,15 +11,18 @@
       if (!object(state)) return fail('缺少状态对象');
       if (state.version !== RULES.version || state.rulesVersion !== RULES.version || state.saveFormatVersion !== RULES.saveFormatVersion) return fail('格式或规则版本不兼容');
       if (typeof state.appVersion !== 'string' || !state.appVersion.length || state.appVersion.length > 64) return fail('程序版本标记');
-      if (!game.validateNickname(state.nickname).ok || state.nickname !== state.nickname.trim()) return fail('昵称');
+      // 昵称在创建时严格校验（见 game.validateNickname）；旧档可能含宽松规则的昵称，加载时只做基本检查。
+      if (typeof state.nickname !== 'string' || !state.nickname.trim() || state.nickname !== state.nickname.trim() || [...state.nickname].length > 12 || /[\u0000-\u001f\u007f]/.test(state.nickname)) return fail('昵称');
       if (!integer(state.term, 1, 8) || !['playing', 'eventPending', 'summary', 'endingChoice', 'finished'].includes(state.phase) || !integer(state.revision, 0, 2000)) return fail('学期、阶段或状态版本');
       for (const [key, max] of [['time', 12], ['energy', 100], ['money', 1000000], ['social', 100], ['fitness', 100], ['mood', 100], ['preparation', 100], ['furtherStudy', 100], ['jobPreparation', 100]]) if (!integer(state[key], 0, max)) return fail(key);
       if (!object(state.rng) || state.rng.algorithm !== 'mulberry32-v1' || typeof state.rng.seed !== 'string' || !state.rng.seed.length || state.rng.seed.length > 64 || !integer(state.rng.value, 0, 4294967295) || !integer(state.rng.calls, 2, 100)) return fail('随机数状态');
       if (state.rng.value !== ((random.create(state.rng.seed).value + Math.imul(0x6D2B79F5, state.rng.calls)) >>> 0)) return fail('随机数调用位置');
       // 入学背景核对：转专业成功才会更换学院方向。新存档按操作历史重放精确核对；
       // 旧版本存档或无法重放的存档退化为结构校验（学院、专业必须与配置一致，未转专业时必须与入学时一致）。
-      const initialBackground = game.createGame({ nickname: state.nickname, seed: state.rng.seed }).background;
-      const backgroundReplay = game.replay({ nickname: state.nickname, seed: state.rng.seed, commands: state.history.map((entry) => entry.command) });
+      // 重放需要创建时合法的新昵称，旧档昵称不合新规则时用默认昵称重放（昵称不参与随机数抽取，入学背景不受影响）。
+      const replayNickname = game.validateNickname(state.nickname).ok ? state.nickname : '北交同学';
+      const initialBackground = game.createGame({ nickname: replayNickname, seed: state.rng.seed }).background;
+      const backgroundReplay = game.replay({ nickname: replayNickname, seed: state.rng.seed, commands: state.history.map((entry) => entry.command) });
       const transferred = state.eventHistory.some((entry) => entry.event === 'transferResult' && entry.choice === 'check') && state.experiences.some((item) => item.type === 'transfer');
       const validBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && item.majors.includes(background.major));
       const backgroundOk = backgroundReplay.ok ? same(state.background, backgroundReplay.state.background) : validBackground(state.background) && (transferred ? state.background.id !== initialBackground.id : same(state.background, initialBackground));

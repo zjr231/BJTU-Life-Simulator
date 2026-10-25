@@ -8,9 +8,15 @@
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const clamp = (value, max) => Math.max(0, Math.min(max, value));
   function validateNickname(value) {
+    // 按主流游戏昵称规则：2～12 个字符，只能使用汉字、字母、数字与 · - _，不能全是数字或符号。
     if (typeof value !== 'string' || !value.trim()) return { ok: false, reason: '先填一个昵称吧' };
-    if ([...value.trim()].length > 12 || /[\u0000-\u001f\u007f]/.test(value)) return { ok: false, reason: '昵称最多 12 个字符，不能包含控制字符' };
-    return { ok: true, value: value.trim() };
+    const name = value.trim();
+    if ([...name].length < 2 || [...name].length > 12) return { ok: false, reason: '昵称需要 2～12 个字符' };
+    if (/[\u0000-\u001f\u007f]/.test(name)) return { ok: false, reason: '昵称不能包含控制字符' };
+    if (!/^[\p{L}\p{M}\p{Nd}·\-_ ]+$/u.test(name)) return { ok: false, reason: '昵称只能使用汉字、字母、数字和 · - _' };
+    if (/^[\p{Nd}]+$/u.test(name)) return { ok: false, reason: '昵称不能全是数字' };
+    if (/^[\p{P}\p{S} ]+$/u.test(name)) return { ok: false, reason: '昵称不能全是符号' };
+    return { ok: true, value: name };
   }
   function createGame(options = {}) {
     const nickname = validateNickname(options.nickname === undefined ? '北交同学' : options.nickname);
