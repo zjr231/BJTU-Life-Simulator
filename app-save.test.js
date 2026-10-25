@@ -14,7 +14,7 @@ function memory() {
   const data = new Map();
   return { data, getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
 }
-function app(storage = memory(), withSms = false) {
+function app(storage = memory(), withSms = false, withNpc = false) {
   const elements = new Map();
   function element(selector) {
     if (!elements.has(selector)) {
@@ -43,6 +43,7 @@ function app(storage = memory(), withSms = false) {
     setTimeout(callback) { timers.set(++sequence, callback); return sequence; },
     clearTimeout(id) { timers.delete(id); } };
   if (withSms) globals.CampusSms = sms;
+  if (withNpc) globals.CampusNpc = require('./npc.js');
   const context = vm.createContext(globals);
   vm.runInContext(fs.readFileSync(require.resolve('./app.js'), 'utf8'), context);
   const evaluate = expression => vm.runInContext(expression, context);
@@ -304,6 +305,36 @@ test('进入场所时地图离场、入场动画标记按定时清理，返回�
   assert.equal(placeScreen.classList.contains('is-entering'), false);
   ui.evaluate('openPlace("dorm")');
   assert.equal(placeScreen.classList.contains('is-entering'), true);
+});
+
+test('地图上的偶遇 NPC 渲染与点击搭话轮换台词，离场保留淡出', () => {
+  const ui = app(memory(), false, true);
+  ui.start();
+  // 换成立即生成、间隔为 0 的引擎，避免依赖真实时钟；场上限两人由引擎保证。
+  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
+  ui.flush(); ui.flush();
+  const html = ui.element('#npcLayer').innerHTML;
+  assert.match(html, /npc-figure/);
+  assert.match(html, /npc-svg/);
+  assert.match(html, /npc-label/);
+  assert.equal((html.match(/data-npc-id=/g) || []).length, 2);
+  const id = ui.evaluate('npcSystem.active()[0].id');
+  const label = ui.evaluate('npcSystem.active()[0].label');
+  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
+  assert.equal(ui.evaluate('dialogMode'), 'npc');
+  assert.match(ui.element('#dialogBody').innerHTML, /npc-dialog-line/);
+  assert.equal(ui.element('#dialogTitle').textContent, label);
+  assert.match(ui.element('#dialogButtons').innerHTML, /data-dialog-action="npcTalk"/);
+  const firstLine = ui.element('#dialogBody').innerHTML;
+  ui.click('#dialogButtons', { dialogAction: 'npcTalk' });
+  assert.notEqual(ui.element('#dialogBody').innerHTML, firstLine);
+  ui.click('#dialogButtons', { dialogAction: 'resume' });
+  assert.equal(ui.element('#termDialog').open, false);
+  // 引擎判定离场后，NPC 保留淡出标记并渲染出 is-fading（模拟 npcTick 对离场事件的记录）。
+  const removed = ui.evaluate('(() => { const events = npcSystem.tick(Date.now() + 80000); for (const npc of events.removed) npcFades.set(npc.id, { npc, since: Date.now() }); return events.removed.length; })()');
+  assert.ok(removed > 0);
+  ui.flush();
+  assert.match(ui.element('#npcLayer').innerHTML, /is-fading/);
 });
 
 test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当前进度和目标新档', () => {

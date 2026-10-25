@@ -31,6 +31,14 @@ let uiLocked = false;
 let unlockTimer;
 let toastTimer;
 let placeEnterTimer;
+// 校园偶遇 NPC：纯逻辑在 npc.js，渲染与点击对话在这里；属于观感层，不进入存档格式。
+const npc = typeof CampusNpc !== 'undefined' ? CampusNpc : null;
+let npcSystem = null;
+let npcTimer = null;
+let npcTalking = null;
+const npcFades = new Map();
+const npcNodes = new Map();
+const npcTalkIndex = new Map();
 let commandSequence = 0;
 let savedRevision = -1;
 let savedAt = '';
@@ -174,6 +182,41 @@ const EVENT_CHOICE_FLAVOR = {
   'memorial129:watch': '谢幕时全场起立。身边有人小声说：这台晚会排了三个月。',
   'memorial129:later': '你拍了张节目单。横幅上的字被风吹得猎猎响。'
 };
+// NPC 2D 小人：同一套基础身型（头、袖、上衣、下摆、腿）加各职位配件，班车单独绘制。
+function npcBody(options) {
+  const skin = options.skin || '#f2c9a0';
+  const top = options.top;
+  return '<circle cx="20" cy="12" r="7" fill="' + skin + '"/>'
+    + '<rect x="9" y="21" width="3" height="11" rx="1.5" fill="' + top + '"/>'
+    + '<rect x="28" y="21" width="3" height="11" rx="1.5" fill="' + top + '"/>'
+    + '<rect x="12" y="20" width="16" height="16" rx="4" fill="' + top + '"/>'
+    + '<rect x="13" y="28" width="14" height="6" rx="2" fill="' + (options.bottom || '#3c4450') + '"/>'
+    + (options.accessory || '')
+    + '<rect x="14" y="36" width="4" height="9" rx="2" fill="' + (options.legs || '#333a45') + '"/>'
+    + '<rect x="22" y="36" width="4" height="9" rx="2" fill="' + (options.legs || '#333a45') + '"/>';
+}
+const NPC_HAIR = '<path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#2b2b33"/>';
+const NPC_HAIR_GREY = '<path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#c9ccd1"/>';
+const NPC_GLASSES = '<circle cx="16" cy="12" r="2.2" fill="none" stroke="#22262b" stroke-width="1.1"/><circle cx="24" cy="12" r="2.2" fill="none" stroke="#22262b" stroke-width="1.1"/><path d="M18.2 12h3.6" stroke="#22262b" stroke-width="1.1"/>';
+const NPC_FIGURES = {
+  student: npcBody({ top: '#2e6fae', bottom: '#f4f4f4', accessory: NPC_HAIR + '<rect x="29" y="21" width="7" height="14" rx="2.5" fill="#7c4a21"/>' }),
+  senior: npcBody({ top: '#5b6b7c', bottom: '#8a97a5', accessory: NPC_HAIR + NPC_GLASSES + '<rect x="29" y="21" width="7" height="14" rx="2.5" fill="#6b4a2b"/>' }),
+  canteen: npcBody({ skin: '#f0c39a', top: '#f7f7f2', bottom: '#f7f7f2', accessory: NPC_HAIR + '<rect x="12" y="2" width="16" height="7" rx="2" fill="#f7f7f2"/><rect x="12" y="2" width="16" height="3" rx="1.5" fill="#d94f4f"/>' }),
+  lecturer: npcBody({ top: '#3f5c77', bottom: '#333a45', accessory: NPC_HAIR + '<path d="M19 21l2 6-2 1-2-1z" fill="#b03a2e"/>' }),
+  staff: npcBody({ top: '#6f7f8f', bottom: '#4c5866', accessory: NPC_HAIR + '<rect x="17" y="21" width="6" height="2" fill="#c26a2e"/><rect x="18" y="23" width="4" height="5" rx="0.8" fill="#f7f7f2"/>' }),
+  security: npcBody({ top: '#2b3440', bottom: '#2b3440', accessory: '<rect x="11" y="3" width="18" height="5" rx="2" fill="#2b3440"/><rect x="9" y="7" width="22" height="2" rx="1" fill="#1c232c"/>' }),
+  courier: npcBody({ top: '#f0a020', bottom: '#d9d9d9', accessory: '<rect x="13" y="3" width="14" height="4.5" rx="2" fill="#f0a020"/><rect x="12" y="20" width="16" height="3" rx="1" fill="#b37000"/>' }),
+  professor: npcBody({ top: '#4a4a55', bottom: '#333a45', accessory: NPC_HAIR_GREY + NPC_GLASSES + '<rect x="4" y="25" width="5" height="8" rx="1" fill="#8d5524"/>' }),
+  international: npcBody({ skin: '#8a5a3b', top: '#e84393', bottom: '#d63384', accessory: '<circle cx="14" cy="7" r="2.6" fill="#1d1d24"/><circle cx="20" cy="5.5" r="3" fill="#1d1d24"/><circle cx="26" cy="7" r="2.6" fill="#1d1d24"/>' }),
+  bus: '<rect x="3" y="9" width="34" height="27" rx="5" fill="#d94f4f"/>'
+    + '<rect x="6" y="13" width="11" height="9" rx="1.5" fill="#cfeef7"/><rect x="23" y="13" width="11" height="9" rx="1.5" fill="#cfeef7"/>'
+    + '<rect x="6" y="25" width="28" height="3.5" rx="1.5" fill="#a33333"/><rect x="6" y="31" width="28" height="2" rx="1" fill="#7d1f1f"/>'
+    + '<circle cx="12" cy="39" r="4.5" fill="#26272b"/><circle cx="12" cy="39" r="1.8" fill="#8f9296"/>'
+    + '<circle cx="28" cy="39" r="4.5" fill="#26272b"/><circle cx="28" cy="39" r="1.8" fill="#8f9296"/>'
+};
+function npcFigureSvg(figure) {
+  return '<svg class="npc-svg" viewBox="0 0 40 48" aria-hidden="true">' + (NPC_FIGURES[figure] || NPC_FIGURES.student) + '</svg>';
+}
 function statsMarkup() {
   const latest = state.courses.at(-1);
   const items = [
@@ -201,7 +244,7 @@ function renderState() {
   $('#directionBrief').innerHTML = '<div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
   $('#endTermButton').textContent = ({ eventPending: '处理当前事件', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果' })[state.phase] || '结束学期';
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
-  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave'].includes(dialogMode);
+  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc'].includes(dialogMode);
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
@@ -267,16 +310,98 @@ function closePlace() {
   activePlace = null;
   if (!dialog.open) lastHotspot?.focus();
 }
+function resetNpcSystem() {
+  if (!npc) return;
+  npcSystem = npc.createSystem({ random: () => Math.random() });
+  npcFades.clear();
+  npcTalkIndex.clear();
+  npcTalking = null;
+  for (const node of npcNodes.values()) node.remove();
+  npcNodes.clear();
+  const layer = $('#npcLayer');
+  if (layer) layer.innerHTML = '';
+}
+function npcDisplayList() {
+  const entries = [];
+  if (npcSystem && state) for (const npc of npcSystem.active()) entries.push({ npc, fading: false });
+  const now = Date.now();
+  for (const [id, entry] of npcFades) {
+    if (now - entry.since >= 700) npcFades.delete(id);
+    else entries.push({ npc: entry.npc, fading: true });
+  }
+  return entries;
+}
+function renderNpcLayer() {
+  const layer = $('#npcLayer');
+  if (!layer) return;
+  if (typeof document.createElement !== 'function') {
+    // 没有节点构造能力的环境（自动化测试）：输出等价的文本标记。
+    layer.innerHTML = npcDisplayList().map((entry) => '<button class="npc-figure' + (entry.fading ? ' is-fading' : '') + '" data-npc-id="' + entry.npc.id + '">' + npcFigureSvg(entry.npc.figure) + '<span class="npc-label">' + h(entry.npc.label) + '</span></button>').join('');
+    return;
+  }
+  const wanted = new Set();
+  for (const entry of npcDisplayList()) {
+    wanted.add(entry.npc.id);
+    let node = npcNodes.get(entry.npc.id);
+    if (!node) {
+      node = document.createElement('button');
+      node.type = 'button';
+      node.className = 'npc-figure';
+      node.dataset.npcId = entry.npc.id;
+      node.setAttribute('aria-label', '和' + entry.npc.label + '搭话');
+      node.innerHTML = npcFigureSvg(entry.npc.figure) + '<span class="npc-label">' + h(entry.npc.label) + '</span>';
+      layer.appendChild(node);
+      npcNodes.set(entry.npc.id, node);
+      // 离场淡出：先按不透明插入，强制一次布局后再加淡出类，让过渡动起来。
+      if (entry.fading) {
+        try { node.getBoundingClientRect(); } catch (_) {}
+        node.classList.add('is-fading');
+      }
+    }
+    node.style.left = entry.npc.x + '%';
+    node.style.top = entry.npc.y + '%';
+    if (entry.fading) node.classList.add('is-fading');
+    else node.classList.remove('is-fading');
+  }
+  for (const [id, node] of npcNodes) {
+    if (wanted.has(id)) continue;
+    node.remove();
+    npcNodes.delete(id);
+  }
+}
+function npcTick() {
+  if (npcSystem && state) {
+    const events = npcSystem.tick(Date.now());
+    for (const npc of events.removed) npcFades.set(npc.id, { npc, since: Date.now() });
+  }
+  renderNpcLayer();
+  if (typeof setTimeout === 'function') npcTimer = setTimeout(npcTick, 300);
+}
+function talkToNpc(npcId) {
+  if (!npcSystem || !state || dialog.open) return;
+  const found = npcSystem.active().find((item) => item.id === npcId);
+  if (!found) return;
+  npcTalking = { id: found.id, identityId: found.identityId, label: found.label, figure: found.figure };
+  audio?.play('npc');
+  showNpcLine();
+}
+function showNpcLine() {
+  const lines = npc.linesFor(npcTalking.identityId);
+  const index = npcTalkIndex.get(npcTalking.id) || 0;
+  npcTalkIndex.set(npcTalking.id, index + 1);
+  const line = lines[index % lines.length];
+  showDialog('npc', npcTalking.label, '<div class="npc-dialog-figure">' + npcFigureSvg(npcTalking.figure) + '</div><p class="npc-dialog-line">' + h(line) + '</p><p class="dialog-note">校园里的人会随机出现，聊几句不消耗资源。</p>', [{ id: 'npcTalk', text: '再聊一句' }, { id: 'resume', text: '先走了', secondary: true }]);
+}
 function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
   stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', admission: '入学', enrollment: '入学', login: '登录', endingChoice: '毕业方向', finished: '四年手账' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', admission: '入学', enrollment: '入学', login: '登录', endingChoice: '毕业方向', finished: '四年手账', npc: '校园偶遇' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
   $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
-  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave'].includes(mode);
+  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc'].includes(mode);
   if (!dialog.open) dialog.showModal();
   (dialog.querySelector('input') || $('#dialogTitle')).focus({ preventScroll: true });
   dialog.scrollTop = 0;
@@ -445,6 +570,7 @@ function startGame() {
   failures.length = 0;
   audio?.play('success');
   audio?.startBgm();
+  resetNpcSystem();
   renderState();
   showEnrollment();
 }
@@ -535,6 +661,7 @@ function loadGame(slotId, source = 'primary') {
   clearTimeout(unlockTimer);
   uiLocked = false;
   failures.length = 0;
+  resetNpcSystem();
   audio?.play('load');
   audio?.startBgm();
   renderState();
@@ -603,6 +730,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
     try { storage?.setItem(LOGIN_SKIP_KEY, '1'); } catch (_) {}
     showAdmission();
   }
+  else if (id === 'npcTalk' && dialogMode === 'npc') showNpcLine();
   else if (id === 'confirmSave' && dialogMode === 'confirmSave' && saveTarget !== null) finishSave(saveTarget);
   else if (id === 'backToSave') showSave();
   else if (id === 'settle' && dialogMode === 'confirm') { if (runCommand('endTerm', null, button.dataset.revision)) { saveCurrent(true); showSummary(); } }
@@ -610,6 +738,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
   else if (id === 'restart') askRestart();
   else if (id === 'confirmRestart') {
     closePlace();
+    resetNpcSystem();
     audio?.stopBgm();
     state = null;
     activeSaveSlot = null;
@@ -622,6 +751,14 @@ $('#dialogButtons').addEventListener('click', (event) => {
   }
 });
 hotspots.forEach((hotspot) => hotspot.addEventListener('click', () => openPlace(hotspot.dataset.place, hotspot)));
+const npcLayer = $('#npcLayer');
+if (npc && npcLayer) {
+  npcLayer.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-npc-id]');
+    if (button) talkToNpc(button.dataset.npcId);
+  });
+  npcTick();
+}
 $('#backButton').addEventListener('click', closePlace);
 $('#endTermButton').addEventListener('click', requestEndTerm);
 $('#saveButton').addEventListener('click', showSave);

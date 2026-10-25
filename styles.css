@@ -48,6 +48,22 @@ h1 { margin: 0; font-family: serif; font-size: clamp(25px, 3.5vw, 40px); line-he
 .map-hotspot:focus-visible::before { border-color:#fff9db; opacity:1; animation-duration:1.15s; }
 @media (hover: hover) and (pointer: fine) { .map-hotspot:hover::before { border-color:#fff9db; opacity:1; animation-duration:1.15s; } }
 .map-hotspot.is-active::before { border-color:#fff3a7; opacity:1; box-shadow:0 0 0 11px rgba(242,208,75,.34), 0 0 18px rgba(242,208,75,.42); }
+
+/* 校园偶遇 NPC：随地图同比例行走的 2D 小人，点击可搭话；离场淡出。 */
+.npc-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.npc-figure { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 3.4%; min-width: 28px; max-width: 44px; padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; transform: translate(-50%, -50%); transition: opacity .6s ease, filter .2s ease; }
+.npc-svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 2px 3px rgba(20, 43, 37, .38)); }
+.npc-label { padding: 2px 7px; border-radius: 999px; background: rgba(20, 43, 37, .84); color: #f4e9c8; font-size: 11px; line-height: 1.25; white-space: nowrap; }
+.npc-figure.is-fading { opacity: 0; pointer-events: none; }
+@media (hover: hover) and (pointer: fine) {
+  .npc-figure:hover { z-index: 4; filter: brightness(1.1); }
+  .npc-figure:hover .npc-label { background: rgba(20, 43, 37, .96); box-shadow: 0 0 0 2px rgba(242, 208, 75, .75); }
+}
+.npc-figure:focus-visible { outline: none; }
+.npc-figure:focus-visible .npc-label { box-shadow: 0 0 0 2px #fff9db; }
+.npc-figure:active { filter: brightness(1.12); }
+.npc-dialog-figure { width: 76px; margin: 2px auto 10px; }
+.npc-dialog-line { margin: 0; font-size: 1.05rem; line-height: 1.8; }
 @keyframes hotspot-pulse {
   0% { box-shadow:0 0 0 0 rgba(242,208,75,.58); opacity:.94; }
   72%, 100% { box-shadow:0 0 0 15px rgba(242,208,75,0); opacity:.68; }
@@ -322,6 +338,7 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
    place screen rises with staggered content; leaving restores the map. */
 .map-screen.is-leaving .map-layer { transform: translate(-50%, -50%) scale(1.045); filter: brightness(.55) saturate(.85); }
 .map-screen.is-leaving .map-hotspot,
+.map-screen.is-leaving .npc-figure,
 .map-screen.is-leaving .hud-top,
 .map-screen.is-leaving .status-card,
 .map-screen.is-leaving .map-caption { opacity: 0; }
@@ -367,7 +384,7 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .utility-button:active, .end-term-button:active, .history-button:active { transform: translateY(1px); }
 
 @media (prefers-reduced-motion: reduce) {
-  .map-layer, .map-hotspot, .hud-top, .status-card, .map-caption, .place-screen, .place-backdrop,
+  .map-layer, .map-hotspot, .npc-figure, .hud-top, .status-card, .map-caption, .place-screen, .place-backdrop,
   .place-content > *, .back-button, .action-card button, .utility-button, .end-term-button, .history-button { transition: none !important; }
   .place-content > *, .place-screen.is-entering .place-content > *,
   .place-screen.is-entering .action-card, .place-screen.is-entering .unavailable-card { animation: none !important; opacity: 1; transform: none; }

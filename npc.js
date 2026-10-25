@@ -1,0 +1,179 @@
+(function (root) {
+  'use strict';
+  // 校园偶遇 NPC 纯逻辑：身份权重、行走路线、移动与生命周期、台词库。
+  // 渲染与点击对话由 app.js 负责；属于观感层，不进入存档格式。
+  // 地图坐标与地标按钮一致，均为地图层的百分比坐标（左/上）。
+  const ROUTES = {
+    // 中环线：学生活动中心→银杏大道→思源楼→图书馆→天佑会堂，绕校园一周。
+    campus: [
+      { x: 6.75, y: 31.12 }, { x: 28.32, y: 35.77 }, { x: 44.22, y: 28.8 },
+      { x: 76.18, y: 43.82 }, { x: 43.46, y: 51.62 }
+    ],
+    // 右侧道路：南门→红果园宾馆→逸夫楼→图书馆→宿舍。
+    road: [
+      { x: 30.57, y: 78.17 }, { x: 64.67, y: 62.82 }, { x: 92.74, y: 73.28 },
+      { x: 76.18, y: 43.82 }, { x: 77.35, y: 20.66 }
+    ]
+  };
+  const IDENTITIES = [
+    { id: 'student', label: '学生', figure: 'student', weight: 24, route: 'campus', mode: 'loop', speed: 1.1, lines: [
+      '刚下课从思源楼出来，这老师点名太狠了。你呢，最近忙啥？',
+      '食堂三楼的麻辣香锅你试过没？我每周必去两次。',
+      '社团那边又在招新了，大一不参加，后面时间更少，真的。',
+      '这学期的课表排得我头大，你选到心仪的课了吗？'
+    ] },
+    { id: 'senior', label: '学长', figure: 'senior', weight: 16, route: 'campus', mode: 'loop', speed: 1.0, lines: [
+      '大二开始想方向不算早。保研、考研、出国、就业，先想清楚再发力。',
+      '实习别拖到大四才找，大三寒暑假是最好的窗口期。',
+      '图书馆靠窗的位置最适合自习，早上八点前基本都有座。',
+      '我当年就是社团玩得太疯，绩点拉了。爱好和学习要会平衡。'
+    ] },
+    { id: 'canteenAunt', label: '食堂阿姨', figure: 'canteen', weight: 10, route: 'campus', mode: 'bounce', speed: 1.0, lines: [
+      '同学，怎么才来？给你多打一勺，正长身体呢！',
+      '今天的糖醋里脊是新配方，尝一口不好吃你回来找阿姨。',
+      '天冷了，早饭一定要吃，热乎的包子馒头都给你留着。',
+      '别总点外卖，哪有食堂干净实惠。吃好才有力气学习。'
+    ] },
+    { id: 'lecturer', label: '任课老师', figure: 'lecturer', weight: 10, route: 'campus', mode: 'loop', speed: 1.15, lines: [
+      '作业要自己写，网上抄的那几份我一眼就能看出来。',
+      '这门课的难点在第三章，有问题欢迎在答疑时间来找我。',
+      '平时分比重不小，认真对待每一次作业，期末会轻松很多。',
+      '学习不要只为了考试。现在打下的基础，将来都会用到。'
+    ] },
+    { id: 'staff', label: '行政老师', figure: 'staff', weight: 8, route: 'campus', mode: 'bounce', speed: 1.05, lines: [
+      '转专业、缓考这些手续要提前办，别赶在最后一天。',
+      '教务系统密码记好了，查成绩、选课、办证明都靠它。',
+      '盖章材料记得先看流程说明，材料齐全一次就过，大家都省时间。',
+      '通知都会发在学院群和系统里，养成定期看的习惯。'
+    ] },
+    { id: 'security', label: '保安大叔', figure: 'security', weight: 8, route: 'campus', mode: 'bounce', speed: 0.95, lines: [
+      '进出校门刷脸慢一点没事，安全第一。',
+      '晚上回宿舍别走太偏的路，有事随时找我们巡逻车。',
+      '你们这届学生真有礼貌，见面都喊大叔。',
+      '骑车带耳机听歌可不行，路口得多留神。'
+    ] },
+    { id: 'courier', label: '快递小哥', figure: 'courier', weight: 8, route: 'road', mode: 'bounce', speed: 1.5, lines: [
+      '您的包裹到了！报一下取件码，我帮你找。',
+      '今天这一片的件堆成山，大家取件都麻利点哈。',
+      '易碎件我已经贴了标，拿回去路上慢点。',
+      '同学你的件挺多啊，要不要推个车？'
+    ] },
+    { id: 'professor', label: '教授', figure: 'professor', weight: 6, route: 'campus', mode: 'loop', speed: 0.9, lines: [
+      '做学问急不得。把基础打牢，方向自然就清晰了。',
+      '我在带一个本科生科研小组，感兴趣可以关注学院的招新。',
+      '读文献是基本功，每周精读一篇，坚持一年就见分晓。',
+      '年轻人要敢于提问，大学里最不缺的就是讨论的机会。'
+    ] },
+    { id: 'driver', label: '班车司机', figure: 'bus', weight: 6, route: 'road', mode: 'once', speed: 7, lifetime: [16000, 22000], lines: [
+      '校车来了！去西直门、家属区的上车，别坐错方向。',
+      '这班车人不多，高峰期你可得提前排队。',
+      '开了这么多年车，你们一届一届我都能认个脸熟。',
+      '雨天路滑，车开得慢一点，大家别催。'
+    ] },
+    { id: 'internationalStudent', label: '留学生', figure: 'international', weight: 4, route: 'campus', mode: 'loop', speed: 1.2, lines: [
+      '你好！我在学中文。你是大几的？可以教我一句北京话吗？',
+      '我来自非洲，我们那里的鼓点节奏和这里很不一样，有空给你听。',
+      '中文好难，但北交的老师和同学都特别耐心。',
+      '我最喜欢银杏大道，秋天的时候像画一样。'
+    ] }
+  ];
+  const DEFAULTS = { lifetime: [40000, 70000], maxActive: 2, gap: [12000, 30000], firstDelay: [2500, 6000], holdAfterRoute: 1500, maxTickGap: 2000 };
+
+  function between(random, range) { return range[0] + random() * (range[1] - range[0]); }
+
+  function createSystem(options = {}) {
+    const random = options.random || (() => Math.random());
+    const settings = { ...DEFAULTS, ...(options.settings || {}) };
+    const active = [];
+    let nextId = 1;
+    let lastTick = null;
+    let nextSpawnAt = between(random, settings.firstDelay);
+
+    function pickIdentity() {
+      const total = IDENTITIES.reduce((sum, item) => sum + item.weight, 0);
+      let roll = random() * total;
+      for (const identity of IDENTITIES) {
+        roll -= identity.weight;
+        if (roll < 0) return identity;
+      }
+      return IDENTITIES[0];
+    }
+
+    function spawn(now) {
+      const identity = pickIdentity();
+      const lifetime = between(random, identity.lifetime || DEFAULTS.lifetime);
+      const npc = {
+        id: 'npc:' + nextId++, identityId: identity.id, label: identity.label, figure: identity.figure,
+        route: ROUTES[identity.route], mode: identity.mode, speed: identity.speed, lifetime,
+        segment: 0, segmentElapsed: 0, direction: 1, x: ROUTES[identity.route][0].x, y: ROUTES[identity.route][0].y,
+        bornAt: now, expiresAt: now + lifetime, routeDone: false, routeDoneAt: null
+      };
+      active.push(npc);
+      return npc;
+    }
+
+    function advance(npc, dt) {
+      if (npc.routeDone) return;
+      // dt 是毫秒，速度是每秒走地图的百分比，先把帧长换算成秒。
+      let remaining = dt / 1000 * npc.speed;
+      while (remaining > 0 && !npc.routeDone) {
+        const from = npc.route[npc.segment];
+        let next = npc.segment + npc.direction;
+        if (next < 0 || next >= npc.route.length) {
+          if (npc.mode === 'loop') next = 0;
+          else if (npc.mode === 'bounce') { npc.direction *= -1; next = npc.segment + npc.direction; }
+          else { npc.routeDone = true; npc.x = from.x; npc.y = from.y; return; }
+        }
+        const target = npc.route[next];
+        const length = Math.hypot(target.x - from.x, target.y - from.y);
+        if (length === 0) { npc.segment = next; continue; }
+        const leftOnSegment = length - npc.segmentElapsed;
+        if (remaining < leftOnSegment) {
+          npc.segmentElapsed += remaining;
+          const ratio = npc.segmentElapsed / length;
+          npc.x = from.x + (target.x - from.x) * ratio;
+          npc.y = from.y + (target.y - from.y) * ratio;
+          return;
+        }
+        remaining -= leftOnSegment;
+        npc.segment = next;
+        npc.segmentElapsed = 0;
+        npc.x = target.x;
+        npc.y = target.y;
+      }
+    }
+
+    return {
+      tick(now) {
+        const spawned = [];
+        const removed = [];
+        if (lastTick === null) lastTick = now;
+        const dt = Math.min(Math.max(now - lastTick, 0), settings.maxTickGap);
+        lastTick = now;
+        if (active.length < settings.maxActive && now >= nextSpawnAt) {
+          spawned.push(spawn(now));
+          nextSpawnAt = now + between(random, settings.gap);
+        }
+        for (const npc of active) {
+          advance(npc, dt);
+          if (npc.routeDone && npc.routeDoneAt === null) npc.routeDoneAt = now;
+          // 路线走完并停留片刻后离场；寿命到期直接离场。都交给界面做淡出。
+          if (now >= npc.expiresAt || (npc.routeDoneAt !== null && now >= npc.routeDoneAt + settings.holdAfterRoute)) removed.push(npc);
+        }
+        for (const npc of removed) active.splice(active.indexOf(npc), 1);
+        return { spawned, removed };
+      },
+      active: () => active.map((npc) => ({ ...npc })),
+      count: () => active.length
+    };
+  }
+
+  function linesFor(identityId) {
+    const identity = IDENTITIES.find((item) => item.id === identityId);
+    return identity ? identity.lines : [];
+  }
+
+  const api = { IDENTITIES, ROUTES, DEFAULTS, createSystem, linesFor };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.CampusNpc = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);

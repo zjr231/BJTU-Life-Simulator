@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 const root = path.resolve(__dirname, '..');
-const scripts = ['config.js', 'rng.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'app.js'];
+const scripts = ['config.js', 'rng.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'npc.js', 'app.js'];
 const files = new Set(['index.html', 'styles.css', '.nojekyll', ...scripts]);
 
 function localReference(reference, from) {
