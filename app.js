@@ -40,6 +40,7 @@ const npcFades = new Map();
 const npcNodes = new Map();
 const npcTalkIndex = new Map();
 const npcChatLogs = new Map();
+let npcTyping = false;
 let commandSequence = 0;
 let savedRevision = -1;
 let savedAt = '';
@@ -209,6 +210,12 @@ const NPC_FIGURES = {
   courier: npcBody({ top: '#f0a020', bottom: '#d9d9d9', accessory: '<rect x="13" y="3" width="14" height="4.5" rx="2" fill="#f0a020"/><rect x="12" y="20" width="16" height="3" rx="1" fill="#b37000"/>' }),
   professor: npcBody({ top: '#4a4a55', bottom: '#333a45', accessory: NPC_HAIR_GREY + NPC_GLASSES + '<rect x="4" y="25" width="5" height="8" rx="1" fill="#8d5524"/>' }),
   international: npcBody({ skin: '#8a5a3b', top: '#e84393', bottom: '#d63384', accessory: '<circle cx="14" cy="7" r="2.6" fill="#1d1d24"/><circle cx="20" cy="5.5" r="3" fill="#1d1d24"/><circle cx="26" cy="7" r="2.6" fill="#1d1d24"/>' }),
+  chef: npcBody({ skin: '#f0c39a', top: '#f7f7f2', bottom: '#f7f7f2', accessory: NPC_HAIR + '<rect x="13" y="0" width="14" height="9" rx="2" fill="#f7f7f2"/><rect x="13" y="0" width="14" height="2.6" rx="1.3" fill="#d94f4f"/>' }),
+  dormAunt: npcBody({ skin: '#f2c9a0', top: '#b0553f', bottom: '#8f6b52', accessory: NPC_HAIR_GREY + '<circle cx="20" cy="4.5" r="2.6" fill="#c9ccd1"/>' }),
+  librarian: npcBody({ top: '#3e7d5c', bottom: '#333a45', accessory: NPC_HAIR + NPC_GLASSES + '<rect x="29" y="24" width="7" height="9" rx="1" fill="#c26a2e"/>' }),
+  rider: npcBody({ top: '#2f6fb0', bottom: '#2f6fb0', accessory: '<path d="M12 8 A8 8 0 0 1 28 8 L27.5 10.5 A7.2 7.2 0 0 0 12.5 10.5 Z" fill="#e8a020"/><rect x="12" y="20" width="16" height="3" rx="1" fill="#e8a020"/><rect x="0" y="24" width="6" height="12" rx="2" fill="#d94f4f"/>' }),
+  coach: npcBody({ top: '#a33333', bottom: '#333a45', accessory: NPC_HAIR + '<circle cx="20" cy="26" r="2.2" fill="#e8e8e8"/><path d="M20 28.2v3" stroke="#e8e8e8" stroke-width="1"/>' }),
+  doctor: npcBody({ top: '#f7f7f2', bottom: '#f7f7f2', accessory: NPC_HAIR + '<rect x="18" y="22" width="4" height="5" fill="#d94f4f"/><rect x="16.5" y="23.2" width="7" height="2.4" fill="#d94f4f"/>' }),
   bus: '<rect x="3" y="9" width="34" height="27" rx="5" fill="#d94f4f"/>'
     + '<rect x="6" y="13" width="11" height="9" rx="1.5" fill="#cfeef7"/><rect x="23" y="13" width="11" height="9" rx="1.5" fill="#cfeef7"/>'
     + '<rect x="6" y="25" width="28" height="3.5" rx="1.5" fill="#a33333"/><rect x="6" y="31" width="28" height="2" rx="1" fill="#7d1f1f"/>'
@@ -385,18 +392,47 @@ function talkToNpc(npcId) {
   if (!found) return;
   npcTalking = { id: found.id, identityId: found.identityId, label: found.label, figure: found.figure };
   audio?.play('npc');
-  showNpcLine();
+  showNpcChat();
 }
-function showNpcLine() {
-  const lines = npc.linesFor(npcTalking.identityId);
-  const index = npcTalkIndex.get(npcTalking.id) || 0;
-  npcTalkIndex.set(npcTalking.id, index + 1);
-  const line = lines[index % lines.length];
-  // 配置了在线对话中转地址时，附加打字输入框：发送走云函数转 DeepSeek，失败自动回退本地台词。
-  const chatForm = game.AI_CHAT && game.AI_CHAT.relay
-    ? '<form id="npcChatForm" class="npc-chat-form"><label for="npcChatInput">' + h(npcTalking.label) + '就在眼前，想说点什么？</label><div class="npc-chat-row"><input id="npcChatInput" maxlength="200" placeholder="比如：最近校园里有什么新鲜事？" autocomplete="off"><button type="submit" class="utility-button">发送</button></div></form>'
-    : '';
-  showDialog('npc', npcTalking.label, '<div class="npc-dialog-figure">' + npcFigureSvg(npcTalking.figure) + '</div><p class="npc-dialog-line">' + h(line) + '</p><p class="dialog-note">校园里的人会随机出现，聊几句不消耗资源。</p>' + chatForm, [{ id: 'npcTalk', text: '再聊一句' }, { id: 'resume', text: '先走了', secondary: true }]);
+// 聊天窗口：点击即打开，开场白进历史，气泡式展示；配置了在线中转时输入直接走云函数，失败自动回退本地台词。
+function showNpcChat() {
+  npcTyping = false;
+  // 清掉已离场人物的聊天记录，控制总量；每条对话保留最近 12 条消息。
+  if (npcSystem) {
+    const activeIds = new Set(npcSystem.active().map((item) => item.id));
+    for (const id of [...npcChatLogs.keys()]) if (!activeIds.has(id)) npcChatLogs.delete(id);
+  }
+  let history = npcChatLogs.get(npcTalking.id);
+  if (!history) {
+    const lines = npc.linesFor(npcTalking.identityId);
+    history = [{ role: 'assistant', content: lines[0] }];
+    npcChatLogs.set(npcTalking.id, history);
+    npcTalkIndex.set(npcTalking.id, 1);
+  }
+  const chatForm = '<form id="npcChatForm" class="npc-chat-form"><div class="npc-chat-row"><input id="npcChatInput" maxlength="200" placeholder="说点什么…" autocomplete="off"><button type="submit" class="utility-button">发送</button></div></form>';
+  showDialog('npc', npcTalking.label, '<div class="npc-chat"><div class="npc-chat-history" id="npcChatHistory">' + renderNpcHistory(history) + '</div>' + chatForm + '<p class="dialog-note">校园里的人会随机出现，聊几句不消耗资源；离开后聊天记录会清空。</p></div>', [{ id: 'npcLeave', text: '退出聊天', secondary: true }]);
+  scrollNpcChat();
+}
+function npcBubbleMarkup(message) {
+  if (message.role === 'user') return '<div class="npc-msg is-me"><div class="npc-bubble">' + h(message.content) + '</div></div>';
+  return '<div class="npc-msg"><span class="npc-avatar">' + npcFigureSvg(npcTalking.figure) + '</span><div class="npc-bubble">' + h(message.content) + '</div></div>';
+}
+function npcTypingMarkup() {
+  return '<div class="npc-msg"><span class="npc-avatar">' + npcFigureSvg(npcTalking.figure) + '</span><div class="npc-bubble is-typing">对方正在输入…</div></div>';
+}
+function renderNpcHistory(history) {
+  return (history || []).map(npcBubbleMarkup).join('');
+}
+function updateNpcHistory() {
+  const node = document.querySelector('#npcChatHistory');
+  if (!node) return;
+  const history = npcTalking ? (npcChatLogs.get(npcTalking.id) || []) : [];
+  node.innerHTML = renderNpcHistory(history) + (npcTyping ? npcTypingMarkup() : '');
+  scrollNpcChat();
+}
+function scrollNpcChat() {
+  const node = document.querySelector('#npcChatHistory');
+  if (node) { try { node.scrollTop = node.scrollHeight; } catch (_) {} }
 }
 // 在线对话的玩家背景速写，随学期推进变化，让人物回答更贴合当前处境。
 function npcPlayerContext() {
@@ -407,53 +443,65 @@ function npcPlayerContext() {
 }
 async function sendNpcChat() {
   if (!npcTalking || dialogMode !== 'npc') return;
+  const talking = npcTalking;
   const input = $('#npcChatInput');
   const text = String(input?.value || '').trim();
   if (!text) { input?.focus(); return; }
+  const history = npcChatLogs.get(talking.id) || [];
+  history.push({ role: 'user', content: text });
+  npcChatLogs.set(talking.id, history.slice(-12));
+  if (input) input.value = '';
+  updateNpcHistory();
   const relay = game.AI_CHAT && game.AI_CHAT.relay;
-  if (!relay || typeof fetch !== 'function') { showNpcLine(); $('#dialogNotice').textContent = '在线对话通道没连上，先用本地台词聊吧。'; return; }
-  // 清掉已离场人物的聊天记录，控制总量；每条对话保留最近 12 条消息。
-  if (npcSystem) {
-    const activeIds = new Set(npcSystem.active().map((item) => item.id));
-    for (const id of [...npcChatLogs.keys()]) if (!activeIds.has(id)) npcChatLogs.delete(id);
-  }
-  const persona = npc.IDENTITIES.find((item) => item.id === npcTalking.identityId);
-  const history = npcChatLogs.get(npcTalking.id) || [];
-  const messages = [
-    { role: 'system', content: '你是《北交人生》校园游戏地图上的一位NPC：' + npcTalking.label + '。用中文回答，两三句以内，口语化，符合你的身份。不要用列表和表情包，不要透露你是AI。你常说的话例如：' + persona.lines.join('') },
-    { role: 'system', content: '正在和你说话的是北京交通大学的学生：' + npcPlayerContext() },
-    ...history,
-    { role: 'user', content: text }
-  ];
+  const online = !!relay && typeof fetch === 'function';
   const sendButton = $('#npcChatForm button[type="submit"]');
   const buttonText = sendButton ? sendButton.textContent : '';
   if (input) input.disabled = true;
   if (sendButton) { sendButton.disabled = true; sendButton.textContent = '对方正在输入…'; }
+  if (online) { npcTyping = true; updateNpcHistory(); }
   let controller = null;
   let timeoutTimer = null;
-  if (typeof AbortController !== 'undefined') {
+  if (online && typeof AbortController !== 'undefined') {
     controller = new AbortController();
-    timeoutTimer = setTimeout(() => controller.abort(), game.AI_CHAT.timeoutMs || 15000);
+    timeoutTimer = setTimeout(() => controller.abort(), (game.AI_CHAT && game.AI_CHAT.timeoutMs) || 15000);
   }
-  try {
-    const response = await fetch(relay, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }), signal: controller ? controller.signal : undefined });
-    const data = await response.json();
-    const reply = typeof data?.reply === 'string' ? data.reply.trim() : '';
-    if (!response.ok || !reply) throw new Error('bad relay response');
-    history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
-    npcChatLogs.set(npcTalking.id, history.slice(-12));
-    const line = document.querySelector('.npc-dialog-line');
-    if (line) line.textContent = reply;
-    $('#dialogNotice').textContent = '';
-    if (input) { input.value = ''; input.disabled = false; input.focus(); }
-    if (sendButton) { sendButton.disabled = false; sendButton.textContent = buttonText; }
-  } catch (_) {
-    // 中转不可达或服务异常：回退本地台词，聊天不中断；输入框随弹窗重建。
-    showNpcLine();
-    $('#dialogNotice').textContent = '在线对话通道没连上，先用本地台词聊吧。';
-  } finally {
-    if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+  let reply = null;
+  if (online) {
+    try {
+      const persona = npc.IDENTITIES.find((item) => item.id === talking.identityId);
+      const messages = [
+        { role: 'system', content: '你是《北交人生》校园游戏地图上的一位NPC：' + talking.label + '。用中文回答，两三句以内，口语化，符合你的身份。不要用列表和表情包，不要透露你是AI。你常说的话例如：' + persona.lines.join('') },
+        { role: 'system', content: '正在和你说话的是北京交通大学的学生：' + npcPlayerContext() },
+        ...history.slice(-12)
+      ];
+      const response = await fetch(relay, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }), signal: controller ? controller.signal : undefined });
+      const data = await response.json();
+      const candidate = typeof data?.reply === 'string' ? data.reply.trim() : '';
+      if (!response.ok || !candidate) throw new Error('bad relay response');
+      reply = candidate;
+      $('#dialogNotice').textContent = '';
+    } catch (_) {
+      // 中转不可达或服务异常：回退本地台词，聊天不中断。
+      reply = null;
+      $('#dialogNotice').textContent = '在线对话通道没连上，先用本地台词聊吧。';
+    } finally {
+      if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+    }
   }
+  if (npcTalking !== talking) return; // 期间换了聊天对象或已退出，不再写入
+  if (!reply) {
+    // 本地台词兜底：按发送次数轮换该身份台词库，离线也能聊起来。
+    const lines = npc.linesFor(talking.identityId);
+    const index = npcTalkIndex.get(talking.id) || 0;
+    npcTalkIndex.set(talking.id, index + 1);
+    reply = lines[index % lines.length];
+  }
+  npcTyping = false;
+  history.push({ role: 'assistant', content: reply });
+  npcChatLogs.set(talking.id, history.slice(-12));
+  updateNpcHistory();
+  if (input) { input.disabled = false; input.focus(); }
+  if (sendButton) { sendButton.disabled = false; sendButton.textContent = buttonText; }
 }
 function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
@@ -794,7 +842,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
     try { storage?.setItem(LOGIN_SKIP_KEY, '1'); } catch (_) {}
     showAdmission();
   }
-  else if (id === 'npcTalk' && dialogMode === 'npc') showNpcLine();
+  else if (id === 'npcLeave' && dialogMode === 'npc') dialog.close();
   else if (id === 'confirmSave' && dialogMode === 'confirmSave' && saveTarget !== null) finishSave(saveTarget);
   else if (id === 'backToSave') showSave();
   else if (id === 'settle' && dialogMode === 'confirm') { if (runCommand('endTerm', null, button.dataset.revision)) { saveCurrent(true); showSummary(); } }

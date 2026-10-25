@@ -307,28 +307,29 @@ test('进入场所时地图离场、入场动画标记按定时清理，返回�
   assert.equal(placeScreen.classList.contains('is-entering'), true);
 });
 
-test('地图上的偶遇 NPC 渲染与点击搭话轮换台词，离场保留淡出', () => {
+test('地图上的偶遇 NPC 渲染，点击直接打开聊天窗口，退出聊天关闭，离场保留淡出', () => {
   const ui = app(memory(), false, true);
   ui.start();
-  // 换成立即生成、间隔为 0 的引擎，避免依赖真实时钟；场上限两人由引擎保证。
+  // 换成立即生成、间隔为 0 的引擎，避免依赖真实时钟；场上限三人由引擎保证。
   ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
-  ui.flush(); ui.flush();
+  ui.flush(); ui.flush(); ui.flush();
   const html = ui.element('#npcLayer').innerHTML;
   assert.match(html, /npc-figure/);
   assert.match(html, /npc-svg/);
   assert.match(html, /npc-label/);
-  assert.equal((html.match(/data-npc-id=/g) || []).length, 2);
+  assert.equal((html.match(/data-npc-id=/g) || []).length, 3);
   const id = ui.evaluate('npcSystem.active()[0].id');
   const label = ui.evaluate('npcSystem.active()[0].label');
   ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
   assert.equal(ui.evaluate('dialogMode'), 'npc');
-  assert.match(ui.element('#dialogBody').innerHTML, /npc-dialog-line/);
   assert.equal(ui.element('#dialogTitle').textContent, label);
-  assert.match(ui.element('#dialogButtons').innerHTML, /data-dialog-action="npcTalk"/);
-  const firstLine = ui.element('#dialogBody').innerHTML;
-  ui.click('#dialogButtons', { dialogAction: 'npcTalk' });
-  assert.notEqual(ui.element('#dialogBody').innerHTML, firstLine);
-  ui.click('#dialogButtons', { dialogAction: 'resume' });
+  // 点击即聊天窗口：气泡历史（含开场白）+ 输入框，没有"再聊一句"按钮。
+  assert.match(ui.element('#dialogBody').innerHTML, /npc-chat-history/);
+  assert.match(ui.element('#dialogBody').innerHTML, /npc-chat-form/);
+  assert.match(ui.element('#dialogBody').innerHTML, /npc-bubble/);
+  assert.doesNotMatch(ui.element('#dialogButtons').innerHTML, /npcTalk/);
+  assert.match(ui.element('#dialogButtons').innerHTML, /data-dialog-action="npcLeave"/);
+  ui.click('#dialogButtons', { dialogAction: 'npcLeave' });
   assert.equal(ui.element('#termDialog').open, false);
   // 引擎判定离场后，NPC 保留淡出标记并渲染出 is-fading（模拟 npcTick 对离场事件的记录）。
   const removed = ui.evaluate('(() => { const events = npcSystem.tick(Date.now() + 80000); for (const npc of events.removed) npcFades.set(npc.id, { npc, since: Date.now() }); return events.removed.length; })()');
@@ -337,7 +338,7 @@ test('地图上的偶遇 NPC 渲染与点击搭话轮换台词，离场保留淡
   assert.match(ui.element('#npcLayer').innerHTML, /is-fading/);
 });
 
-test('NPC 在线对话：配置中转地址后发送消息走云端回复，历史保留且输入复位', async () => {
+test('NPC 在线对话：发送消息走云端回复，气泡就地追加且历史保留，输入复位', async () => {
   const ui = app(memory(), false, true);
   ui.start();
   ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
@@ -345,16 +346,17 @@ test('NPC 在线对话：配置中转地址后发送消息走云端回复，历�
   const id = ui.evaluate('npcSystem.active()[0].id');
   ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
   assert.equal(ui.evaluate('dialogMode'), 'npc');
-  // 首次对话在配置中转之前打开，没有输入框；配置后换一句台词即带上。
+  // 输入框打开即在；配置中转地址后发送走云端回复，不重建弹窗。
   ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
   ui.evaluate('fetch = async (url, options) => ({ ok: true, json: async () => ({ reply: "AI 测试回复：同学好！" }) })');
-  ui.click('#dialogButtons', { dialogAction: 'npcTalk' });
   ui.element('#npcChatInput').value = '你好呀';
   await ui.evaluate('sendNpcChat()');
-  assert.equal(ui.element('.npc-dialog-line').textContent, 'AI 测试回复：同学好！');
+  const history = ui.element('#npcChatHistory').innerHTML;
+  assert.match(history, /你好呀/, '玩家消息进入历史气泡');
+  assert.match(history, /AI 测试回复：同学好！/, '云端回复就地追加为气泡');
   assert.equal(ui.element('#npcChatInput').value, '', '发送后输入框清空');
   assert.equal(ui.element('#npcChatInput').disabled, false, '发送完成后输入框恢复可用');
-  assert.equal(ui.evaluate('npcChatLogs.get(' + JSON.stringify(id) + ').length'), 2, '一问一答进入聊天记录');
+  assert.equal(ui.evaluate('npcChatLogs.get(' + JSON.stringify(id) + ').length'), 3, '开场白加一问一答共三条');
 });
 
 test('NPC 在线对话：中转不可达时回退本地台词并提示，聊天不中断', async () => {
@@ -367,16 +369,13 @@ test('NPC 在线对话：中转不可达时回退本地台词并提示，聊天�
   ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
   ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
   ui.evaluate('fetch = async () => { throw new Error("offline"); }');
-  ui.click('#dialogButtons', { dialogAction: 'npcTalk' });
-  const before = ui.element('#dialogBody').innerHTML;
   ui.element('#npcChatInput').value = '在吗';
   await ui.evaluate('sendNpcChat()');
   assert.match(ui.element('#dialogNotice').textContent, /本地台词/);
-  const after = ui.element('#dialogBody').innerHTML;
-  assert.notEqual(before, after, '弹窗重建为下一句台词');
-  const shown = (after.match(/<p class="npc-dialog-line">([^<]*)<\/p>/) || [])[1];
-  const lines = ui.evaluate('CampusNpc.linesFor(' + JSON.stringify(identityId) + ')').join('');
-  assert.ok(lines.includes(shown), '回退台词来自该身份台词库');
+  const history = ui.element('#npcChatHistory').innerHTML;
+  assert.match(history, /在吗/, '玩家消息留在历史里，聊天不中断');
+  const lines = ui.evaluate('CampusNpc.linesFor(' + JSON.stringify(identityId) + ')');
+  assert.ok(lines.some((line) => history.includes(line)), '回退台词来自该身份台词库');
 });
 
 test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当前进度和目标新档', () => {
