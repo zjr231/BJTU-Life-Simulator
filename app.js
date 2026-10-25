@@ -30,6 +30,7 @@ let dialogMode = null;
 let uiLocked = false;
 let unlockTimer;
 let toastTimer;
+let placeEnterTimer;
 let commandSequence = 0;
 let savedRevision = -1;
 let savedAt = '';
@@ -238,18 +239,28 @@ function openPlace(key, hotspot) {
   $('#placeDescription').textContent = game.PLACES[key].description;
   $('#actionFeedback').textContent = '逛逛不花资源。收益接近上限时，显示实际增加的数值。';
   hotspots.forEach((item) => item.classList.toggle('is-active', item.dataset.place === key));
-  $('#placeScreen').classList.add('is-open');
-  $('#placeScreen').setAttribute('aria-hidden', 'false');
-  $('#placeScreen').inert = false;
+  // 过场动画：地图聚焦压暗离场，场所屏入场时内容错落升起；入场标记随后清理，避免每次行动重绘都重播动画。
+  $('#mapScreen').classList.add('is-leaving');
+  const placeScreen = $('#placeScreen');
+  placeScreen.classList.add('is-open');
+  placeScreen.classList.add('is-entering');
+  if (typeof clearTimeout === 'function') clearTimeout(placeEnterTimer);
+  if (typeof setTimeout === 'function') placeEnterTimer = setTimeout(() => placeScreen.classList.remove('is-entering'), 1300);
+  placeScreen.setAttribute('aria-hidden', 'false');
+  placeScreen.inert = false;
   $('#mapScreen').inert = true;
   document.body.style.overflow = 'hidden';
   renderState();
   $('#backButton').focus();
 }
 function closePlace() {
-  $('#placeScreen').classList.remove('is-open');
-  $('#placeScreen').setAttribute('aria-hidden', 'true');
-  $('#placeScreen').inert = true;
+  const placeScreen = $('#placeScreen');
+  placeScreen.classList.remove('is-open');
+  placeScreen.classList.remove('is-entering');
+  if (typeof clearTimeout === 'function') clearTimeout(placeEnterTimer);
+  $('#mapScreen').classList.remove('is-leaving');
+  placeScreen.setAttribute('aria-hidden', 'true');
+  placeScreen.inert = true;
   $('#mapScreen').inert = false;
   hotspots.forEach((item) => item.classList.remove('is-active'));
   document.body.style.overflow = '';

@@ -22,7 +22,7 @@ function app(storage = memory(), withSms = false) {
       const classes = new Set();
       elements.set(selector, {
         innerHTML: '', textContent: '', value: '', open: false, hidden: false, style: {},
-        classList: { add: name => classes.add(name), remove: name => classes.delete(name),
+        classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name),
           toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); } },
         addEventListener: (type, callback) => listeners.set(type, callback),
         emit(type, event = {}) { listeners.get(type)?.(event); },
@@ -279,6 +279,31 @@ test('旧档显示为栏位 1，昵称转义，存储不可用时仍可开始游
   denied.start(); denied.click('#saveButton');
   assert.equal((denied.element('#dialogBody').innerHTML.match(/disabled/g) || []).length, 3);
   assert.equal(denied.evaluate('state.phase'), 'playing');
+});
+
+test('进入场所时地图离场、入场动画标记按定时清理，返回时恢复', () => {
+  const ui = app(memory());
+  ui.start();
+  ui.evaluate('openPlace("think")');
+  const mapScreen = ui.element('#mapScreen');
+  const placeScreen = ui.element('#placeScreen');
+  assert.equal(mapScreen.classList.contains('is-leaving'), true);
+  assert.equal(placeScreen.classList.contains('is-open'), true);
+  assert.equal(placeScreen.classList.contains('is-entering'), true);
+  // 入场动画播完后清除标记，之后执行行动重绘列表不会重播整屏动画。
+  ui.flush();
+  assert.equal(placeScreen.classList.contains('is-entering'), false);
+  ui.evaluate('closePlace()');
+  assert.equal(mapScreen.classList.contains('is-leaving'), false);
+  assert.equal(placeScreen.classList.contains('is-open'), false);
+  assert.equal(placeScreen.classList.contains('is-entering'), false);
+  // 未到定时结束就返回时，入场标记立即清理，重新进入会重播动画。
+  ui.evaluate('openPlace("dorm")');
+  assert.equal(placeScreen.classList.contains('is-entering'), true);
+  ui.evaluate('closePlace()');
+  assert.equal(placeScreen.classList.contains('is-entering'), false);
+  ui.evaluate('openPlace("dorm")');
+  assert.equal(placeScreen.classList.contains('is-entering'), true);
 });
 
 test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当前进度和目标新档', () => {
