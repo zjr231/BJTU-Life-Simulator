@@ -48,9 +48,13 @@
       { id: 'talk', title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 15, social: 3 },
       { id: 'later', title: '先自己调整', description: '说声不用了，戴上耳机。今晚想一个人待着。' }
     ] },
-    fitnessTest: { priority: 20, title: '体测报名', description: '体育老师翻着点名册看了你一眼：这学期底子不错，体测的名额给你留一个。', trigger: '点名册上，你的锻炼出勤画得挺满', choices: [
-      { id: 'participate', title: '参加体测', description: '报上名，上跑道。跑完这次，体测这一关就算过了。', time: 1, energy: 10, mood: 5, minFitness: 60, experience: 'fitnessTest' },
-      { id: 'later', title: '这次暂不参加', description: '这次先不跑。跑道一直都在，下次再说。' }
+    fitnessTest: { priority: 20, title: '体测周', description: '体育老师在班群里发了通知：体测周到了。八百米和引体向上躲不掉，校医院这两天排的都是开免测证明的人。', trigger: '体育老师在班群里发了通知', choices: [
+      { id: 'participate', title: '认真参加体测', description: '做完热身，一项一项来。跑完最后一圈，嗓子眼里都是铁锈味。', time: 1, energy: 10, mood: 5, outcomeBy: { metric: 'fitness', threshold: 60, pass: { title: '体测达标', description: '每一项都过了线。体育老师拍了拍你：不错，别松。', mood: 5, social: 2, experience: 'fitnessTest' }, fail: { title: '体测未达标', description: '成绩单下来，有一项差一点。辅导员通知你：春季有一次补测，好好准备。', flag: 'fitnessRetest' } } },
+      { id: 'later', title: '开假条请假', description: '去校医院开了张假条。体测免了，但辅导员记了你一笔：春季补测，不得缺席。', flag: 'fitnessRetest', mood: -3 }
+    ] },
+    fitnessRetest: { priority: 22, title: '春季补测', description: '体育组发来补测通知：秋季体测未达标或缺考的同学，统一安排本学期补测。再不过，可就要记入档案了。', trigger: '体育组发来补测通知', choices: [
+      { id: 'participate', title: '报名参加补测', description: '提前两周开始练。补测当天，状态比上学期好得多。', time: 1, energy: 10, mood: 4, clearFlag: 'fitnessRetest', outcomeBy: { metric: 'fitness', threshold: 60, pass: { title: '补测达标', description: '这一回过了。体育老师签了字，体测这一关总算翻篇。', mood: 6, experience: 'fitnessTest' }, fail: { title: '补测仍未达标', description: '还差一点。体育老师说：明年秋天，跟下一届一起测。', flag: 'fitnessRetest', mood: -4 } } },
+      { id: 'later', title: '再拖一次', description: '关掉通知。辅导员说过，补测旷考是要写检查的。', mood: -5 }
     ] },
     projectOffer: { priority: 30, chain: 'project', node: 'application', title: '项目组的邀请', description: '课间，老师把你叫到走廊，说有个项目缺人手，问你要不要来。跟着做下去，下个学期把成果摆出来，简历上能多一行。', trigger: '你之前递出去的那份申请，有回音了', choices: [
       { id: 'accept', title: '加入项目', description: '答应下来。这学期开工，下个学期见成果。', chainEffect: 'accept' },
@@ -83,17 +87,29 @@
       { id: 'discuss', title: '加入讨论', description: '拉开椅子坐过去。聊着聊着，卡住的点通了几处。', time: 1, energy: 5, preparation: 5, social: 3 },
       { id: 'later', title: '继续自己的计划', description: '点头笑笑，低头继续看自己的书。' }
     ] },
-    military1: { priority: 11, title: '军训开训', description: '开学第二周，公告栏贴出军训安排。辅导员在群里说，这是大学的第一课。', trigger: '公告栏前围满了人', choices: [
-      { id: 'join', title: '换上迷彩服', description: '站进队列，太阳很晒，口号很响。', time: 1, energy: 10, fitness: 5, mood: -5 },
+    military1: { priority: 11, title: '军训开训', description: '开学第二周，公告栏贴出军训安排。辅导员在群里说，这是大学的第一课。训练之余，连队还要出人参加拔河和红歌合唱。', trigger: '公告栏前围满了人', choices: [
+      { id: 'tug', title: '报名拔河', description: '麻绳磨得手心发烫，赢了的那一刻，全连的人都在喊。', time: 1, energy: 10, fitness: 6, mood: -4, social: 4 },
+      { id: 'choir', title: '加入红歌合唱', description: '嗓子唱哑了，但几百人一起吼出来的时候，鸡皮疙瘩都起来了。', time: 1, energy: 6, mood: 2, social: 5 },
+      { id: 'join', title: '正常参加训练', description: '站进队列，太阳很晒，口号很响。', time: 1, energy: 10, fitness: 5, mood: -5 },
       { id: 'later', title: '先请假', description: '跟辅导员磨了半天，批了半天的假。' }
     ] },
     military2: { priority: 12, title: '军训汇演', description: '两周过去，方阵走得有模有样。明天就是汇演，教官最后一遍喊了「稍息」。', trigger: '迷彩服洗了又洗，汇演要到了', choices: [
-      { id: 'perform', title: '认真走完汇演', description: '正步踩在跑道上，胳膊甩得生疼。', time: 1, energy: 8, mood: 6, social: 3, experience: 'military' },
+      { id: 'march', title: '走分列式', description: '正步踩在跑道上，胳膊甩得生疼。走过主席台的时候，你没敢眨眼睛。', time: 1, energy: 8, mood: 6, social: 3, experience: 'military' },
+      { id: 'choir', title: '参加合唱方队', description: '和合唱队的同学一起上台。台下跟着打拍子，唱得比排练时都响。', time: 1, energy: 5, mood: 7, social: 4, experience: 'military' },
       { id: 'later', title: '混在队伍后面', description: '跟着走完，不抢镜，也不掉队。' }
     ] },
-    transfer: { priority: 70, title: '转专业通知', description: '学院通知栏贴出转专业办法。室友路过时多看了你一眼：你不是一直嘀咕想换方向？', trigger: '通知栏又贴了新东西', choices: [
+    transfer: { priority: 69, title: '转专业通知', description: '学院通知栏贴出转专业办法：平均成绩是硬门槛，笔试面试一个不少。室友路过时多看了你一眼：你不是一直嘀咕想换方向？', trigger: '通知栏又贴了新东西', choices: [
       { id: 'apply', title: '递交转专业申请', description: '打印成绩单，填表，交到教务处。心里七上八下。', time: 2, energy: 10, mood: 4, social: 1 },
       { id: 'later', title: '留在原专业', description: '想想又算了。现在这个方向，其实也没那么差。' }
+    ] },
+    transferResult: { priority: 70, title: '转专业结果公示', description: '教务系统更新了转专业结果。公示名单前围了一圈人，你的心提到了嗓子眼。', trigger: '教务系统更新了转专业结果', choices: [
+      { id: 'check', title: '查看结果', description: '名单一行行扫过去。', outcomeBy: { metric: 'average', threshold: 85, pass: { title: '申请通过', description: '你的名字出现在转入名单上。搬到新的学院，课表和同学都要重新认识一遍。', mood: 10, social: 3, changeBackground: true, experience: 'transfer' }, fail: { title: '结果未通过', description: '名单里没有你。教务处说，明年这个时候还能再报一次。', mood: -6 } } },
+      { id: 'later', title: '先不看结果', description: '把手机扣在桌上。该来的总会来。' }
+    ] },
+    sportsMeet: { priority: 57, title: '春季运动会', description: '一年一度的春季运动会开始报名。班长在群里喊：各项目还差人，短跑接力缺一棒，趣味项目纯属图一乐。', trigger: '班长在群里喊报名', choices: [
+      { id: 'sprint', title: '报名短跑接力', description: '最后一棒交到你手里。发令枪响，跑道两边的加油声连成一片。', time: 1, energy: 10, mood: 4, outcomeBy: { metric: 'fitness', threshold: 60, pass: { title: '接力拿到名次', description: '冲线的时候，班里的同学把你围住。奖状挂在教室后墙。', mood: 8, social: 5, experience: 'sportsMeet' }, fail: { title: '成绩不算理想', description: '名次差一点。班长说没关系，明年再来。', mood: -2, social: 2 } } },
+      { id: 'fun', title: '报名趣味项目', description: '两人三足、袋鼠跳。规则是什么不重要，笑到肚子疼是真的。', time: 1, energy: 5, mood: 6, social: 5, experience: 'sportsMeet' },
+      { id: 'later', title: '坐在观众席', description: '当个观众。递水、喊加油、拍照片，一样不落。', time: 1, mood: 3, social: 2 }
     ] },
     seminar: { priority: 71, title: '深造宣讲会', description: '教学楼下贴出深造经验分享会的海报：去年上岸的学长学姐来分享，群里已经开始接龙报名。', trigger: '报告厅门口排起了长队', choices: [
       { id: 'attend', title: '进去听一听', description: '记了半页笔记，也记下了几个名字。', time: 1, energy: 3, furtherStudy: 8 },
@@ -108,7 +124,7 @@
       { id: 'market', title: '摆摊卖旧书', description: '教材三块一本，学弟学妹边挑边问有没有笔记。', time: 1, energy: 5, income: 80, social: 3 },
       { id: 'later', title: '这些都不弄了', description: '把该交的材料交齐，比什么都强。' }
     ] },
-    singer1: { priority: 25, title: '歌手大赛报名', description: '学生活动中心门口拉起横幅：校园歌手大赛报名最后一天。门口的音箱放着一首谁都听过的歌。', trigger: '门口的音箱放着一首谁都听过的歌', choices: [
+    singer1: { priority: 25, title: '校园歌星大赛报名', description: '学生活动中心门口拉起横幅：校园歌星大赛报名最后一天。门口的音箱放着一首谁都听过的歌。', trigger: '门口的音箱放着一首谁都听过的歌', choices: [
       { id: 'signup', title: '报名试试', description: '填了报名表。上台这种事，总得试一次。', time: 1, energy: 3 },
       { id: 'later', title: '在旁边看热闹', description: '看别人报名也挺好。' }
     ] },
@@ -144,7 +160,7 @@
       { id: 'feed', title: '买根火腿肠喂它', description: '它凑过来，吃完蹭了蹭你的裤脚。', time: 1, money: 10, mood: 5 },
       { id: 'later', title: '赶时间，先走了', description: '你绕开它。它也不恼，继续晒太阳。' }
     ] },
-    canteen: { priority: 62, title: '食堂新窗口', description: '群里有人发来消息：食堂三楼开了新窗口，队伍拐了两个弯，招牌菜每天都卖断货。', trigger: '新窗口的队伍拐了两个弯', choices: [
+    canteen: { priority: 62, title: '益民餐厅新窗口', description: '群里有人发来消息：益民餐厅开了新窗口，队伍拐了两个弯，招牌菜每天都卖断货。', trigger: '新窗口的队伍拐了两个弯', choices: [
       { id: 'queue', title: '排队尝一尝', description: '排到窗口，阿姨手一抖，多给了半勺。', time: 1, money: 20, mood: 6, energy: 3 },
       { id: 'later', title: '人太多，改天', description: '拍了张菜单照片，发给室友。' }
     ] },
@@ -175,15 +191,15 @@
     ] },
     injury: { priority: 74, title: '操场上的崴脚', description: '跑圈冲刺的时候，脚踝咔地响了一声。现在肿起来了，走路一瘸一拐。', trigger: '脚踝肿起来了', choices: [
       { id: 'treat', title: '去校医院处理', description: '冰袋敷上，校医说没伤到骨头，静养一周。', time: 1, energy: 3, money: 50, mood: 5 },
-      { id: 'later', title: '贴个膏药忍着', description: '膏药味冲鼻子。疼是疼，课还是得去上。' }
+      { id: 'later', title: '贴个膏药忍着', description: '膏药味冲鼻子。疼是疼，课还是得去上。', fitness: -6, mood: -3 }
     ] },
     flu: { priority: 75, title: '换季流感', description: '换季降温，宿舍楼下一片咳嗽声。早上起来，你的嗓子也哑了，额头有点烫。', trigger: '宿舍楼下一片咳嗽声', choices: [
       { id: 'clinic', title: '去校医院开药', description: '排队的工夫，前面已经有人戴着口罩在咳嗽。', time: 1, energy: 3, money: 60, mood: 7 },
-      { id: 'later', title: '多喝热水硬扛', description: '热水一杯接一杯。扛不扛得住，看运气。' }
+      { id: 'later', title: '多喝热水硬扛', description: '热水一杯接一杯。扛不扛得住，看运气。', mood: -5 }
     ] },
     insomnia: { priority: 76, title: '失眠的夜', description: '连续几天熬到凌晨，今晚躺下反而清醒。窗帘外透进路灯，脑子里全是没交的作业。', trigger: '窗帘外透进路灯', choices: [
       { id: 'clinic', title: '去校医院看看', description: '校医说先调作息，开了两片药。', time: 1, money: 60, mood: 6 },
-      { id: 'later', title: '翻个身硬睡', description: '你翻了个身，数到三百，又数了一遍。' }
+      { id: 'later', title: '翻个身硬睡', description: '你翻了个身，数到三百，又数了一遍。', mood: -4 }
     ] },
     lecture: { priority: 77, title: '会堂的讲座', description: '天佑会堂门口排起长队。海报上写着今晚的嘉宾，是行业里叫得出名字的人。', trigger: '会堂门口排起长队', choices: [
       { id: 'listen', title: '进场听一场', description: '两个小时的讲座，你记了半页关键词。', time: 1, energy: 2, social: 3, mood: 3 },
@@ -200,14 +216,51 @@
     frontDesk: { priority: 80, title: '周末帮工', description: '宾馆前台贴着招周末帮工的启事。时薪还行，就是得早起。', trigger: '前台贴着招工启事', choices: [
       { id: 'apply', title: '去应聘', description: '换床单、摆毛巾，干了一整天。结钱的时候，手有点抖。', time: 1, income: 150, mood: -3 },
       { id: 'later', title: '看看就好', description: '时薪是还行。但周末，你想睡懒觉。' }
+    ] },
+    ginkgo: { priority: 81, season: 'autumn', title: '银杏大道金黄', description: '一场秋雨过后，银杏大道整条路都黄透了。举着相机的人比落叶还多，连门卫大叔都换上了精神的白手套。', trigger: '整条银杏大道都黄透了', choices: [
+      { id: 'photo', title: '拍几张照片', description: '手机举了半小时，终于等到一阵风。照片发到家族群，家里人说真好看。', time: 1, mood: 6 },
+      { id: 'later', title: '路过看看', description: '在树下站了一会儿，慢慢走开。' }
+    ] },
+    hawthorn: { priority: 82, season: 'autumn', title: '山楂分发', description: '秋天的山楂熟了。后勤师傅在逸夫操场旁支起小摊，给师生分发刚摘的山楂——红果园的小红果，一年就这一回。', trigger: '山楂摊前围了一群人', choices: [
+      { id: 'take', title: '领一袋山楂', description: '山楂洗干净塞进包里，酸得人眯眼睛。同学说，这就是「小红果」的来历。', time: 1, mood: 5, social: 2 },
+      { id: 'later', title: '不凑热闹', description: '人太多了。你绕开摊位，去忙自己的。' }
+    ] },
+    alumniFair: { priority: 83, title: '校友返校集市', description: '值年返校的校友把红果园宾馆大堂变成了集市：老照片、校徽徽章、手绘校园地图，还有当年食堂的菜谱复刻。', trigger: '宾馆大堂摆满了摊位', choices: [
+      { id: 'browse', title: '逛逛摊位', description: '和摊主聊起来，他讲起二十年前的思源楼，你讲现在的。', time: 1, energy: 3, social: 4, mood: 4 },
+      { id: 'later', title: '绕道走', description: '今天人太多了，改天再来。' }
+    ] },
+    rollCall: { priority: 84, title: '课堂点名', description: '上课铃响，老师翻开点名册。后排几个空位的主人托你喊到，你手心有点冒汗。', trigger: '老师翻开了点名册', choices: [
+      { id: 'cover', title: '帮忙喊到', description: '一声「到」喊得底气不足，好在老师没抬头。', social: 3, mood: -3 },
+      { id: 'later', title: '不掺和', description: '你低头翻书。反正被点到的又不是你。' }
+    ] },
+    jobFair: { priority: 85, title: '招聘会海报', description: '南门布告栏贴出大型招聘会海报：上百家企业进校，时间就定在下周。路过的大四学长正对着海报拍照。', trigger: '布告栏前围了不少人', choices: [
+      { id: 'browse', title: '凑近看岗位', description: '扫了几个二维码，把感兴趣的展位记下来。', time: 1, energy: 2, social: 2, mood: 2 },
+      { id: 'later', title: '离毕业还早', description: '你摆摆手。海报上的字，以后再看。' }
+    ] },
+    medicalInsurance: { priority: 86, title: '医保办理', description: '校医院的宣传栏贴出通知：大学生医保参保登记开始，门诊报销比例又调高了。', trigger: '宣传栏贴出医保通知', choices: [
+      { id: 'register', title: '登记参保', description: '排队交材料。从此看病买药，能报一点是一点。', time: 1, money: 100, mood: 3 },
+      { id: 'later', title: '下次再说', description: '想着自己身体还行，先把这事放一放。' }
+    ] },
+    labNight: { priority: 87, title: '实验室通宵', description: '逸夫楼的实验室今晚灯火通明。师兄师姐们赶着跑最后一批数据，白板上写着倒计时。', trigger: '逸夫楼的灯亮到很晚', choices: [
+      { id: 'join', title: '留下来一起赶', description: '帮师兄配试剂、看仪器。凌晨两点的实验室，咖啡和键盘声都很响。', time: 1, energy: 6, preparation: 5, mood: -4, social: 2 },
+      { id: 'later', title: '回去休息', description: '看了一眼倒计时，你拉上外套回宿舍。' }
+    ] },
+    danceParty: { priority: 88, title: '周末舞会', description: '学生活动中心周末办舞会，彩灯挂起来，音箱轰着鼓点。门口有人分发荧光棒。', trigger: '活动中心的彩灯亮了起来', choices: [
+      { id: 'join', title: '进去跳一会儿', description: '从僵硬到放开，一晚上下来嗓子哑了，笑是真的。', time: 1, energy: 8, social: 6, mood: 8 },
+      { id: 'later', title: '在门口看看', description: '音乐挺好听。你听了一会儿，转身走了。' }
+    ] },
+    memorial129: { priority: 89, season: 'autumn', title: '12·9 文艺汇演', description: '纪念「一二·九」运动的文艺汇演在天佑会堂拉开帷幕。整场演出从合唱到话剧，节目单厚厚一沓。', trigger: '天佑会堂挂出了横幅', choices: [
+      { id: 'watch', title: '进场看演出', description: '谢幕的时候全场起立。有人小声说：这台晚会排了三个月。', time: 1, energy: 2, money: 20, mood: 8, social: 3 },
+      { id: 'later', title: '路过不进去', description: '门口转了一圈，拍了张节目单。' }
     ] }
   };
   const ENDINGS = { graduationAverage: 60, passedTerms: 6, furtherStudyAverage: 80, furtherStudyPreparation: 60, jobPreparation: 60 };
-  const RANDOM_POOL = ['campusDiscussion', 'cat', 'canteen', 'card', 'wall', 'seat', 'snow', 'parcel', 'night', 'injury', 'flu', 'insomnia', 'lecture', 'drama', 'alumniStory', 'frontDesk'];
+  const RANDOM_POOL = ['campusDiscussion', 'cat', 'canteen', 'card', 'wall', 'seat', 'snow', 'parcel', 'night', 'injury', 'flu', 'insomnia', 'lecture', 'drama', 'alumniStory', 'frontDesk', 'ginkgo', 'hawthorn', 'alumniFair', 'rollCall', 'jobFair', 'medicalInsurance', 'labNight', 'danceParty', 'memorial129'];
   // Elapsed time is an estimate of semester progress, not a week/day calendar.
   const CAMPUS_SCHEDULE = {
     military1: { terms: [1], minActions: 2, maxElapsed: 4 },
-    military2: { terms: [1], maxElapsed: 7, after: ['military1', 'join', 0], actionGap: 1 },
+    // after 的选项留空表示任意选项（报名、请假都算参加了开训，汇演按例出席）。
+    military2: { terms: [1], maxElapsed: 7, after: ['military1', undefined, 0], actionGap: 1 },
     // actions 限定事件只在与文案相符的行动后触发；结果类事件（复赛、汇演、答辩等）不限，因为玩家已报名参加。
     singer1: { season: 'autumn', minElapsed: 4, maxElapsed: 7, unless: 'singer3', actions: ['clubWork', 'walk', 'chat'] },
     singer2: { season: 'autumn', after: ['singer1', 'signup', 0], actionGap: 1 },
@@ -215,9 +268,16 @@
     ticket1: { season: 'autumn', minElapsed: 9, unless: 'ticket3' },
     ticket2: { season: 'spring', maxElapsed: 4, after: ['ticket1', 'buy', 1] },
     ticket3: { season: 'spring', maxElapsed: 6, after: ['ticket2', 'board', 0], actionGap: 1, actions: ['chat'] },
+    // 体测为秋季学年主测，全年级统一参加；未达标或缺考者春季补测。
+    fitnessTest: { terms: [3, 5, 7], minElapsed: 3, maxElapsed: 9 },
+    fitnessRetest: { season: 'spring', minElapsed: 2, maxElapsed: 8, flag: 'fitnessRetest' },
+    // 转专业共三次机会（大一下/大二上/大二下），结果在下学期初公示。
+    transfer: { terms: [2, 3, 4], minElapsed: 4, maxElapsed: 7, actions: ['study'], unless: 'transferResult' },
+    transferResult: { after: ['transfer', 'apply', 1], maxElapsed: 4 },
+    sportsMeet: { terms: [2, 4, 6], minElapsed: 5, maxElapsed: 8 },
     contest1: { terms: [5], minElapsed: 4, maxElapsed: 7, unless: 'contest2', actions: ['study', 'applyProject', 'projectWork'] },
-    contest2: { terms: [5], after: ['contest1', 'join', 0], actionGap: 1 },
-    transfer: { terms: [3], minElapsed: 4, maxElapsed: 7, actions: ['study'] },
+    // 校内选拔秋季启动，决赛次年春季。
+    contest2: { terms: [6], after: ['contest1', 'join', 1] },
     seminar: { terms: [6], minElapsed: 4, maxElapsed: 7, actions: ['study', 'show'] },
     graduation: { terms: [8], minElapsed: 9 }
   };
@@ -237,7 +297,16 @@
     lecture: { actions: ['show'] },
     drama: { actions: ['show'], season: 'spring', minElapsed: 9 },
     alumniStory: { actions: ['alumniVolunteer'] },
-    frontDesk: { actions: ['alumniVolunteer'] }
+    frontDesk: { actions: ['alumniVolunteer'] },
+    ginkgo: { actions: ['walk'], season: 'autumn', minElapsed: 5 },
+    hawthorn: { actions: ['exercise'], season: 'autumn', minElapsed: 4 },
+    alumniFair: { actions: ['alumniVolunteer'] },
+    rollCall: { actions: ['study', 'tutoring'] },
+    jobFair: { actions: ['work'] },
+    medicalInsurance: { actions: ['checkup', 'sickVisit'] },
+    labNight: { actions: ['projectWork'] },
+    danceParty: { actions: ['clubWork'] },
+    memorial129: { actions: ['show'], season: 'autumn', minElapsed: 8 }
   };
   const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -69,8 +69,8 @@ const ACTION_FLAVOR = {
 const EVENT_CHOICE_FLAVOR = {
   'roommateCare:talk': '烤串摊的灯很亮。你把最近的破事倒了一桌子，说到最后，自己先笑了。',
   'roommateCare:later': '你戴上耳机。室友没再说话，只把顶灯调暗了一格。',
-  'fitnessTest:participate': '冲线的时候腿有点软。体育老师低头在名单上画了个勾。',
-  'fitnessTest:later': '这次没报名。跑道一直都在，下次再说。',
+  'fitnessTest:later': '假条开好了，医务室老师签了字。你走出校医院，听见操场上隐约的哨声。',
+  'fitnessRetest:later': '通知被划进「稍后处理」。它会在消息列表里，一直等到你点开为止。',
   'projectOffer:accept': '你在报名表上签了字。当晚，项目群里多了条欢迎消息。',
   'projectOffer:later': '你婉拒了。老师摆摆手：随时欢迎回来。',
   'projectReview:complete': '答辩结束，台下有人鼓掌。你把 PPT 拖进了「结题」文件夹。',
@@ -88,12 +88,18 @@ const EVENT_CHOICE_FLAVOR = {
   'internshipReview:abandon': '没办证明。通勤路上的晚霞，你自己记得。',
   'campusDiscussion:discuss': '三个人的草稿纸拼到一张桌上，那道题终于有了第三种解法。',
   'campusDiscussion:later': '你低头继续看书。那桌的声音小了下去。',
+  'military1:tug': '麻绳绷直的那一刻，你听见全连在喊号子。手心的茧，是军训留给你的第一枚勋章。',
+  'military1:choir': '几百人的合唱把操场都震了震。教官说，唱得比走正步齐。',
   'military1:join': '迷彩服领到手，裤腿长了一截。你把鞋带系得比高考还紧。',
   'military1:later': '假条交上去了。你在树荫下看他们踢正步。',
-  'military2:perform': '方阵走过主席台，你的正步一个都没错。掌声响起来的时候，你才发现手心全是汗。',
+  'military2:march': '方阵走过主席台，你的正步一个都没错。掌声响起来的时候，你才发现手心全是汗。',
+  'military2:choir': '合唱方队上台，你站在第二排。台下跟着打拍子，比排练时齐多了。',
   'military2:later': '你跟在队伍最后。走过主席台时，也把腰挺了挺。',
   'transfer:apply': '材料递进窗口。之后的日子，你路过通知栏都会多看两眼。',
   'transfer:later': '你把通知拍下来，存进相册，再没打开。',
+  'transferResult:later': '你把手机扣在桌上。通知栏的红点，等会儿再看。',
+  'sportsMeet:fun': '两人三足摔成一团，全班笑到岔气。名次不重要，照片全是表情包。',
+  'sportsMeet:later': '你在看台递了一下午的水。加油喊得嗓子哑了，比自己上场还累。',
   'seminar:attend': '散场后你在报告厅门口站了会儿。有个学长加了你微信，说资料发你。',
   'seminar:later': '你从队伍旁绕过去，回头看了一眼海报。',
   'retake:retake': '报名确认短信到了。你把教材重新包了书皮。',
@@ -147,7 +153,25 @@ const EVENT_CHOICE_FLAVOR = {
   'alumniStory:listen': '学长递来名片。你说，先加个微信。',
   'alumniStory:later': '你从人群边上走过。杯盘碰撞声里，混着几句旧日里的校名。',
   'frontDesk:apply': '结账的时候手有点抖。回家的路上，你给自己买了瓶汽水。',
-  'frontDesk:later': '你盯着启事看了两秒，最后被床的召唤打败了。'
+  'frontDesk:later': '你盯着启事看了两秒，最后被床的召唤打败了。',
+  'ginkgo:photo': '一阵风过，银杏叶落了你一头。照片发出去，家里人说：北京的秋天真好看。',
+  'ginkgo:later': '你在树下站了一会儿，风把叶子吹到你肩膀上。',
+  'hawthorn:take': '山楂酸得人眯眼睛。同学说，这就是「小红果」的来历。',
+  'hawthorn:later': '你绕开摊位。身后的笑声和山楂味一起飘过来。',
+  'alumniFair:browse': '老校友翻出当年的饭票，你翻出手机里的校园地图。差了二十年，聊的还是一座园子。',
+  'alumniFair:later': '今天人太多了。你说改天再来，转身走进了大堂。',
+  'rollCall:cover': '「到！」你喊得中气十足。老师推了推眼镜，没抬头。',
+  'rollCall:later': '你低头翻书。讲台上传来一个名字，不是你的。',
+  'jobFair:browse': '展位图拍下来，二维码扫了七八个。有些岗位的名字，你第一次听说。',
+  'jobFair:later': '你摆摆手。离毕业还早，海报上的字以后再认。',
+  'medicalInsurance:register': '参保回执折好放进钱包。从此看病买药，能报一点是一点。',
+  'medicalInsurance:later': '想着身体还行，先把这事放一放。',
+  'labNight:join': '凌晨两点的实验室，咖啡和键盘声都很响。师兄说：谢谢你，数据跑完了。',
+  'labNight:later': '你拉上外套。逸夫楼的灯在身后，亮成一片。',
+  'danceParty:join': '从僵硬到放开，一晚上下来嗓子哑了。回宿舍路上，彩灯还在晃。',
+  'danceParty:later': '音乐挺好听。你在门口听了一会儿，转身走了。',
+  'memorial129:watch': '谢幕时全场起立。身边有人小声说：这台晚会排了三个月。',
+  'memorial129:later': '你拍了张节目单。横幅上的字被风吹得猎猎响。'
 };
 function statsMarkup() {
   const latest = state.courses.at(-1);
@@ -460,7 +484,8 @@ function showEndings() {
 }
 const EXPERIENCE_LABELS = {
   project: '校园项目完成', club: '社团活动经历', internship: '实习经历完成', fitnessTest: '体测体验达标',
-  military: '军训汇演完成', singer: '歌手大赛经历', trip: '返乡分享经历', contest: '学科竞赛经历'
+  military: '军训汇演完成', singer: '歌手大赛经历', trip: '返乡分享经历', contest: '学科竞赛经历',
+  sportsMeet: '运动会经历', transfer: '转专业经历'
 };
 function growthRecord() {
   return courseTable() + '<h3>校园经历</h3>' + (state.experiences.length ? '<ul>' + state.experiences.map((item) => '<li>' + game.TERM_NAMES[item.term - 1] + '：' + h(EXPERIENCE_LABELS[item.type] || '校园经历') + '</li>').join('') + '</ul>' : '<p>还没有拿得出手的经历。</p>') + '<h3>事件链进度</h3><ul>' + Object.entries(state.chains).map(([id, chain]) => '<li>' + game.CHAIN_NAMES[id] + '：' + chainLabel(chain) + (chain.status === 'active' ? '，预计第 ' + chain.deadline + ' 学期出结果' : '') + '</li>').join('') + '</ul><h3>毕业条件进度</h3>' + game.evaluateEndings(state).options.filter((item) => item.id !== 'notQualified').map((item) => '<h4>' + h(item.title) + '</h4>' + requirementsMarkup(item.requirements)).join('');
@@ -542,7 +567,7 @@ $('#dialogBody').addEventListener('click', (event) => {
     const result = runCommand('submitEventChoice', button.dataset.eventChoice, button.dataset.revision, button.dataset.instance);
     if (!result) return;
     audio?.play('success');
-    const feedback = EVENT_CHOICE_FLAVOR[result.entry.event + ':' + result.entry.choice] || result.entry.title + '。';
+    const feedback = EVENT_CHOICE_FLAVOR[result.entry.event + ':' + result.entry.choice] || (result.entry.outcome ? result.entry.outcome + '。' : result.entry.title + '。');
     $('#actionFeedback').textContent = feedback;
     if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; } else { dialog.close(); showToast(feedback); }
   } else if (button.dataset.ending) {
