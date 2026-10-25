@@ -310,7 +310,7 @@
   };
   // 可选在线对话：relay 为云函数中转地址，空字符串表示关闭（NPC 只回本地台词）。
   // 密钥只放在云函数的环境变量里，前端永远接触不到；未连接或超时自动回退本地台词。
-  const AI_CHAT = { relay: '', timeoutMs: 15000 };
+  const AI_CHAT = { relay: 'https://deepseek-relay-bsxioiwmxt.cn-hangzhou.fcapp.run', timeoutMs: 15000 };
   const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;

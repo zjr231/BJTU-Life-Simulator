@@ -16,10 +16,10 @@ DeepSeek 不需要训练模型：中转函数把「人物设定 + 玩家背景 +
 
 ### 方案 A：阿里云函数计算（HTTP 触发器）
 
-1. 登录阿里云控制台 → 函数计算 FC → 创建函数，运行环境选 **Node.js 20**，HTTP 触发器（请求方式 POST）。
-2. 代码上传 `scripts/deepseek-relay.js`（它导出的入口是 `handler`）。
+1. 登录阿里云控制台 → 函数计算 FC → 创建函数，函数类型选 **事件函数**，运行环境选 **Node.js 20**，触发器选 **HTTP 触发器**（请求方式 POST）。
+2. 代码上传 `scripts/deepseek-relay.js`（它导出事件函数入口 `handler` 和 `main`，请求处理程序填 `deepseek-relay.handler` 或 `deepseek-relay.main` 均可）。
 3. 在函数配置里添加环境变量：`DEEPSEEK_API_KEY` = 你的密钥。
-4. 部署后在触发器详情里拿到公网 URL，形如 `https://xxx.cn-hangzhou.fc.aliyuncs.com/...`。
+4. 部署后在触发器详情里拿到公网 URL，形如 `https://xxx.cn-hangzhou.fcapp.run`。线上转发逻辑会自动兼容对象与 Buffer 形式的事件、CORS 预检与控制台测试。
 
 ### 方案 B：华为云函数工作流 FunctionGraph（API 网关触发器）
 

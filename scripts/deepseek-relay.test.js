@@ -70,14 +70,28 @@ test('模型无内容或网络失败分别返回 502 与 504', async () => {
   assert.equal(offline.statusCode, 504);
 });
 
-test('阿里云 HTTP 触发器签名：handler 写入状态码与 JSON 响应', async () => {
-  const resp = { statusCode: 0, headers: {}, send(body) { this.body = body; }, setHeader(key, value) { this.headers[key] = value; } };
-  await handler({ method: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }) }, resp, {}, { apiKey: KEY, fetchFn: async () => okJson });
-  assert.equal(resp.statusCode, 200);
-  assert.equal(JSON.parse(resp.body).reply, '你好呀，同学！');
-  await handler({ method: 'OPTIONS' }, resp, {});
-  assert.equal(resp.statusCode, 204);
-  assert.equal(resp.headers['Access-Control-Allow-Origin'], '*');
+test('阿里云事件函数签名：handler 返回标准结构，兼容对象/Buffer 事件与控制台测试', async () => {
+  const options = { apiKey: KEY, fetchFn: async () => okJson };
+  // 网关事件：body 为 JSON 字符串
+  const post = await handler({ httpMethod: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }) }, {}, options);
+  assert.equal(post.statusCode, 200);
+  assert.equal(post.isBase64Encoded, false);
+  assert.equal(JSON.parse(post.body).reply, '你好呀，同学！');
+  assert.equal(post.headers['Access-Control-Allow-Origin'], '*');
+  // FC 3.0 Node.js 运行时可能把整个事件以 Buffer 传入
+  const buffered = await handler(Buffer.from(JSON.stringify({ httpMethod: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }) }), 'utf-8'), {}, options);
+  assert.equal(buffered.statusCode, 200);
+  assert.equal(JSON.parse(buffered.body).reply, '你好呀，同学！');
+  // 控制台“测试”直接传 messages JSON
+  const bare = await handler({ messages: [{ role: 'user', content: 'hi' }] }, {}, options);
+  assert.equal(bare.statusCode, 200);
+  assert.equal(JSON.parse(bare.body).reply, '你好呀，同学！');
+  // 预检与非法方法
+  const preflight = await handler({ httpMethod: 'OPTIONS' }, {});
+  assert.equal(preflight.statusCode, 204);
+  assert.equal(preflight.headers['Access-Control-Allow-Origin'], '*');
+  const wrong = await handler({ httpMethod: 'GET' }, {});
+  assert.equal(wrong.statusCode, 405);
 });
 
 test('华为云 API 网关签名：main 返回状态码、CORS 头与非 base64 JSON', async () => {
