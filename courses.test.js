@@ -151,6 +151,20 @@ test('定量课程生成计算题，种子相同可复现、种子不同会变�
   assert.notDeepEqual(other.questions, first.questions);
 });
 
+test('同一试卷不重复抽取同一生成题型', () => {
+  const assertUniqueTypes = (ids, seed) => {
+    const exam = game.generateExam(ids, seed, rng);
+    const types = exam.questions.map((question) => question.templateId).filter(Boolean);
+    assert.equal(new Set(types).size, types.length, ids.join(',') + ' / ' + seed);
+  };
+  const calculus = game.generateExam(['calc1', 'calc1', 'calc1'], 'dedupe-calculus-full', rng);
+  assert.equal(calculus.questions.filter((question) => question.templateId).length, 5);
+  for (const course of game.COURSES.filter((item) => item.topic)) {
+    for (let index = 0; index < 5; index++) assertUniqueTypes([course.id, course.id, course.id], 'dedupe-' + course.id + '-' + index);
+  }
+  for (let index = 0; index < 30; index++) assertUniqueTypes(['calc1', 'calc2', 'linearAlgebra'], 'dedupe-calculus-' + index);
+});
+
 test('旧版题库试卷仍可校验，篡改答案后拒绝', () => {
   const selected = selectFirst(game.createGame({ seed: 'legacy-exam' }));
   const course = game.courseById(selected.selectedCourses[0]);

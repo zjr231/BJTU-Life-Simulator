@@ -866,12 +866,18 @@
       && (course.background === 'common' || course.background === backgroundId)
       && (!course.major || !major || course.major === major));
   }
-  function generatedQuestion(course, next, serial) {
+  function generatedQuestion(course, next, serial, usedTypes) {
     const topics = TOPICS[course.topic];
     if (!Array.isArray(topics) || !topics.length) return null;
-    const raw = choose(next, topics)(next, course);
+    const available = topics
+      .map((generator, index) => ({ generator, templateId: course.topic + ':' + index }))
+      .filter(({ templateId }) => !usedTypes.has(templateId));
+    if (!available.length) return null;
+    const picked = choose(next, available);
+    usedTypes.add(picked.templateId);
+    const raw = picked.generator(next, course);
     const question = makeChoice(raw.prompt, raw.correct, raw.distractors, next);
-    return { ...question, id: 'gen-' + course.id + '-' + serial };
+    return { ...question, id: 'gen-' + course.id + '-' + serial, templateId: picked.templateId };
   }
   function bankQuestion(course, next, used) {
     const pool = (QUESTIONS[course.subject] || []).filter((question) => !used.has(question.id));
@@ -886,10 +892,11 @@
     let rng = randomApi.create(String(seed));
     const next = () => { const drawn = randomApi.draw(rng); rng = drawn.rng; return drawn.number; };
     const used = new Set();
+    const usedTypes = new Set();
     const questions = [];
     let serial = 0;
     const add = (course) => {
-      const generated = generatedQuestion(course, next, ++serial);
+      const generated = generatedQuestion(course, next, ++serial, usedTypes);
       if (generated) {
         questions.push({ ...generated, subject: course.subject, courseId: course.id, courseName: course.name, points: 20 });
         return true;
