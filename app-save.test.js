@@ -68,6 +68,18 @@ function app(storage = memory(), withSms = false, withNpc = false) {
     flush() { const jobs = [...timers.values()]; timers.clear(); jobs.forEach(callback => callback()); } };
 }
 
+test('数学题干规范渲染矩阵、积分上下限和上标，并保持转义', () => {
+  const ui = app();
+  const matrix = ui.evaluate('mathText(' + JSON.stringify('矩阵 [[1,2],[3,4]] 的行列式是？') + ')');
+  assert.match(matrix, /class="math-matrix"/);
+  assert.match(matrix, /<span>1<\/span><span>2<\/span><span>3<\/span><span>4<\/span>/);
+  const integral = ui.evaluate('mathText(' + JSON.stringify('定积分 ∫[0,5] 4x dx 的值是？') + ')');
+  assert.match(integral, /∫<span class="math-limits"><sup>5<\/sup><sub>0<\/sub><\/span>/);
+  const power = ui.evaluate('mathText(' + JSON.stringify('函数 f(x)=x^2 的导数是？') + ')');
+  assert.match(power, /x<sup>2<\/sup>/);
+  assert.equal(ui.evaluate('mathText(' + JSON.stringify('<script>') + ')'), '&lt;script&gt;');
+});
+
 test('暂不登录偏好刷新后保留，可返回登录，登录和切换账号清除跳过偏好', async () => {
   const storage = memory();
   const first = app(storage, true);

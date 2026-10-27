@@ -413,7 +413,15 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .exam-option { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; font-size: 13px; cursor: pointer; }
 .exam-option:has(input:checked) { border-color: #597d58; background: #eef4e9; }
 .exam-option input { margin-top: 3px; accent-color: var(--deep); }
-.exam-option span { font-weight: 700; color: #926c30; }
+.exam-option > span:first-of-type { font-weight: 700; color: #926c30; }
+.exam-prompt sup, .exam-option sup { font-size: .72em; line-height: 1; }
+.exam-prompt sub, .exam-option sub { font-size: .72em; line-height: 1; }
+.math-limits { display: inline-grid; grid-template-rows: auto auto; vertical-align: middle; margin: 0 .08em; font-size: .72em; line-height: 1; }
+.math-limits sup, .math-limits sub { font-size: 1em; line-height: 1; vertical-align: baseline; }
+.math-matrix { display: inline-grid; grid-template-columns: auto auto auto; align-items: center; vertical-align: middle; margin: 0 .2em; font-weight: 400; color: inherit; }
+.math-matrix .matrix-bracket { font-size: 2.1em; line-height: 1; font-weight: 300; color: inherit; }
+.math-matrix .matrix-grid { display: grid; grid-template-columns: repeat(2, minmax(1.2em, auto)); gap: 2px 8px; padding: 2px 4px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 400; color: inherit; }
+.math-matrix .matrix-grid span { font-weight: 400; color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .map-layer, .map-hotspot, .npc-figure, .hud-top, .status-card, .map-caption, .place-screen, .place-backdrop,

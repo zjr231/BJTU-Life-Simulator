@@ -4,6 +4,15 @@ const game = CampusGame;
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const h = escapeHtml;
+const mathText = (value) => {
+  const matrix = (first, second) => '<span class="math-matrix" role="math"><span class="matrix-bracket">[</span><span class="matrix-grid">'
+    + first.split(',').concat(second.split(',')).map((cell) => '<span>' + cell.trim() + '</span>').join('')
+    + '</span><span class="matrix-bracket">]</span></span>';
+  return escapeHtml(value)
+    .replace(/\[\[([^\[\]]+)\],\[([^\[\]]+)\]\]/g, (_, first, second) => matrix(first, second))
+    .replace(/∫\[([^,\]]+),([^\]]+)\]/g, '∫<span class="math-limits"><sup>$2</sup><sub>$1</sub></span>')
+    .replace(/\^(\([^)]*\)|[A-Za-z0-9+\-−]+)/g, '<sup>$1</sup>');
+};
 const hotspots = [...document.querySelectorAll('.map-hotspot')];
 const audio = typeof CampusAudio !== 'undefined' ? CampusAudio : null;
 const PLACE_SOUNDS = { think: 'study', library: 'study', yifu: 'study', dorm: 'relax', ginkgo: 'relax', track: 'sport', activity: 'opportunity', gate: 'opportunity', hospital: 'info', auditorium: 'info', hotel: 'info' };
@@ -730,7 +739,7 @@ function submitCourseSelection(form) {
 }
 function showExam() {
   if (!state || state.phase !== 'examPending' || !state.exam) { resumePhase(); return; }
-  const questions = state.exam.questions.map((question, index) => '<article class="exam-question"><div class="exam-question-head"><span class="exam-index">第 ' + (index + 1) + ' 题</span><span class="exam-tag">' + h(question.courseName) + ' · ' + h(game.SUBJECTS[question.subject]) + '</span><span class="exam-points">20 分</span></div><p class="exam-prompt">' + h(question.prompt) + '</p><div class="exam-options">' + question.options.map((option, optionIndex) => '<label class="exam-option"><input type="radio" name="q' + index + '" value="' + optionIndex + '"><span>' + String.fromCharCode(65 + optionIndex) + '</span>' + h(option) + '</label>').join('') + '</div></article>').join('');
+  const questions = state.exam.questions.map((question, index) => '<article class="exam-question"><div class="exam-question-head"><span class="exam-index">第 ' + (index + 1) + ' 题</span><span class="exam-tag">' + h(question.courseName) + ' · ' + h(game.SUBJECTS[question.subject]) + '</span><span class="exam-points">20 分</span></div><p class="exam-prompt">' + mathText(question.prompt) + '</p><div class="exam-options">' + question.options.map((option, optionIndex) => '<label class="exam-option"><input type="radio" name="q' + index + '" value="' + optionIndex + '"><span>' + String.fromCharCode(65 + optionIndex) + '</span>' + mathText(option) + '</label>').join('') + '</div></article>').join('');
   showDialog('exam', game.TERM_NAMES[state.term - 1] + ' · 期末考试', '<p>平时分 <b>' + state.preparation + ' / 100</b>，占总评 40%。考试共 5 题，每题 20 分，占总评 60%。</p><form id="examForm">' + questions + '<p id="examError" class="action-reason" role="alert"></p><button type="submit">提交试卷</button></form><p class="dialog-note">提交后立即结算，不能修改答案。</p>');
 }
 function submitExamForm(form) {
