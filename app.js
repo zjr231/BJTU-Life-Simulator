@@ -249,10 +249,12 @@ function renderState() {
   $('#preparationValue').textContent = state.preparation + ' / 100';
   $('#preparationMeter').value = state.preparation;
   $('#placeStats').innerHTML = '<div class="place-resources"><span>时间 <b>' + state.time + ' / 12</b></span><span>精力 <b>' + state.energy + ' / 100</b></span><span>学习进度 <b>' + state.preparation + ' / 100</b></span></div><div class="place-attributes">' + statsMarkup() + '</div>';
-  $('#directionBrief').innerHTML = '<div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
-  $('#endTermButton').textContent = ({ eventPending: '处理当前事件', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果' })[state.phase] || '结束学期';
+  const selectedIds = state.selectedCourses || [];
+  const selectedNames = selectedIds.map((id) => game.courseById(id)?.name || id).join('、') || '未选课';
+  $('#directionBrief').innerHTML = '<div>本学期课程 <b>' + h(selectedNames) + '</b>' + (state.phase === 'examPending' ? ' · 考试待提交' : '') + '</div><div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
+  $('#endTermButton').textContent = ({ eventPending: '处理当前事件', examPending: '继续期末考试', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果' })[state.phase] || (selectedIds.length ? '结束学期并考试' : '结束学期');
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
-  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc'].includes(dialogMode);
+  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'exam'].includes(dialogMode);
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
@@ -507,12 +509,12 @@ function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
   stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', admission: '入学', enrollment: '入学', login: '登录', endingChoice: '毕业方向', finished: '四年手账', npc: '校园偶遇' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', exam: '期末考试', endingChoice: '毕业方向', finished: '四年手账', npc: '校园偶遇' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
   $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
-  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc'].includes(mode);
+  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'exam'].includes(mode);
   if (!dialog.open) dialog.showModal();
   (dialog.querySelector('input') || $('#dialogTitle')).focus({ preventScroll: true });
   dialog.scrollTop = 0;
@@ -533,7 +535,7 @@ function lockUi() {
 function runCommand(operation, id, expectedRevision, eventInstanceId) {
   if (!state || uiLocked) return null;
   const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId };
-  const result = ['executeAction', 'submitEventChoice', 'chooseEnding'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const result = ['executeAction', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'submitExam'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');
@@ -687,10 +689,10 @@ function startGame() {
 }
 function showEnrollment() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
-  showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p><p class="dialog-note">背景只影响一项行动加成，不会锁死你的毕业路线。入学后可在「入学背景」里随时查看。</p>', [{ id: 'resume', text: '看看怎么安排' }]);
+  showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p><p class="dialog-note">背景只影响一项行动加成，不会锁死你的毕业路线。看完玩法说明后先完成本学期选课。</p>', [{ id: 'resume', text: '看看怎么安排' }]);
 }
 function showTutorial() {
-  showDialog('tutorial', '八学期怎么安排', '<ol><li>点击地图上的地点，先看成本和收益，再决定做不做。逛逛、返回都不花钱。</li><li>学习和自学都攒同一个学习进度；期末成绩 = round(40 + 学习进度 × 0.6)，60 分达标。</li><li>每学期 12 点时间。休息能回精力，回不了时间；长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目的成果在之后的学期确认，社团和实习在投入完成后即可收尾。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
+  showDialog('tutorial', '八学期怎么安排', '<ol><li>每学期开学先选 3 门课程，再去地图上安排行动。选课决定期末考试覆盖的学科。</li><li>点击地图上的地点，先看成本和收益，再决定做不做。逛逛、返回都不花钱。</li><li>学习和自学都攒同一个学习进度，它是总评里的平时分（40%）。</li><li>期末参加 5 题考试，覆盖所选课程，每题 20 分；总评 = 平时分 × 40% + 考试 × 60%，60 分达标。</li><li>每学期 12 点时间。休息能回精力，回不了时间；长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目的成果在之后的学期确认，社团和实习在投入完成后即可收尾。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
 }
 function showBackground() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
@@ -706,21 +708,69 @@ function showEvent() {
   }).join('');
   showDialog('event', event.title, '<p>' + h(event.description) + '</p><p class="dialog-note">' + h(event.trigger) + '。先做个选择，再继续。事件进行中也可以保存。</p><div class="event-choice-list">' + choices + '</div>');
 }
+function needsCourseSelection() {
+  return !!state && state.phase === 'playing' && !(state.selectedCourses || []).length && !state.history.some((entry) => entry.term === state.term && entry.command.operation === 'executeAction');
+}
+function showCourseSelection() {
+  if (!state || state.phase !== 'playing') { resumePhase(); return; }
+  if ((state.selectedCourses || []).length) { resumePhase(); return; }
+  const options = game.coursesForTerm(state.term, state.background.id);
+  const cards = options.map((course) => '<label class="course-card"><input type="checkbox" name="course" value="' + h(course.id) + '"><span class="course-main"><b>' + h(course.name) + '</b><span class="course-meta">' + h(game.SUBJECTS[course.subject]) + ' · ' + course.credits + ' 学分</span><span class="course-desc">' + h(course.description) + '</span></span></label>').join('');
+  showDialog('courseSelection', '开学选课', '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。从本学期可选课程中选择 3 门，期末考试会覆盖这些课程。</p><form id="courseForm"><p class="course-count" id="courseCount">已选 0 / 3 门</p><div class="course-list">' + cards + '</div><p id="courseError" class="action-reason" role="alert"></p><button type="submit">确认选课</button></form><p class="dialog-note">每学期 3 门课；期末考试 5 题，每题 20 分。总评 = 平时分 40% + 考试 60%。</p>');
+}
+function submitCourseSelection(form) {
+  const ids = [...form.querySelectorAll('input[name="course"]:checked')].map((input) => input.value);
+  if (ids.length !== 3) { $('#courseError').textContent = '请选择 3 门课程'; audio?.play('deny'); return; }
+  const result = runCommand('selectCourses', ids, state.revision);
+  if (!result) return;
+  audio?.play('success');
+  const names = ids.map((id) => game.courseById(id).name).join('、');
+  if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = '选课完成：' + names; }
+  else { dialog.close(); showToast('选课完成：' + names); }
+}
+function showExam() {
+  if (!state || state.phase !== 'examPending' || !state.exam) { resumePhase(); return; }
+  const questions = state.exam.questions.map((question, index) => '<article class="exam-question"><div class="exam-question-head"><span class="exam-index">第 ' + (index + 1) + ' 题</span><span class="exam-tag">' + h(question.courseName) + ' · ' + h(game.SUBJECTS[question.subject]) + '</span><span class="exam-points">20 分</span></div><p class="exam-prompt">' + h(question.prompt) + '</p><div class="exam-options">' + question.options.map((option, optionIndex) => '<label class="exam-option"><input type="radio" name="q' + index + '" value="' + optionIndex + '"><span>' + String.fromCharCode(65 + optionIndex) + '</span>' + h(option) + '</label>').join('') + '</div></article>').join('');
+  showDialog('exam', game.TERM_NAMES[state.term - 1] + ' · 期末考试', '<p>平时分 <b>' + state.preparation + ' / 100</b>，占总评 40%。考试共 5 题，每题 20 分，占总评 60%。</p><form id="examForm">' + questions + '<p id="examError" class="action-reason" role="alert"></p><button type="submit">提交试卷</button></form><p class="dialog-note">提交后立即结算，不能修改答案。</p>');
+}
+function submitExamForm(form) {
+  if (!state?.exam) return;
+  const answers = state.exam.questions.map((_, index) => {
+    const checked = form.querySelector('input[name="q' + index + '"]:checked');
+    return checked ? Number(checked.value) : null;
+  });
+  if (answers.some((answer) => answer === null)) { $('#examError').textContent = '请为每道题选择一个答案'; audio?.play('deny'); return; }
+  const result = runCommand('submitExam', answers, state.revision);
+  if (!result) return;
+  audio?.play('success');
+  if (activeSaveSlot !== null) saveCurrent(true);
+  showSummary();
+  showToast('考试得分 ' + state.summary.examScore + ' 分，总评 ' + state.summary.grade + ' 分');
+}
 function summaryMarkup(summary) {
-  return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>学习进度 ' + summary.preparation + ' / 100。期末成绩按 40 + 学习进度 × 0.6 计算。</p><div class="summary-lines"><span>生活费 <b>−300 元</b></span><span>补助 <b>+' + summary.aid + ' 元</b></span><span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
+  if (summary.examScore === undefined) return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>学习进度 ' + summary.preparation + ' / 100。期末成绩按 40 + 学习进度 × 0.6 计算。</p><div class="summary-lines"><span>生活费 <b>−300 元</b></span><span>补助 <b>+' + summary.aid + ' 元</b></span><span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
+  return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + h(summary.rating) + ' · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>平时分 ' + summary.usualScore + ' / 100（40%）+ 期末考试 ' + summary.examScore + ' / 100（60%）。</p><p class="dialog-note">本学期课程：' + h(summary.courseNames.join('、')) + '</p><div class="summary-lines"><span>生活费 <b>−300 元</b></span><span>补助 <b>+' + summary.aid + ' 元</b></span><span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
 }
 function requestEndTerm() {
   if (!state) return;
   if (state.phase !== 'playing') { resumePhase(); return; }
+  if ((state.selectedCourses || []).length) {
+    if (runCommand('beginExam', null, state.revision)) {
+      if (activeSaveSlot !== null) saveCurrent(true);
+      showExam();
+    }
+    return;
+  }
   const preview = game.previewSettlement(state);
   showDialog('confirm', '结束' + preview.name + '？', summaryMarkup(preview) + '<p class="dialog-note">这是只读预览。确认后本学期不能继续行动。' + (activeSaveSlot === null ? '当前尚未选择存档栏位，结算后请手动选择栏位保存。' : '将自动保存到栏位 ' + activeSaveSlot + '。') + (preview.unusedTime ? '还有 ' + preview.unusedTime + ' 点时间，可以继续安排。' : '') + '</p>', [{ id: 'resume', text: '继续本学期', secondary: true }, { id: 'settle', text: '确认结算' }]);
 }
 function showSummary() {
   audio?.play('paper');
-  showDialog('summary', state.summary.name + ' · 学期总结', summaryMarkup(state.summary) + '<p>' + h(saveNotice || '可以随时保存当前总结。') + '</p><p>' + (state.term === 8 ? '八个学期的记录齐了。接下来，看看毕业的路往哪走。' : '开学之后，时间和精力重新给足，学习进度从头攒；存款、长期状态和之前的投入都还跟着你。') + '</p>', [{ id: 'next', text: state.term === 8 ? '评估毕业方向' : '进入' + game.TERM_NAMES[state.term] }]);
+  showDialog('summary', state.summary.name + ' · 学期总结', summaryMarkup(state.summary) + '<p>' + h(saveNotice || '可以随时保存当前总结。') + '</p><p>' + (state.term === 8 ? '八个学期的记录齐了。接下来，看看毕业的路往哪走。' : '开学之后先选课，时间和精力重新给足，平时分从头攒；存款、长期状态和之前的投入都还跟着你。') + '</p>', [{ id: 'next', text: state.term === 8 ? '评估毕业方向' : '进入' + game.TERM_NAMES[state.term] }]);
 }
 function courseTable() {
   if (!state.courses.length) return '<p>还没有结算过的成绩。</p>';
+  if (state.courses.some((item) => item.examScore !== undefined)) return '<table class="course-table"><thead><tr><th>学期</th><th>平时</th><th>考试</th><th>总评</th><th>评级</th><th>结果</th></tr></thead><tbody>' + state.courses.map((item) => '<tr><td>' + h(item.name) + '</td><td>' + (item.usualScore ?? item.preparation) + '</td><td>' + (item.examScore ?? '—') + '</td><td>' + item.grade + '</td><td>' + h(item.rating || '—') + '</td><td>' + (item.passed ? '达标' : '未达标') + '</td></tr>').join('') + '</tbody></table>';
   return '<table class="course-table"><thead><tr><th>学期</th><th>学习进度</th><th>成绩</th><th>结果</th></tr></thead><tbody>' + state.courses.map((item) => '<tr><td>' + h(item.name) + '</td><td>' + item.preparation + '</td><td>' + item.grade + '</td><td>' + (item.passed ? '达标' : '未达标') + '</td></tr>').join('') + '</tbody></table>';
 }
 function requirementsMarkup(requirements) {
@@ -751,9 +801,11 @@ function showResult() {
 function resumePhase() {
   if (!state) { showAdmission(); return; }
   if (state.phase === 'eventPending') showEvent();
+  else if (state.phase === 'examPending') showExam();
   else if (state.phase === 'summary') showSummary();
   else if (state.phase === 'endingChoice') showEndings();
   else if (state.phase === 'finished') showResult();
+  else if (needsCourseSelection()) showCourseSelection();
   else dialog.close();
 }
 function showLoad() {
@@ -795,6 +847,15 @@ $('#dialogBody').addEventListener('submit', (event) => {
   if (event.target.id === 'admissionForm') { event.preventDefault(); startGame(); }
   else if (event.target.id === 'loginForm') { event.preventDefault(); doLogin(); }
   else if (event.target.id === 'npcChatForm') { event.preventDefault(); sendNpcChat(); }
+  else if (event.target.id === 'courseForm') { event.preventDefault(); submitCourseSelection(event.target); }
+  else if (event.target.id === 'examForm') { event.preventDefault(); submitExamForm(event.target); }
+});
+$('#dialogBody').addEventListener('change', (event) => {
+  const form = event.target.closest('#courseForm');
+  if (!form) return;
+  const count = form.querySelectorAll('input[name="course"]:checked').length;
+  const label = form.querySelector('#courseCount');
+  if (label) label.textContent = '已选 ' + count + ' / 3 门';
 });
 $('#actionList').addEventListener('click', (event) => {
   const button = event.target.closest('[data-action]');
@@ -819,7 +880,9 @@ $('#dialogBody').addEventListener('click', (event) => {
     audio?.play('success');
     const feedback = EVENT_CHOICE_FLAVOR[result.entry.event + ':' + result.entry.choice] || (result.entry.outcome ? result.entry.outcome + '。' : result.entry.title + '。');
     $('#actionFeedback').textContent = feedback;
-    if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; } else { dialog.close(); showToast(feedback); }
+    if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; }
+    else if (needsCourseSelection()) { showCourseSelection(); $('#dialogNotice').textContent = feedback; }
+    else { dialog.close(); showToast(feedback); }
   } else if (button.dataset.ending) {
     if (runCommand('chooseEnding', button.dataset.ending, button.dataset.revision)) { saveCurrent(true); showResult(); }
   }
@@ -902,7 +965,7 @@ window.addEventListener('storage', (event) => {
   }
 });
 dialog.addEventListener('cancel', (event) => {
-  if (!state || ['eventPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment'].includes(dialogMode)) event.preventDefault();
+  if (!state || ['eventPending', 'examPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment', 'courseSelection', 'exam'].includes(dialogMode)) event.preventDefault();
 });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && activePlace && !dialog.open) closePlace();

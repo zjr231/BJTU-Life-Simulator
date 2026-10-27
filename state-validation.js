@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function validate(state, game, random) {
-    const { RULES, ACTIONS, EVENTS, TERM_NAMES, CHAIN_NAMES } = game;
+    const { RULES, ACTIONS, EVENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, gradeFor, ratingFor } = game;
     const fail = (reason) => ({ ok: false, reason: '存档状态无效：' + reason });
     const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
     const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -13,8 +13,17 @@
       if (typeof state.appVersion !== 'string' || !state.appVersion.length || state.appVersion.length > 64) return fail('程序版本标记');
       // 昵称在创建时严格校验（见 game.validateNickname）；旧档可能含宽松规则的昵称，加载时只做基本检查。
       if (typeof state.nickname !== 'string' || !state.nickname.trim() || state.nickname !== state.nickname.trim() || [...state.nickname].length > 12 || /[\u0000-\u001f\u007f]/.test(state.nickname)) return fail('昵称');
-      if (!integer(state.term, 1, 8) || !['playing', 'eventPending', 'summary', 'endingChoice', 'finished'].includes(state.phase) || !integer(state.revision, 0, 2000)) return fail('学期、阶段或状态版本');
+      if (!integer(state.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished'].includes(state.phase) || !integer(state.revision, 0, 2000)) return fail('学期、阶段或状态版本');
       for (const [key, max] of [['time', 12], ['energy', 100], ['money', 1000000], ['social', 100], ['fitness', 100], ['mood', 100], ['preparation', 100], ['furtherStudy', 100], ['jobPreparation', 100]]) if (!integer(state[key], 0, max)) return fail(key);
+      // 旧存档没有选课/考试字段，读取时按“未选课”处理；一旦存在就必须结构完整。
+      const selectedCourses = state.selectedCourses === undefined ? [] : state.selectedCourses;
+      if (!Array.isArray(selectedCourses) || ![0, 3].includes(selectedCourses.length) || new Set(selectedCourses).size !== selectedCourses.length || !selectedCourses.every((id) => COURSES.some((course) => course.id === id))) return fail('选课记录');
+      const exam = state.exam === undefined ? null : state.exam;
+      if (exam !== null) {
+        if (!object(exam) || !Array.isArray(exam.questions) || exam.questions.length !== 5 || !Array.isArray(exam.answers) || exam.answers.length !== 0 || exam.score !== null || exam.submitted !== false) return fail('试卷结构');
+        if (!exam.questions.every((question) => object(question) && typeof question.id === 'string' && question.id.length < 80 && typeof question.prompt === 'string' && question.prompt.length < 500 && Array.isArray(question.options) && question.options.length === 4 && question.options.every((option) => typeof option === 'string' && option.length < 200) && integer(question.answer, 0, 3) && question.points === 20 && own(SUBJECTS, question.subject) && COURSES.some((course) => course.id === question.courseId) && typeof question.courseName === 'string' && question.courseName.length < 200)) return fail('试卷题目');
+      }
+      if ((state.phase === 'examPending') !== (exam !== null)) return fail('阶段与试卷不一致');
       if (!object(state.rng) || state.rng.algorithm !== 'mulberry32-v1' || typeof state.rng.seed !== 'string' || !state.rng.seed.length || state.rng.seed.length > 64 || !integer(state.rng.value, 0, 4294967295) || !integer(state.rng.calls, 2, 100)) return fail('随机数状态');
       if (state.rng.value !== ((random.create(state.rng.seed).value + Math.imul(0x6D2B79F5, state.rng.calls)) >>> 0)) return fail('随机数调用位置');
       // 入学背景核对：转专业成功才会更换学院方向。新存档按操作历史重放精确核对；
@@ -27,6 +36,10 @@
       const validBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && item.majors.includes(background.major));
       const backgroundOk = backgroundReplay.ok ? same(state.background, backgroundReplay.state.background) : validBackground(state.background) && (transferred ? state.background.id !== initialBackground.id : same(state.background, initialBackground));
       if (!backgroundOk) return fail('入学背景');
+      if (backgroundReplay.ok) {
+        if (!same(selectedCourses, backgroundReplay.state.selectedCourses)) return fail('选课记录');
+        if (exam !== null && !same(exam, backgroundReplay.state.exam)) return fail('试卷内容');
+      }
       for (const key of ['courses', 'history', 'eventQueue', 'eventHistory', 'experiences', 'processedCommands']) if (!Array.isArray(state[key]) || state[key].length > 2000) return fail(key);
       if (!object(state.counts) || !object(state.eventFlags) || !object(state.chains)) return fail('次数、事件标记或事件链');
       const validCounts = (counts) => object(counts) && Object.entries(counts).every(([id, count]) => own(ACTIONS, id) && integer(count, 0, ACTIONS[id].limit || 12));
@@ -35,15 +48,23 @@
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (!['executeAction', 'submitEventChoice', 'endTerm', 'continueGame', 'chooseEnding'].includes(command.operation)) return fail('历史操作类型');
+        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'beginExam', 'submitExam', 'endTerm', 'continueGame', 'chooseEnding'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'executeAction' && !own(ACTIONS, command.id)) return fail('历史行动');
         if (command.operation === 'submitEventChoice' && (!own(EVENTS, entry.event) || !EVENTS[entry.event].choices.some((choice) => choice.id === command.id) || command.eventInstanceId !== entry.instanceId)) return fail('历史事件');
+        if (command.operation === 'selectCourses' && (!Array.isArray(command.id) || command.id.length !== 3 || new Set(command.id).size !== 3 || !command.id.every((id) => COURSES.some((course) => course.id === id)))) return fail('历史选课');
+        if (command.operation === 'submitExam' && (!Array.isArray(command.id) || command.id.length !== 5 || !command.id.every((answer) => integer(answer, 0, 3)))) return fail('历史考试答案');
         if (command.operation === 'chooseEnding' && !['ordinary', 'employment', 'furtherStudy', 'notQualified'].includes(command.id)) return fail('历史方向');
-        for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'summary', 'endingChoice', 'finished'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !integer(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 100)) return fail('历史状态摘要');
+        for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !integer(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 100)) return fail('历史状态摘要');
       }
       const expectedCourses = ['summary', 'endingChoice', 'finished'].includes(state.phase) ? state.term : state.term - 1;
       if (state.courses.length !== expectedCourses) return fail('课程记录数量与阶段不符');
-      if (!state.courses.every((course, index) => object(course) && course.term === index + 1 && course.name === TERM_NAMES[index] && integer(course.preparation, 0, 100) && course.grade === Math.round(40 + course.preparation * 0.6) && course.passed === (course.grade >= 60) && course.livingCost === 300 && integer(course.aid, 0, 300) && integer(course.moneyAfter, 0, 1000000) && integer(course.unusedTime, 0, 12) && validCounts(course.counts) && Array.isArray(course.notices) && course.notices.every((note) => typeof note === 'string' && note.length < 200) && object(course.attributes) && ['social', 'fitness', 'mood'].every((key) => integer(course.attributes[key], 0, 100)))) return fail('成绩记录');
+      const validCourse = (course, index) => {
+        if (!object(course) || course.term !== index + 1 || course.name !== TERM_NAMES[index] || !integer(course.preparation, 0, 100) || course.passed !== (course.grade >= 60) || course.livingCost !== 300 || !integer(course.aid, 0, 300) || !integer(course.moneyAfter, 0, 1000000) || !integer(course.unusedTime, 0, 12) || !validCounts(course.counts) || !Array.isArray(course.notices) || !course.notices.every((note) => typeof note === 'string' && note.length < 200) || !object(course.attributes) || !['social', 'fitness', 'mood'].every((key) => integer(course.attributes[key], 0, 100))) return false;
+        const legacy = course.grade === Math.round(40 + course.preparation * 0.6);
+        const examined = integer(course.usualScore, 0, 100) && course.usualScore === course.preparation && integer(course.examScore, 0, 100) && course.examScore % 20 === 0 && course.grade === gradeFor(course.usualScore, course.examScore) && course.rating === ratingFor(course.grade) && Array.isArray(course.courseIds) && course.courseIds.length === 3 && new Set(course.courseIds).size === 3 && course.courseIds.every((id) => COURSES.some((item) => item.id === id)) && Array.isArray(course.courseNames) && course.courseNames.length === 3 && course.courseNames.every((name) => typeof name === 'string' && name.length < 200);
+        return legacy || examined;
+      };
+      if (!state.courses.every(validCourse)) return fail('成绩记录');
       if (['summary', 'endingChoice', 'finished'].includes(state.phase)) {
         if (!same(state.summary, state.courses.at(-1)) || state.money !== state.summary.moneyAfter || state.preparation !== state.summary.preparation) return fail('学期总结');
       } else if (state.summary !== null) return fail('未结算阶段存在总结');

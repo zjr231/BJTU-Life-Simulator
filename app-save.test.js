@@ -51,13 +51,19 @@ function app(storage = memory(), withSms = false, withNpc = false) {
     element(selector).emit('click', { target: { closest: () => ({ dataset }) } });
   }
   return { storage, element, evaluate, click, window,
-    start() {
+    start(selectCourses = true) {
       element('#nicknameInput').value = '界面测试';
       evaluate('startGame()');
       assert.equal(evaluate('dialogMode'), 'enrollment');
       click('#dialogButtons', { dialogAction: 'resume' });
       assert.equal(evaluate('dialogMode'), 'tutorial');
       click('#dialogButtons', { dialogAction: 'resume' });
+      if (selectCourses && evaluate('dialogMode') === 'courseSelection') {
+        const ids = evaluate('CampusGame.coursesForTerm(state.term, state.background.id).slice(0, 3).map((course) => course.id)');
+        evaluate('state = CampusGame.selectCourses(state, ' + JSON.stringify(ids) + ', { expectedRevision: state.revision }).state; renderState(); resumePhase()');
+        assert.equal(evaluate('state.selectedCourses.length'), 3);
+        assert.equal(evaluate('state.phase'), 'playing');
+      }
     },
     flush() { const jobs = [...timers.values()]; timers.clear(); jobs.forEach(callback => callback()); } };
 }
@@ -146,7 +152,7 @@ test('切换栏位保存失败时，继续保留原当前栏位及内存进度',
 
 test('新局未选栏位时结算保留内存，首次选栏后后续结算只自动保存到该栏', () => {
   const ui = app();
-  ui.start();
+  ui.start(false);
   ui.click('#endTermButton');
   ui.click('#dialogButtons', { dialogAction: 'settle', revision: '0' });
   assert.equal(ui.evaluate('state.phase'), 'summary');
@@ -203,7 +209,7 @@ for (const state of phaseStates()) {
       ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
       assert.equal(ui.evaluate('activeSaveSlot'), 2);
       assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state)')), state);
-      const mode = { eventPending: 'event', summary: 'summary', endingChoice: 'endingChoice', finished: 'finished' }[state.phase];
+      const mode = { playing: 'courseSelection', eventPending: 'event', summary: 'summary', endingChoice: 'endingChoice', finished: 'finished' }[state.phase];
       if (mode) assert.equal(ui.evaluate('dialogMode'), mode);
       else assert.equal(ui.element('#termDialog').open, false);
       ui.click('#saveButton');
@@ -376,6 +382,26 @@ test('NPC 在线对话：中转不可达时回退本地台词并提示，聊天�
   assert.match(history, /在吗/, '玩家消息留在历史里，聊天不中断');
   const lines = ui.evaluate('CampusNpc.linesFor(' + JSON.stringify(identityId) + ')');
   assert.ok(lines.some((line) => history.includes(line)), '回退台词来自该身份台词库');
+});
+
+test('开学选课、结束学期开考与期末总结界面可依次渲染', () => {
+  const ui = app();
+  ui.start(false);
+  assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
+  assert.match(ui.element('#dialogBody').innerHTML, /id="courseForm"/);
+  assert.match(ui.element('#dialogBody').innerHTML, /course-card/);
+  assert.match(ui.element('#dialogBody').innerHTML, /学分/);
+  const ids = ui.evaluate('CampusGame.coursesForTerm(state.term, state.background.id).slice(0, 3).map((course) => course.id)');
+  ui.evaluate('state = CampusGame.selectCourses(state, ' + JSON.stringify(ids) + ', { expectedRevision: state.revision }).state; renderState(); dialog.close()');
+  ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.match(ui.element('#dialogBody').innerHTML, /id="examForm"/);
+  assert.equal((ui.element('#dialogBody').innerHTML.match(/class="exam-question"/g) || []).length, 5);
+  const answers = ui.evaluate('state.exam.questions.map((question) => question.answer)');
+  ui.evaluate('state = CampusGame.submitExam(state, ' + JSON.stringify(answers) + ', { expectedRevision: state.revision }).state; renderState(); showSummary()');
+  assert.equal(ui.evaluate('dialogMode'), 'summary');
+  assert.match(ui.element('#dialogBody').innerHTML, /平时分/);
+  assert.match(ui.element('#dialogBody').innerHTML, /期末考试/);
 });
 
 test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当前进度和目标新档', () => {

@@ -2,11 +2,14 @@
   'use strict';
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
+  const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
   const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT } = config;
+  const { COURSES, SUBJECTS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const clamp = (value, max) => Math.max(0, Math.min(max, value));
+  const selectedCoursesOf = (state) => Array.isArray(state.selectedCourses) ? state.selectedCourses : [];
   function validateNickname(value) {
     // 按主流游戏昵称规则：2～12 个字符，只能使用汉字、字母、数字与 · - _，不能全是数字或符号。
     if (typeof value !== 'string' || !value.trim()) return { ok: false, reason: '先填一个昵称吧' };
@@ -33,7 +36,7 @@
       nickname: nickname.value, background: { id: background.id, college: background.college, major: background.majors[Math.floor(second.number * background.majors.length)] }, rng: second.rng,
       term: 1, phase: 'playing', revision: 0, processedCommands: [], time: RULES.time, energy: RULES.energy, money: RULES.initialMoney,
       social: RULES.initialSocial, fitness: RULES.initialFitness, mood: RULES.initialMood, preparation: 0, furtherStudy: 0, jobPreparation: 0,
-      counts: {}, courses: [], history: [], summary: null, pendingEvent: null, eventQueue: [], eventFlags: {}, eventHistory: [], experiences: [], chains, endingOptions: null, result: null
+      counts: {}, courses: [], selectedCourses: [], exam: null, history: [], summary: null, pendingEvent: null, eventQueue: [], eventFlags: {}, eventHistory: [], experiences: [], chains, endingOptions: null, result: null
     };
   }
   function getAction(state, id) {
@@ -257,19 +260,59 @@
     }
     return { chains, notices };
   }
-  function previewSettlement(state) {
-    const grade = Math.round(40 + state.preparation * 0.6);
+  function previewSettlement(state, examScore = null) {
+    const usualScore = state.preparation;
+    const graded = selectedCoursesOf(state).length > 0;
+    const score = graded ? (examScore === null ? (state.exam?.score ?? 0) : examScore) : null;
+    const grade = graded ? gradeFor(usualScore, score) : Math.round(40 + state.preparation * 0.6);
     const aid = Math.max(0, RULES.livingCost - state.money);
-    return { term: state.term, name: TERM_NAMES[state.term - 1], preparation: state.preparation, grade, passed: grade >= 60, livingCost: RULES.livingCost, aid, moneyAfter: state.money + aid - 300, unusedTime: state.time, counts: { ...state.counts }, attributes: { social: state.social, fitness: state.fitness, mood: state.mood }, notices: settlementChains(state).notices };
+    const summary = { term: state.term, name: TERM_NAMES[state.term - 1], preparation: state.preparation, grade, passed: grade >= 60, livingCost: RULES.livingCost, aid, moneyAfter: state.money + aid - 300, unusedTime: state.time, counts: { ...state.counts }, attributes: { social: state.social, fitness: state.fitness, mood: state.mood }, notices: settlementChains(state).notices };
+    if (graded) Object.assign(summary, { usualScore, examScore: score, rating: ratingFor(grade), courseIds: [...selectedCoursesOf(state)], courseNames: selectedCoursesOf(state).map((id) => courseById(id)?.name || id) });
+    return summary;
   }
   function endTerm(state, options = {}) {
     const command = commandCheck(state, options, 'endTerm');
     if (!command.ok) return command;
     if (state.phase === 'eventPending') return { ok: false, reason: '请先处理当前事件', state };
     if (state.phase !== 'playing') return { ok: false, reason: '本学期已经结算或流程已经结束', state };
+    if (selectedCoursesOf(state).length) return { ok: false, reason: '请先参加本学期期末考试', state };
     const summary = previewSettlement(state);
     const next = { ...state, phase: 'summary', money: summary.moneyAfter, chains: settlementChains(state).chains, courses: [...state.courses, summary], summary };
     return commit(state, next, { operation: 'endTerm' }, { action: 'endTerm', title: '学期结算' }, command.commandId);
+  }
+  function selectCourses(state, ids, options = {}) {
+    const command = commandCheck(state, options, 'selectCourses');
+    if (!command.ok) return command;
+    if (state.phase !== 'playing') return { ok: false, reason: '现在不能选课', state };
+    if (selectedCoursesOf(state).length) return { ok: false, reason: '本学期已经完成选课', state };
+    if (!Array.isArray(ids) || ids.length !== 3) return { ok: false, reason: '每学期需要选择 3 门课程', state };
+    if (new Set(ids).size !== ids.length) return { ok: false, reason: '不能重复选择同一门课程', state };
+    const available = new Set(coursesForTerm(state.term, state.background.id).map((course) => course.id));
+    if (!ids.every((id) => available.has(id))) return { ok: false, reason: '课程不在本学期可选范围', state };
+    const next = { ...state, selectedCourses: [...ids] };
+    return commit(state, next, { operation: 'selectCourses', id: [...ids] }, { action: 'selectCourses', title: '完成选课' }, command.commandId);
+  }
+  function beginExam(state, options = {}) {
+    const command = commandCheck(state, options, 'beginExam');
+    if (!command.ok) return command;
+    if (state.phase !== 'playing') return { ok: false, reason: '现在不能开始考试', state };
+    if (state.pendingEvent) return { ok: false, reason: '请先处理当前事件', state };
+    if (!selectedCoursesOf(state).length) return { ok: false, reason: '请先完成本学期选课', state };
+    let exam;
+    try { exam = generateExam(selectedCoursesOf(state), state.rng.seed + ':exam:' + state.term + ':' + selectedCoursesOf(state).join(','), random); }
+    catch (error) { return { ok: false, reason: error.message, state }; }
+    return commit(state, { ...state, phase: 'examPending', exam }, { operation: 'beginExam' }, { action: 'beginExam', title: '开始期末考试' }, command.commandId);
+  }
+  function submitExam(state, answers, options = {}) {
+    const command = commandCheck(state, options, 'submitExam');
+    if (!command.ok) return command;
+    if (state.phase !== 'examPending' || !state.exam) return { ok: false, reason: '当前没有待提交的试卷', state };
+    if (!Array.isArray(answers) || answers.length !== state.exam.questions.length || !answers.every((answer) => Number.isSafeInteger(answer) && answer >= 0 && answer < 4)) return { ok: false, reason: '请为每道题选择答案', state };
+    const correct = state.exam.questions.reduce((count, question, index) => count + (answers[index] === question.answer ? 1 : 0), 0);
+    const examScore = correct * 20;
+    const summary = previewSettlement(state, examScore);
+    const next = { ...state, phase: 'summary', money: summary.moneyAfter, chains: settlementChains(state).chains, courses: [...state.courses, summary], summary, exam: null };
+    return commit(state, next, { operation: 'submitExam', id: [...answers] }, { action: 'submitExam', title: '提交期末试卷', examScore, correct }, command.commandId);
   }
   function evaluateEndings(state) {
     const average = averageGrade(state);
@@ -300,8 +343,8 @@
     if (!command.ok) return command;
     if (state.phase !== 'summary') return { ok: false, reason: '当前没有待确认的学期总结', state };
     const next = state.term === 8
-      ? { ...state, phase: 'endingChoice', endingOptions: evaluateEndings(state) }
-      : attachEvents({ ...state, term: state.term + 1, phase: 'playing', time: 12, energy: 80, preparation: 0, counts: {}, summary: null }, 'newTerm');
+      ? { ...state, phase: 'endingChoice', endingOptions: evaluateEndings(state), selectedCourses: [], exam: null }
+      : attachEvents({ ...state, term: state.term + 1, phase: 'playing', time: 12, energy: 80, preparation: 0, counts: {}, summary: null, selectedCourses: [], exam: null }, 'newTerm');
     return commit(state, next, { operation: 'continueGame' }, { action: 'continueGame', title: state.term === 8 ? '评估毕业方向' : '进入下一学期' }, command.commandId);
   }
   function chooseEnding(state, id, options = {}) {
@@ -321,7 +364,7 @@
     let state = createGame({ nickname, seed });
     for (const [index, command] of commands.entries()) {
       const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId };
-      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args) };
+      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), submitExam: () => submitExam(state, command.id, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args) };
       if (!own(handlers, command.operation)) return { ok: false, reason: '第 ' + (index + 1) + ' 步操作未知', state };
       const result = handlers[command.operation]();
       if (!result.ok) return { ...result, reason: '第 ' + (index + 1) + ' 步：' + result.reason };
@@ -329,7 +372,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, CHAIN_NAMES, AI_CHAT, createGame, validateNickname, getAction, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, endTerm, continueGame, evaluateEndings, chooseEnding, validateState, stateBrief, replay, getTermStage };
+  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, CHAIN_NAMES, AI_CHAT, COURSES, SUBJECTS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, submitExam, endTerm, continueGame, evaluateEndings, chooseEnding, validateState, stateBrief, replay, getTermStage };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
