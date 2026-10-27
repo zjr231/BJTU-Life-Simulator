@@ -151,7 +151,7 @@
     math: [
       { id: 'math-1', prompt: '当 x 趋近于 0 时，sin(3x)/x 的极限是？', options: ['0', '1', '3', '不存在'], answer: 2 },
       { id: 'math-2', prompt: '函数 f(x)=x²eˣ 的导数是？', options: ['2xeˣ', 'eˣ(x²+2x)', 'x²eˣ', 'eˣ(x+2)'], answer: 1 },
-      { id: 'math-3', prompt: '定积分 ∫₀¹ 2x dx 的值是？', options: ['1', '2', '1/2', '0'], answer: 0 },
+      { id: 'math-3', prompt: '定积分 ∫[0,1] 2x dx 的值是？', options: ['1', '2', '1/2', '0'], answer: 0 },
       { id: 'math-4', prompt: '矩阵 [[1,2],[3,4]] 的行列式是？', options: ['-2', '2', '10', '-10'], answer: 0 },
       { id: 'math-5', prompt: '同时掷两枚公平骰子，点数之和为 7 的概率是？', options: ['1/12', '1/9', '1/6', '1/3'], answer: 2 },
       { id: 'math-6', prompt: '函数 ln(x²+1) 的导数是？', options: ['1/(x²+1)', '2x/(x²+1)', '2x', 'x/(x²+1)'], answer: 1 },
@@ -436,7 +436,7 @@
       },
       (next) => {
         const k = int(next, 2, 8), a = int(next, 2, 6);
-        return { prompt: '定积分 ∫₀^' + a + ' ' + k + 'x dx 的值是？', correct: fixed(k * a * a / 2, 1), distractors: [fixed(k * a, 1), fixed(k * a * a, 1), fixed(k * a * a / 4, 1)] };
+        return { prompt: '定积分 ∫[0,' + a + '] ' + k + 'x dx 的值是？', correct: fixed(k * a * a / 2, 1), distractors: [fixed(k * a, 1), fixed(k * a * a, 1), fixed(k * a * a / 4, 1)] };
       },
       (next) => {
         const a = int(next, 1, 9);

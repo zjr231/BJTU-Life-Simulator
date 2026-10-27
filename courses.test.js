@@ -144,6 +144,9 @@ test('定量课程生成计算题，种子相同可复现、种子不同会变�
   assert.ok(first.questions.every((question) => /\d/.test(question.prompt)));
   assert.ok(first.questions.every((question) => question.options.length === 4 && new Set(question.options).size === 4 && question.answer >= 0 && question.answer < 4));
   assert.deepEqual(new Set(first.questions.map((question) => question.courseId)), new Set(ids));
+  const integrals = coursesApi.TOPICS.calculus.map((template) => template(() => 0.42).prompt).filter((prompt) => prompt.includes('定积分'));
+  assert.equal(integrals.length, 1);
+  assert.ok(integrals.every((prompt) => prompt.includes('∫[') && !prompt.includes('^')));
   const other = game.generateExam(ids, 'calc-b', rng);
   assert.notDeepEqual(other.questions, first.questions);
 });
