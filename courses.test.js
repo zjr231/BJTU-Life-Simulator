@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const game = require('./game.js');
 const coursesApi = require('./courses.js');
 const save = require('./save.js');
+const rng = require('./rng.js');
 
 function memory() {
   const data = new Map();
@@ -40,7 +41,13 @@ test('课程目录覆盖 8 个学期和 3 个背景，每学期至少 5 门可�
     assert.ok(Object.hasOwn(game.SUBJECTS, course.subject), course.id);
     assert.ok(course.credits > 0, course.id);
     assert.ok(course.description.length > 8, course.id);
+    if (course.topic) assert.ok(Object.hasOwn(coursesApi.TOPICS, course.topic), course.id);
   }
+  assert.equal(game.courseById('english1').subject, 'english');
+  assert.equal(game.courseById('ethics').subject, 'humanities');
+  assert.equal(game.courseById('pe1').subject, 'sports');
+  assert.equal(game.courseById('law').subject, 'law');
+  assert.ok(game.COURSES.filter((course) => course.subject === 'general').length <= 4);
   for (let term = 1; term <= 8; term++) {
     for (const background of game.BACKGROUNDS) {
       const available = game.coursesForTerm(term, background.id);
@@ -50,7 +57,7 @@ test('课程目录覆盖 8 个学期和 3 个背景，每学期至少 5 门可�
   }
 });
 
-test('六个学科题库充足，题目结构完整且答案有效', () => {
+test('十个学科题库充足，定量课程绑定算法生成器', () => {
   const ids = new Set();
   for (const [subject, questions] of Object.entries(coursesApi.QUESTIONS)) {
     assert.ok(Object.hasOwn(game.SUBJECTS, subject));
@@ -59,9 +66,15 @@ test('六个学科题库充足，题目结构完整且答案有效', () => {
       assert.equal(ids.has(question.id), false, question.id);
       ids.add(question.id);
       assert.equal(question.options.length, 4, question.id);
+      assert.equal(new Set(question.options).size, 4, question.id);
       assert.ok(question.answer >= 0 && question.answer < 4, question.id);
       assert.ok(question.prompt.length > 4, question.id);
     }
+  }
+  const topics = new Set(game.COURSES.filter((course) => course.topic).map((course) => course.topic));
+  for (const [topic, templates] of Object.entries(coursesApi.TOPICS)) {
+    assert.ok(templates.length >= 2, topic);
+    assert.equal(topics.has(topic), true, topic);
   }
 });
 
@@ -87,7 +100,9 @@ test('开考生成 5 道 20 分题，覆盖所选课程，且阶段锁定', () =
   assert.equal(first.ok, true, first.reason);
   assert.equal(first.state.phase, 'examPending');
   assert.equal(first.state.exam.questions.length, 5);
-  assert.ok(first.state.exam.questions.every((question) => question.points === 20 && question.options.length === 4));
+  assert.equal(first.state.exam.generator, 'v2');
+  assert.ok(first.state.exam.questions.every((question) => question.points === 20 && question.options.length === 4 && new Set(question.options).size === 4));
+  assert.equal(new Set(first.state.exam.questions.map((question) => question.id)).size, 5);
   assert.deepEqual(new Set(first.state.exam.questions.map((question) => question.courseId)), new Set(selected.selectedCourses));
   const second = game.beginExam(selected);
   assert.deepEqual(second.state.exam, first.state.exam);
@@ -95,6 +110,33 @@ test('开考生成 5 道 20 分题，覆盖所选课程，且阶段锁定', () =
   assert.equal(game.executeAction(first.state, 'rest').ok, false);
   assert.equal(game.endTerm(first.state).ok, false);
   assert.equal(game.selectCourses(first.state, selected.selectedCourses).ok, false);
+});
+
+test('定量课程生成计算题，种子相同可复现、种子不同会变化', () => {
+  const ids = ['calc2', 'linearAlgebra', 'physics1'];
+  const first = game.generateExam(ids, 'calc-a', rng);
+  const second = game.generateExam(ids, 'calc-a', rng);
+  assert.deepEqual(first, second);
+  assert.ok(first.questions.every((question) => question.id.startsWith('gen-')));
+  assert.ok(first.questions.every((question) => /\d/.test(question.prompt)));
+  assert.ok(first.questions.every((question) => question.options.length === 4 && new Set(question.options).size === 4 && question.answer >= 0 && question.answer < 4));
+  assert.deepEqual(new Set(first.questions.map((question) => question.courseId)), new Set(ids));
+  const other = game.generateExam(ids, 'calc-b', rng);
+  assert.notDeepEqual(other.questions, first.questions);
+});
+
+test('旧版题库试卷仍可校验，篡改答案后拒绝', () => {
+  const selected = selectFirst(game.createGame({ seed: 'legacy-exam' }));
+  const course = game.courseById(selected.selectedCourses[0]);
+  const exam = {
+    questions: coursesApi.LEGACY_QUESTIONS.general.slice(0, 5).map((question) => ({ ...question, subject: 'general', courseId: course.id, courseName: course.name, points: 20 })),
+    answers: [], score: null, submitted: false
+  };
+  const state = { ...selected, phase: 'examPending', exam };
+  assert.equal(game.validateState(state).ok, true, game.validateState(state).reason);
+  const tampered = structuredClone(state);
+  tampered.exam.questions[0].answer = (tampered.exam.questions[0].answer + 1) % 4;
+  assert.equal(game.validateState(tampered).ok, false);
 });
 
 test('总评按平时分 40% + 考试 60% 计算，并正确记录评级', () => {

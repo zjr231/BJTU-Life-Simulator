@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function validate(state, game, random) {
-    const { RULES, ACTIONS, EVENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, gradeFor, ratingFor } = game;
+    const { RULES, ACTIONS, EVENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, gradeFor, ratingFor } = game;
     const fail = (reason) => ({ ok: false, reason: '存档状态无效：' + reason });
     const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
     const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -21,7 +21,15 @@
       const exam = state.exam === undefined ? null : state.exam;
       if (exam !== null) {
         if (!object(exam) || !Array.isArray(exam.questions) || exam.questions.length !== 5 || !Array.isArray(exam.answers) || exam.answers.length !== 0 || exam.score !== null || exam.submitted !== false) return fail('试卷结构');
+        if (exam.generator !== undefined && exam.generator !== 'v2') return fail('试卷版本');
         if (!exam.questions.every((question) => object(question) && typeof question.id === 'string' && question.id.length < 80 && typeof question.prompt === 'string' && question.prompt.length < 500 && Array.isArray(question.options) && question.options.length === 4 && question.options.every((option) => typeof option === 'string' && option.length < 200) && integer(question.answer, 0, 3) && question.points === 20 && own(SUBJECTS, question.subject) && COURSES.some((course) => course.id === question.courseId) && typeof question.courseName === 'string' && question.courseName.length < 200)) return fail('试卷题目');
+        if (exam.generator !== 'v2') {
+          const legacyMatch = (question) => {
+            const bank = [...(LEGACY_QUESTIONS[question.subject] || []), ...(QUESTIONS[question.subject] || [])].find((item) => item.id === question.id);
+            return !!bank && bank.prompt === question.prompt && bank.answer === question.answer && bank.options.length === question.options.length && bank.options.every((option, index) => option === question.options[index]);
+          };
+          if (!exam.questions.every(legacyMatch)) return fail('旧试卷内容');
+        }
       }
       if ((state.phase === 'examPending') !== (exam !== null)) return fail('阶段与试卷不一致');
       if (!object(state.rng) || state.rng.algorithm !== 'mulberry32-v1' || typeof state.rng.seed !== 'string' || !state.rng.seed.length || state.rng.seed.length > 64 || !integer(state.rng.value, 0, 4294967295) || !integer(state.rng.calls, 2, 100)) return fail('随机数状态');
@@ -38,7 +46,8 @@
       if (!backgroundOk) return fail('入学背景');
       if (backgroundReplay.ok) {
         if (!same(selectedCourses, backgroundReplay.state.selectedCourses)) return fail('选课记录');
-        if (exam !== null && !same(exam, backgroundReplay.state.exam)) return fail('试卷内容');
+        // v2 试卷可精确重放；旧版试卷由上面的题库内容比对保护，避免生成算法升级后无法读取。
+        if (exam !== null && exam.generator === 'v2' && !same(exam, backgroundReplay.state.exam)) return fail('试卷内容');
       }
       for (const key of ['courses', 'history', 'eventQueue', 'eventHistory', 'experiences', 'processedCommands']) if (!Array.isArray(state[key]) || state[key].length > 2000) return fail(key);
       if (!object(state.counts) || !object(state.eventFlags) || !object(state.chains)) return fail('次数、事件标记或事件链');
