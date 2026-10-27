@@ -2,8 +2,11 @@
   'use strict';
   // 课程目录保存稳定元数据；定量课程通过 topic 绑定算法生成器，其余课程使用学科题库。
   const SUBJECTS = {
-    math: '数学', physics: '物理', cs: '计算机', engineering: '工程',
-    management: '经管', english: '英语', humanities: '人文', law: '法学', sports: '体育', general: '通识'
+    math: '数学', physics: '物理', cs: '计算机', software: '软件工程', ai: '人工智能',
+    communication: '通信工程', electrical: '电气工程', mechanical: '机械工程',
+    transport: '交通运输', civil: '土木工程', chemistry: '化学',
+    engineering: '工程', management: '管理', economics: '经济学', finance: '金融学',
+    accounting: '会计学', english: '英语', humanities: '人文', law: '法学', sports: '体育', general: '通识'
   };
   const COURSES = [
     { id: 'calc1', name: '高等数学A（上）', subject: 'math', topic: 'calculus', credits: 5, term: 1, background: 'common', description: '极限、导数与积分，一门需要持续投入的基础课。' },
@@ -12,6 +15,7 @@
     { id: 'pe1', name: '体育I', subject: 'sports', credits: 1, term: 1, background: 'common', description: '体能与项目练习，期末有统一的体测要求。' },
     { id: 'introCs', name: '程序设计基础', subject: 'cs', topic: 'binary', credits: 4, term: 1, background: 'information', description: '从变量和分支写到函数，第一次把想法变成程序。' },
     { id: 'drawing', name: '工程制图基础', subject: 'engineering', credits: 3, term: 1, background: 'engineering', description: '三视图、剖视图和尺寸标注，图纸是工程师的语言。' },
+    { id: 'engineeringChemistry', name: '工科化学', subject: 'chemistry', credits: 2, term: 1, background: 'engineering', description: '物质组成、反应与平衡，为材料和环境类课程打底。' },
     { id: 'managementIntro', name: '管理学原理', subject: 'management', credits: 3, term: 1, background: 'management', description: '计划、组织、领导和控制，理解组织如何运转。' },
 
     { id: 'calc2', name: '高等数学A（下）', subject: 'math', topic: 'calculus', credits: 5, term: 2, background: 'common', description: '多元函数、重积分与级数，计算量明显上来。' },
@@ -20,51 +24,51 @@
     { id: 'english2', name: '大学英语II', subject: 'english', credits: 3, term: 2, background: 'common', description: '长篇阅读与学术写作入门，开始积累专业词汇。' },
     { id: 'modernHistory', name: '中国近现代史纲要', subject: 'humanities', credits: 3, term: 2, background: 'common', description: '从近代变局读到现代中国，重视时间线与因果关系。' },
     { id: 'dataStructures', name: '数据结构', subject: 'cs', topic: 'complexity', credits: 4, term: 2, background: 'information', description: '线性表、树、图与查找排序，写代码前先想清楚结构。' },
-    { id: 'mechanics', name: '理论力学', subject: 'engineering', topic: 'mechanics', credits: 4, term: 2, background: 'engineering', description: '静力学与运动学，受力分析要一步一步来。' },
-    { id: 'microEconomics', name: '微观经济学', subject: 'management', topic: 'economics', credits: 3, term: 2, background: 'management', description: '从供需和边际分析出发，理解个体如何做选择。' },
+    { id: 'mechanics', name: '理论力学', subject: 'mechanical', topic: 'mechanics', credits: 4, term: 2, background: 'engineering', description: '静力学与运动学，受力分析要一步一步来。' },
+    { id: 'microEconomics', name: '微观经济学', subject: 'economics', topic: 'economics', credits: 3, term: 2, background: 'management', description: '从供需和边际分析出发，理解个体如何做选择。' },
 
     { id: 'probability', name: '概率论与数理统计', subject: 'math', topic: 'probability', credits: 4, term: 3, background: 'common', description: '随机变量、分布与参数估计，考试很看重计算。' },
     { id: 'physics2', name: '大学物理II', subject: 'physics', topic: 'circuits', credits: 4, term: 3, background: 'common', description: '电磁学与光学，实验和理论需要互相印证。' },
     { id: 'english3', name: '大学英语III', subject: 'english', credits: 3, term: 3, background: 'common', description: '学术听力与小组展示，开始训练公开表达。' },
     { id: 'marxism', name: '马克思主义基本原理', subject: 'humanities', credits: 3, term: 3, background: 'common', description: '概念多、体系强，适合按专题整理笔记。' },
     { id: 'algorithms', name: '算法设计与分析', subject: 'cs', topic: 'complexity', credits: 4, term: 3, background: 'information', description: '分治、动态规划与贪心，复杂度分析贯穿全程。' },
-    { id: 'materials', name: '材料力学', subject: 'engineering', topic: 'stress', credits: 4, term: 3, background: 'engineering', description: '应力、应变与强度校核，公式背后是工程安全。' },
-    { id: 'accounting', name: '会计学原理', subject: 'management', topic: 'accounting', credits: 3, term: 3, background: 'management', description: '借贷记账与报表阅读，数字要能对上。' },
+    { id: 'materials', name: '材料力学', subject: 'civil', topic: 'stress', credits: 4, term: 3, background: 'engineering', description: '应力、应变与强度校核，公式背后是工程安全。' },
+    { id: 'accounting', name: '会计学原理', subject: 'accounting', topic: 'accounting', credits: 3, term: 3, background: 'management', description: '借贷记账与报表阅读，数字要能对上。' },
 
     { id: 'numerical', name: '数值分析', subject: 'math', topic: 'numerical', credits: 3, term: 4, background: 'common', description: '用计算机求解数学问题，误差分析比结果更重要。' },
     { id: 'physicsLab', name: '大学物理实验', subject: 'physics', topic: 'measurement', credits: 2, term: 4, background: 'common', description: '测量、记录与误差处理，实验报告占很大比重。' },
     { id: 'english4', name: '大学英语IV', subject: 'english', credits: 3, term: 4, background: 'common', description: '学术阅读与论文摘要，开始接触英文文献。' },
     { id: 'maoism', name: '毛泽东思想和中国特色社会主义理论体系概论', subject: 'humanities', credits: 3, term: 4, background: 'common', description: '理论联系实际，课堂讨论和材料分析较多。' },
     { id: 'operatingSystems', name: '操作系统', subject: 'cs', credits: 4, term: 4, background: 'information', description: '进程、内存、文件与调度，理解程序如何真正运行。' },
-    { id: 'structural', name: '结构力学', subject: 'engineering', topic: 'stress', credits: 4, term: 4, background: 'engineering', description: '从静定到超静定结构，弯矩图是绕不开的基本功。' },
+    { id: 'structural', name: '结构力学', subject: 'civil', topic: 'stress', credits: 4, term: 4, background: 'engineering', description: '从静定到超静定结构，弯矩图是绕不开的基本功。' },
     { id: 'marketing', name: '市场营销学', subject: 'management', credits: 3, term: 4, background: 'management', description: '市场细分、定位与营销组合，案例讨论很多。' },
 
     { id: 'optimization', name: '最优化方法', subject: 'math', topic: 'optimization', credits: 3, term: 5, background: 'common', description: '线性规划与无约束优化，建模和求解同样重要。' },
     { id: 'english5', name: '学术英语', subject: 'english', credits: 3, term: 5, background: 'common', description: '文献检索、学术表达与论文结构，为高年级做准备。' },
     { id: 'politicalEconomy', name: '政治经济学', subject: 'humanities', credits: 3, term: 5, background: 'common', description: '从经典理论理解经济制度与运行机制。' },
     { id: 'database', name: '数据库系统', subject: 'cs', credits: 4, term: 5, background: 'information', description: '关系模型、SQL 与事务，数据要存得住也查得快。' },
-    { id: 'networks', name: '计算机网络', subject: 'cs', credits: 4, term: 5, background: 'information', description: '分层协议与网络互连，抓包能看见理论怎么落地。' },
-    { id: 'construction', name: '土木工程施工', subject: 'engineering', credits: 3, term: 5, background: 'engineering', description: '施工组织、工序与质量控制，现场经验很重要。' },
-    { id: 'engineeringGeology', name: '工程地质', subject: 'engineering', credits: 3, term: 5, background: 'engineering', description: '岩土性质与地质勘察，工程选址前要先读懂地面以下。' },
-    { id: 'corporateFinance', name: '公司金融', subject: 'management', topic: 'finance', credits: 4, term: 5, background: 'management', description: '投资决策、融资结构与估值，计算和判断并重。' },
+    { id: 'networks', name: '计算机网络', subject: 'communication', credits: 4, term: 5, background: 'information', description: '分层协议与网络互连，抓包能看见理论怎么落地。' },
+    { id: 'construction', name: '土木工程施工', subject: 'civil', credits: 3, term: 5, background: 'engineering', description: '施工组织、工序与质量控制，现场经验很重要。' },
+    { id: 'engineeringGeology', name: '工程地质', subject: 'civil', credits: 3, term: 5, background: 'engineering', description: '岩土性质与地质勘察，工程选址前要先读懂地面以下。' },
+    { id: 'corporateFinance', name: '公司金融', subject: 'finance', topic: 'finance', credits: 4, term: 5, background: 'management', description: '投资决策、融资结构与估值，计算和判断并重。' },
     { id: 'humanResource', name: '人力资源管理', subject: 'management', credits: 3, term: 5, background: 'management', description: '招聘、绩效、薪酬与组织发展，核心是人和制度。' },
 
     { id: 'statistics', name: '应用统计学', subject: 'math', topic: 'statistics', credits: 3, term: 6, background: 'common', description: '假设检验与回归分析，学会从数据里得出结论。' },
     { id: 'english6', name: '专业英语', subject: 'english', credits: 2, term: 6, background: 'common', description: '阅读专业文献与撰写英文说明，词汇量决定速度。' },
     { id: 'law', name: '经济法', subject: 'law', credits: 3, term: 6, background: 'common', description: '合同、公司与市场秩序，案例题需要抓住要件。' },
-    { id: 'softwareEngineering', name: '软件工程', subject: 'cs', credits: 4, term: 6, background: 'information', description: '需求、设计、测试与团队协作，项目文档占分不少。' },
-    { id: 'embedded', name: '嵌入式系统', subject: 'cs', credits: 4, term: 6, background: 'information', description: '从单片机到实时系统，软硬件边界开始模糊。' },
-    { id: 'transport', name: '交通工程', subject: 'engineering', credits: 4, term: 6, background: 'engineering', description: '交通流、道路设计与信号控制，和城市日常紧密相关。' },
+    { id: 'softwareEngineering', name: '软件工程', subject: 'software', credits: 4, term: 6, background: 'information', description: '需求、设计、测试与团队协作，项目文档占分不少。' },
+    { id: 'embedded', name: '嵌入式系统', subject: 'electrical', credits: 4, term: 6, background: 'information', description: '从单片机到实时系统，软硬件边界开始模糊。' },
+    { id: 'transport', name: '交通工程', subject: 'transport', credits: 4, term: 6, background: 'engineering', description: '交通流、道路设计与信号控制，和城市日常紧密相关。' },
     { id: 'engineeringEconomics', name: '工程经济学', subject: 'engineering', topic: 'finance', credits: 3, term: 6, background: 'engineering', description: '用现金流和折现率比较方案，工程决策不只看技术。' },
     { id: 'operations', name: '运营管理', subject: 'management', topic: 'operations', credits: 3, term: 6, background: 'management', description: '产能、库存与流程优化，追求效率和成本的平衡。' },
-    { id: 'internationalBusiness', name: '国际商务', subject: 'management', topic: 'international', credits: 3, term: 6, background: 'management', description: '跨市场经营、汇率与供应链，视角从校内拉到全球。' },
+    { id: 'internationalBusiness', name: '国际商务', subject: 'economics', topic: 'international', credits: 3, term: 6, background: 'management', description: '跨市场经营、汇率与供应链，视角从校内拉到全球。' },
 
     { id: 'bigData', name: '大数据技术', subject: 'cs', credits: 4, term: 7, background: 'information', description: '分布式存储与计算，数据规模上来后思路会变。' },
-    { id: 'ai', name: '人工智能导论', subject: 'cs', credits: 4, term: 7, background: 'information', description: '搜索、学习与推理，理解常见算法的适用边界。' },
-    { id: 'bridge', name: '桥梁工程', subject: 'engineering', topic: 'stress', credits: 4, term: 7, background: 'engineering', description: '桥型、受力与施工，结构安全需要反复验算。' },
-    { id: 'seismicDesign', name: '建筑抗震设计', subject: 'engineering', credits: 3, term: 7, background: 'engineering', description: '从地震作用到构造措施，理解结构抗震的基本逻辑。' },
+    { id: 'ai', name: '人工智能导论', subject: 'ai', credits: 4, term: 7, background: 'information', description: '搜索、学习与推理，理解常见算法的适用边界。' },
+    { id: 'bridge', name: '桥梁工程', subject: 'civil', topic: 'stress', credits: 4, term: 7, background: 'engineering', description: '桥型、受力与施工，结构安全需要反复验算。' },
+    { id: 'seismicDesign', name: '建筑抗震设计', subject: 'civil', credits: 3, term: 7, background: 'engineering', description: '从地震作用到构造措施，理解结构抗震的基本逻辑。' },
     { id: 'projectManagement', name: '项目管理', subject: 'management', topic: 'project', credits: 3, term: 7, background: 'management', description: '范围、进度、成本与风险，计划要能落地。' },
-    { id: 'investment', name: '投资学', subject: 'management', topic: 'finance', credits: 4, term: 7, background: 'management', description: '收益与风险、资产组合和市场有效性，计算题较多。' },
+    { id: 'investment', name: '投资学', subject: 'finance', topic: 'finance', credits: 4, term: 7, background: 'management', description: '收益与风险、资产组合和市场有效性，计算题较多。' },
     { id: 'strategicManagement', name: '战略管理', subject: 'management', credits: 3, term: 7, background: 'management', description: '从行业分析到竞争策略，练习在不确定中做判断。' },
     { id: 'professionalEnglish', name: '专业英语文献阅读', subject: 'english', credits: 2, term: 7, background: 'common', description: '精读英文论文，训练摘要和批判性阅读。' },
     { id: 'academicWriting', name: '学术写作', subject: 'general', credits: 2, term: 7, background: 'common', description: '从选题到引用，把研究过程写成规范的文本。' },
@@ -78,6 +82,70 @@
     { id: 'graduationEng', name: '毕业设计（工程类）', subject: 'engineering', credits: 8, term: 8, background: 'engineering', description: '从方案到计算书，完整走一遍工程实践流程。' },
     { id: 'graduationMgmt', name: '毕业设计（经管类）', subject: 'management', credits: 8, term: 8, background: 'management', description: '用数据和理论回答一个真实的管理问题。' }
   ];
+
+  // 参考北京交通大学各学院培养方案的核心课程，按专业补充高年级专业课。
+  const MAJOR_COURSES = [
+    { id: 'computerArchitecture', name: '计算机体系结构', subject: 'cs', credits: 3, term: 5, background: 'information', major: '计算机科学与技术', description: '指令系统、流水线与存储层次，理解程序性能从哪里来。' },
+    { id: 'compiler', name: '编译原理', subject: 'cs', credits: 4, term: 6, background: 'information', major: '计算机科学与技术', description: '词法、语法、语义与代码生成，把高级语言翻译成机器指令。' },
+    { id: 'machineLearning', name: '机器学习', subject: 'ai', topic: 'ml', credits: 3, term: 7, background: 'information', major: '计算机科学与技术', description: '监督学习、模型评估与正则化，用数据训练可泛化的模型。' },
+    { id: 'graduationComputer', name: '毕业设计（计算机）', subject: 'cs', credits: 8, term: 8, background: 'information', major: '计算机科学与技术', description: '完成一个计算机系统或应用课题，从需求到实现完整交付。' },
+
+    { id: 'communicationPrinciples', name: '通信原理', subject: 'communication', topic: 'signals', credits: 4, term: 5, background: 'information', major: '通信工程', description: '模拟与数字调制、信道编码与噪声分析，通信系统的核心理论。' },
+    { id: 'digitalSignalProcessing', name: '数字信号处理', subject: 'communication', topic: 'signals', credits: 3, term: 6, background: 'information', major: '通信工程', description: '采样、Z 变换与数字滤波，把连续信号变成可计算的序列。' },
+    { id: 'mobileCommunication', name: '移动通信', subject: 'communication', credits: 3, term: 7, background: 'information', major: '通信工程', description: '蜂窝组网、多址技术与无线信道，理解手机如何保持连接。' },
+    { id: 'graduationCommunication', name: '毕业设计（通信）', subject: 'communication', credits: 8, term: 8, background: 'information', major: '通信工程', description: '围绕通信系统、网络或信号处理完成一个完整工程课题。' },
+
+    { id: 'softwareArchitecture', name: '软件体系结构', subject: 'software', credits: 3, term: 5, background: 'information', major: '软件工程', description: '分层、微服务与质量属性，在写代码前先设计系统骨架。' },
+    { id: 'softwareTesting', name: '软件测试', subject: 'software', credits: 3, term: 6, background: 'information', major: '软件工程', description: '黑盒与白盒方法、测试用例与缺陷管理，质量要靠证据说话。' },
+    { id: 'softwareProjectManagement', name: '软件项目管理', subject: 'software', topic: 'project', credits: 3, term: 7, background: 'information', major: '软件工程', description: '范围、进度、成本与风险管理，让软件项目按计划交付。' },
+    { id: 'graduationSoftware', name: '毕业设计（软件）', subject: 'software', credits: 8, term: 8, background: 'information', major: '软件工程', description: '完成一个软件系统，覆盖需求、设计、实现、测试与部署。' },
+
+    { id: 'machineLearningAi', name: '机器学习', subject: 'ai', topic: 'ml', credits: 3, term: 5, background: 'information', major: '人工智能', description: '从线性模型到集成学习，掌握训练与评估的基本方法。' },
+    { id: 'deepLearning', name: '深度学习', subject: 'ai', topic: 'ml', credits: 3, term: 6, background: 'information', major: '人工智能', description: '神经网络、反向传播与卷积结构，理解深度模型的训练过程。' },
+    { id: 'naturalLanguageProcessing', name: '自然语言处理', subject: 'ai', credits: 3, term: 7, background: 'information', major: '人工智能', description: '文本表示、序列建模与预训练模型，让机器理解和生成语言。' },
+    { id: 'graduationAi', name: '毕业设计（人工智能）', subject: 'ai', credits: 8, term: 8, background: 'information', major: '人工智能', description: '围绕智能算法或应用完成数据、模型、实验与论文。' },
+
+    { id: 'soilMechanics', name: '土力学与基础工程', subject: 'civil', topic: 'soil', credits: 4, term: 5, background: 'engineering', major: '土木工程', description: '土的强度、变形与地基承载，先读懂地面以下再谈上部结构。' },
+    { id: 'concreteDesign', name: '混凝土结构设计原理', subject: 'civil', credits: 4, term: 6, background: 'engineering', major: '土木工程', description: '受弯、受压与受剪承载力，按规范完成配筋与验算。' },
+    { id: 'steelDesign', name: '钢结构设计原理', subject: 'civil', credits: 3, term: 7, background: 'engineering', major: '土木工程', description: '连接、稳定与构件设计，钢材强度高但稳定问题更突出。' },
+    { id: 'graduationCivil', name: '毕业设计（土木）', subject: 'civil', credits: 8, term: 8, background: 'engineering', major: '土木工程', description: '完成结构或施工组织设计，从计算书到图纸完整走一遍。' },
+
+    { id: 'transportOrganization', name: '运输组织学', subject: 'transport', topic: 'traffic', credits: 3, term: 5, background: 'engineering', major: '交通运输', description: '客流货流组织、运行图与能力协调，运输系统的日常指挥。' },
+    { id: 'railwayOperation', name: '铁路行车组织', subject: 'transport', topic: 'traffic', credits: 4, term: 6, background: 'engineering', major: '交通运输', description: '车站作业、列车运行图与区间能力，铁路运输的核心专业课。' },
+    { id: 'transportPlanning', name: '交通规划', subject: 'transport', topic: 'traffic', credits: 3, term: 7, background: 'engineering', major: '交通运输', description: '四阶段法、OD 调查与网络分配，为城市交通提供决策依据。' },
+    { id: 'graduationTransport', name: '毕业设计（交通运输）', subject: 'transport', credits: 8, term: 8, background: 'engineering', major: '交通运输', description: '围绕运输组织、规划或运营完成一个真实交通课题。' },
+
+    { id: 'mechanism', name: '机械原理', subject: 'mechanical', topic: 'machine', credits: 4, term: 5, background: 'engineering', major: '机械工程', description: '机构组成、运动分析与力分析，理解机器如何运动。' },
+    { id: 'machineDesign', name: '机械设计', subject: 'mechanical', credits: 4, term: 6, background: 'engineering', major: '机械工程', description: '连接、传动与轴系设计，把运动方案落到可制造的零件。' },
+    { id: 'manufacturingTechnology', name: '机械制造技术基础', subject: 'mechanical', credits: 3, term: 7, background: 'engineering', major: '机械工程', description: '切削、工艺规程与装配，理解零件从毛坯到成品的路径。' },
+    { id: 'graduationMechanical', name: '毕业设计（机械）', subject: 'mechanical', credits: 8, term: 8, background: 'engineering', major: '机械工程', description: '完成机械结构或机电系统设计，兼顾强度、工艺与控制。' },
+
+    { id: 'electricalMachines', name: '电机学', subject: 'electrical', topic: 'power', credits: 4, term: 5, background: 'engineering', major: '电气工程及其自动化', description: '变压器、异步电机与同步电机，电能与机械能转换的核心。' },
+    { id: 'powerElectronics', name: '电力电子技术', subject: 'electrical', topic: 'power', credits: 3, term: 6, background: 'engineering', major: '电气工程及其自动化', description: '整流、逆变与斩波电路，用开关器件控制电能形态。' },
+    { id: 'powerSystemAnalysis', name: '电力系统分析', subject: 'electrical', topic: 'power', credits: 4, term: 7, background: 'engineering', major: '电气工程及其自动化', description: '潮流、短路与稳定性计算，电网规划运行的基础。' },
+    { id: 'graduationElectrical', name: '毕业设计（电气）', subject: 'electrical', credits: 8, term: 8, background: 'engineering', major: '电气工程及其自动化', description: '完成电力系统、电机或电力电子方向的工程设计与分析。' },
+
+    { id: 'intermediateMicroeconomics', name: '中级微观经济学', subject: 'economics', credits: 3, term: 5, background: 'management', major: '经济学', description: '消费者选择、厂商理论与市场结构，用模型解释价格机制。' },
+    { id: 'econometrics', name: '计量经济学', subject: 'economics', topic: 'statistics', credits: 3, term: 6, background: 'management', major: '经济学', description: '回归、假设检验与因果识别，用数据检验经济理论。' },
+    { id: 'internationalEconomics', name: '国际经济学', subject: 'economics', credits: 3, term: 7, background: 'management', major: '经济学', description: '比较优势、国际贸易与汇率制度，理解开放经济中的选择。' },
+    { id: 'graduationEconomics', name: '毕业设计（经济学）', subject: 'economics', credits: 8, term: 8, background: 'management', major: '经济学', description: '围绕现实经济问题完成文献、数据、模型与政策分析。' },
+
+    { id: 'financialMarkets', name: '金融市场与机构', subject: 'finance', credits: 3, term: 5, background: 'management', major: '金融学', description: '银行、证券与保险机构的运行，理解资金如何跨期配置。' },
+    { id: 'financialEngineering', name: '金融工程', subject: 'finance', topic: 'finance', credits: 3, term: 6, background: 'management', major: '金融学', description: '衍生品定价、套期保值与无套利思维，金融中的工程方法。' },
+    { id: 'financialRiskManagement', name: '金融风险管理', subject: 'finance', credits: 3, term: 7, background: 'management', major: '金融学', description: '市场风险、信用风险与 VaR，识别并度量金融不确定性。' },
+    { id: 'graduationFinance', name: '毕业设计（金融）', subject: 'finance', credits: 8, term: 8, background: 'management', major: '金融学', description: '完成金融产品、风险管理或市场分析方向的毕业论文。' },
+
+    { id: 'intermediateAccounting', name: '中级财务会计', subject: 'accounting', credits: 4, term: 5, background: 'management', major: '会计学', description: '资产、负债、收入与财务报表编制，会计专业的核心主干课。' },
+    { id: 'costAccounting', name: '成本会计', subject: 'accounting', credits: 3, term: 6, background: 'management', major: '会计学', description: '成本归集、分配与差异分析，为定价和绩效提供依据。' },
+    { id: 'auditing', name: '审计学', subject: 'accounting', credits: 3, term: 7, background: 'management', major: '会计学', description: '审计证据、风险导向审计与内部控制，学会验证财务信息。' },
+    { id: 'graduationAccounting', name: '毕业设计（会计）', subject: 'accounting', credits: 8, term: 8, background: 'management', major: '会计学', description: '围绕财务报告、审计或成本管理完成一篇应用型论文。' },
+
+    { id: 'organizationalBehavior', name: '组织行为学', subject: 'management', credits: 3, term: 5, background: 'management', major: '工商管理', description: '个体、群体与组织行为，理解制度之外的人的因素。' },
+    { id: 'financialManagement', name: '财务管理', subject: 'finance', credits: 3, term: 6, background: 'management', major: '工商管理', description: '筹资、投资、营运资金与股利政策，为企业决策提供财务依据。' },
+    { id: 'corporateGovernance', name: '公司治理', subject: 'management', credits: 3, term: 7, background: 'management', major: '工商管理', description: '股权结构、董事会与激励机制，处理所有者与经营者的关系。' },
+    { id: 'graduationBusiness', name: '毕业设计（工商管理）', subject: 'management', credits: 8, term: 8, background: 'management', major: '工商管理', description: '围绕企业战略、组织或运营问题完成调研与方案设计。' }
+  ];
+  COURSES.push(...MAJOR_COURSES);
 
   const QUESTIONS = {
     math: [
@@ -179,6 +247,94 @@
       { id: 'general-6', prompt: '职业生涯规划的第一步通常是？', options: ['直接投递简历', '认识自我并了解外部环境', '比较薪资高低', '等待机会出现'], answer: 1 },
       { id: 'general-7', prompt: '创新创业中最小可行产品（MVP）的主要目的是？', options: ['一次性完成全部功能', '快速验证核心假设', '降低产品质量', '避免用户反馈'], answer: 1 },
       { id: 'general-8', prompt: '北京交通大学的前身是？', options: ['京师大学堂', '铁路管理传习所', '南洋公学', '清华学堂'], answer: 1 }
+    ],
+    transport: [
+      { id: 'transport-1', prompt: '交通流三参数关系为 Q=K×V。某路段密度 40 辆/km、平均速度 30 km/h，流量约为？', options: ['700 辆/h', '1200 辆/h', '1600 辆/h', '2400 辆/h'], answer: 1 },
+      { id: 'transport-2', prompt: '一条车道基本通行能力为 1800 pcu/h，2 条车道综合折减系数取 0.9，设计通行能力约为？', options: ['1800 pcu/h', '3240 pcu/h', '3600 pcu/h', '4000 pcu/h'], answer: 1 },
+      { id: 'transport-3', prompt: '铁路区间追踪列车间隔时间为 8 分钟，按 1440 分钟计算，区间通过能力约为？', options: ['90 列/日', '120 列/日', '180 列/日', '240 列/日'], answer: 2 },
+      { id: 'transport-4', prompt: '交通规划四阶段法中，紧接“出行生成”之后的步骤是？', options: ['交通分布', '方式划分', '交通分配', '网络设计'], answer: 0 },
+      { id: 'transport-5', prompt: 'M/M/1 排队系统中，到达率 6 人/h、服务率 10 人/h，服务台利用率是？', options: ['0.4', '0.6', '1.6', '4.0'], answer: 1 },
+      { id: 'transport-6', prompt: '交通规划中的 OD 矩阵主要描述？', options: ['道路几何线形', '起讫点之间的出行量', '车辆排放水平', '公交票价结构'], answer: 1 }
+    ],
+    civil: [
+      { id: 'civil-1', prompt: '某点总应力为 200 kPa，孔隙水压力为 80 kPa，有效应力是？', options: ['80 kPa', '120 kPa', '200 kPa', '280 kPa'], answer: 1 },
+      { id: 'civil-2', prompt: '土体中孔隙体积为 0.3 m³、固体颗粒体积为 0.6 m³，孔隙比 e 是？', options: ['0.3', '0.5', '1.5', '2.0'], answer: 1 },
+      { id: 'civil-3', prompt: '钢筋混凝土保护层最主要的作用是？', options: ['提高混凝土强度', '保护钢筋并保证耐久性', '减少模板用量', '代替箍筋'], answer: 1 },
+      { id: 'civil-4', prompt: '结构可靠指标 β 增大时，结构的失效概率通常？', options: ['增大', '减小', '不变', '先增后减'], answer: 1 },
+      { id: 'civil-5', prompt: '土的三相组成中，构成土骨架的是？', options: ['固相颗粒', '孔隙水', '孔隙气', '毛细水'], answer: 0 },
+      { id: 'civil-6', prompt: '梁在纯弯曲时，横截面中性轴处的正应力为？', options: ['最大值', '零', '拉应力', '压应力'], answer: 1 }
+    ],
+    mechanical: [
+      { id: 'mechanical-1', prompt: '一对齿轮齿数分别为 20 和 60，传动比 i 是？', options: ['1/3', '2', '3', '6'], answer: 2 },
+      { id: 'mechanical-2', prompt: '某机械输入功率 1000 W、输出功率 800 W，机械效率是？', options: ['20%', '80%', '125%', '800%'], answer: 1 },
+      { id: 'mechanical-3', prompt: '铰链四杆机构中，曲柄存在的条件之一是？', options: ['曲柄为最长杆', '曲柄为最短杆且满足杆长条件', '连杆为最短杆', '机架为最短杆'], answer: 1 },
+      { id: 'mechanical-4', prompt: '45 钢调质处理的主要目的是？', options: ['提高综合力学性能', '降低硬度至零', '消除所有合金元素', '提高导电性'], answer: 0 },
+      { id: 'mechanical-5', prompt: '带传动相对齿轮传动的一个典型优点是？', options: ['传动比绝对准确', '过载时可打滑起保护作用', '不需要张紧', '适合高温高速重载'], answer: 1 },
+      { id: 'mechanical-6', prompt: '螺栓连接中施加预紧力的主要作用是？', options: ['增大螺栓直径', '防止连接松动并提高刚度', '减小被连接件厚度', '改变螺纹旋向'], answer: 1 }
+    ],
+    electrical: [
+      { id: 'electrical-1', prompt: '三相对称负载线电压 380 V、线电流 10 A、功率因数 0.8，有功功率约为？', options: ['3.04 kW', '5.26 kW', '6.58 kW', '10.0 kW'], answer: 1 },
+      { id: 'electrical-2', prompt: '变压器一次侧 10000 V、二次侧 400 V，变比约为？', options: ['0.04', '4', '25', '400'], answer: 2 },
+      { id: 'electrical-3', prompt: '50 Hz 电源供电、极对数为 2 的同步电机，同步转速是？', options: ['750 r/min', '1000 r/min', '1500 r/min', '3000 r/min'], answer: 2 },
+      { id: 'electrical-4', prompt: '提高工业负载功率因数的主要好处是？', options: ['增大线路电流', '减少线路损耗并释放容量', '提高频率', '降低电压等级'], answer: 1 },
+      { id: 'electrical-5', prompt: '继电保护的“选择性”是指？', options: ['只保护最重要设备', '只切除故障设备并缩小停电范围', '动作越快越好', '只在白天动作'], answer: 1 },
+      { id: 'electrical-6', prompt: '电力系统一次调频主要依靠？', options: ['发电机调速器', '手动拉闸', '更换变压器', '增加电缆截面'], answer: 0 }
+    ],
+    communication: [
+      { id: 'communication-1', prompt: '某模拟信号最高频率为 4 kHz，按奈奎斯特采样定理，最低采样频率是？', options: ['2 kHz', '4 kHz', '8 kHz', '16 kHz'], answer: 2 },
+      { id: 'communication-2', prompt: '信道带宽 3 kHz、信噪比 7，按香农公式，信道容量约为？', options: ['3 kb/s', '6 kb/s', '9 kb/s', '21 kb/s'], answer: 2 },
+      { id: 'communication-3', prompt: '频率为 300 MHz 的电磁波，在自由空间中的波长约为？', options: ['0.1 m', '1 m', '3 m', '300 m'], answer: 1 },
+      { id: 'communication-4', prompt: '数字通信中误码率的定义是？', options: ['错误比特数除以总比特数', '信号功率除以噪声功率', '带宽除以符号率', '发送功率除以接收功率'], answer: 0 },
+      { id: 'communication-5', prompt: '调制在通信系统中的主要作用是？', options: ['消除所有噪声', '把信号频谱搬移到适合信道传输的位置', '提高电源电压', '压缩数据文件'], answer: 1 },
+      { id: 'communication-6', prompt: '8PSK 调制中，每个符号携带的信息量为？', options: ['1 bit', '2 bit', '3 bit', '8 bit'], answer: 2 }
+    ],
+    software: [
+      { id: 'software-1', prompt: '软件设计中通常追求的质量目标是？', options: ['高耦合、低内聚', '高内聚、低耦合', '高耦合、高内聚', '低耦合、低内聚'], answer: 1 },
+      { id: 'software-2', prompt: '黑盒测试主要依据什么设计测试用例？', options: ['程序内部语句', '需求规格说明', '编译器版本', '数据库索引'], answer: 1 },
+      { id: 'software-3', prompt: '敏捷开发中的 Sprint 通常指？', options: ['一个固定时长的迭代周期', '一次数据库备份', '一种编程语言', '最终用户手册'], answer: 0 },
+      { id: 'software-4', prompt: 'Git 中把暂存区修改记录到本地仓库的命令是？', options: ['git push', 'git commit', 'git clone', 'git status'], answer: 1 },
+      { id: 'software-5', prompt: '软件需求规格说明书（SRS）主要描述？', options: ['服务器采购清单', '系统应满足的功能与非功能需求', '源代码注释规范', '员工排班表'], answer: 1 },
+      { id: 'software-6', prompt: '软件生命周期中，详细设计通常紧接在哪个阶段之后？', options: ['需求分析', '系统测试', '运行维护', '项目验收'], answer: 0 }
+    ],
+    economics: [
+      { id: 'economics-1', prompt: '选择读研而放弃的直接工作收入，属于？', options: ['沉没成本', '机会成本', '固定成本', '会计成本'], answer: 1 },
+      { id: 'economics-2', prompt: '按支出法核算 GDP，通常包括？', options: ['消费、投资、政府购买和净出口', '工资、租金和利润', '进口、出口和关税', '储蓄、投资和税收'], answer: 0 },
+      { id: 'economics-3', prompt: '需求价格弹性绝对值大于 1 时，该商品需求属于？', options: ['缺乏弹性', '单位弹性', '富有弹性', '完全无弹性'], answer: 2 },
+      { id: 'economics-4', prompt: '居民消费价格指数（CPI）主要用于衡量？', options: ['股票价格变化', '居民消费商品和服务的价格变化', '工业增加值', '财政赤字规模'], answer: 1 },
+      { id: 'economics-5', prompt: '边际效用递减规律是指？', options: ['消费越多总效用越低', '连续增加消费时新增效用逐渐减少', '价格越高需求越大', '收入越高储蓄越少'], answer: 1 },
+      { id: 'economics-6', prompt: '比较优势理论认为，各国应专业化生产？', options: ['绝对成本最低的产品', '机会成本较低的产品', '价格最高的产品', '进口最多的产品'], answer: 1 }
+    ],
+    finance: [
+      { id: 'finance-1', prompt: '年利率 10%，2 年后收到 1210 元，其现值约为？', options: ['1000 元', '1100 元', '1200 元', '1210 元'], answer: 0 },
+      { id: 'finance-2', prompt: '市场利率上升时，固定利率债券价格通常？', options: ['上升', '下降', '不变', '先降后升'], answer: 1 },
+      { id: 'finance-3', prompt: '无风险利率 3%、市场风险溢价 8%、β=1.2，按 CAPM 预期收益率为？', options: ['9.6%', '12.6%', '13.0%', '14.4%'], answer: 1 },
+      { id: 'finance-4', prompt: '夏普比率的计算公式是？', options: ['(组合收益-无风险利率)/组合标准差', '组合收益/无风险利率', '无风险利率/组合方差', '组合标准差/组合收益'], answer: 0 },
+      { id: 'finance-5', prompt: '通过分散投资主要可以降低？', options: ['系统性风险', '非系统性风险', '通货膨胀', '无风险利率'], answer: 1 },
+      { id: 'finance-6', prompt: '半强式有效市场假说认为，资产价格反映了？', options: ['只有历史价格', '所有公开信息', '只有内幕信息', '所有未来信息'], answer: 1 }
+    ],
+    accounting: [
+      { id: 'accounting-1', prompt: '借贷记账法的基本记账规则是？', options: ['有借必有贷，借贷必相等', '只记借方不记贷方', '借贷金额可以不等', '资产增加记贷方'], answer: 0 },
+      { id: 'accounting-2', prompt: '会计基本等式是？', options: ['资产=负债+所有者权益', '资产=收入+费用', '利润=资产+负债', '负债=资产+权益'], answer: 0 },
+      { id: 'accounting-3', prompt: '权责发生制要求收入和费用按什么确认？', options: ['现金收付时点', '权利和责任发生期间', '年末统一确认', '合同签订时点'], answer: 1 },
+      { id: 'accounting-4', prompt: '设备原值 100000 元、预计净残值 5000 元、使用 5 年，直线法年折旧额为？', options: ['18000 元', '19000 元', '20000 元', '21000 元'], answer: 1 },
+      { id: 'accounting-5', prompt: '利润表中，利润通常等于？', options: ['收入减费用', '资产减负债', '现金流入减流出', '负债加所有者权益'], answer: 0 },
+      { id: 'accounting-6', prompt: '先进先出法在物价上涨时，通常使期末存货价值？', options: ['偏低', '偏高', '为零', '与后进先出法相同'], answer: 1 }
+    ],
+    chemistry: [
+      { id: 'chemistry-1', prompt: '水的摩尔质量约为？', options: ['16 g/mol', '18 g/mol', '20 g/mol', '36 g/mol'], answer: 1 },
+      { id: 'chemistry-2', prompt: '0.01 mol/L 盐酸溶液的 pH 约为？', options: ['1', '2', '7', '12'], answer: 1 },
+      { id: 'chemistry-3', prompt: '氧化还原反应的本质是？', options: ['电子转移', '质子转移', '分子扩散', '热量传递'], answer: 0 },
+      { id: 'chemistry-4', prompt: '勒夏特列原理用于判断？', options: ['反应速率常数', '外界条件改变时化学平衡的移动方向', '分子量大小', '溶液颜色'], answer: 1 },
+      { id: 'chemistry-5', prompt: '理想气体状态方程是？', options: ['PV=nRT', 'P=VnRT', 'PV=n/RT', 'P+n=VRT'], answer: 0 },
+      { id: 'chemistry-6', prompt: '共价键形成的主要原因是？', options: ['原子间共享电子', '原子间完全转移质子', '原子核融合', '分子间氢键断裂'], answer: 0 }
+    ],
+    ai: [
+      { id: 'ai-1', prompt: '监督学习与无监督学习的主要区别是？', options: ['是否使用标注数据', '是否使用计算机', '是否需要数学', '是否处理图像'], answer: 0 },
+      { id: 'ai-2', prompt: '某分类器 TP=40、FP=10，精确率是？', options: ['20%', '80%', '90%', '100%'], answer: 1 },
+      { id: 'ai-3', prompt: '某分类器 TP=40、FN=10，召回率是？', options: ['20%', '80%', '90%', '100%'], answer: 1 },
+      { id: 'ai-4', prompt: '模型训练误差很低但验证误差很高，通常说明？', options: ['欠拟合', '过拟合', '数据泄漏已消除', '模型没有参数'], answer: 1 },
+      { id: 'ai-5', prompt: '梯度下降法更新参数时，通常沿梯度的？', options: ['正方向', '负方向', '垂直方向', '随机方向'], answer: 1 },
+      { id: 'ai-6', prompt: '交叉验证的主要作用是？', options: ['增加训练数据量', '更稳定地评估模型泛化能力', '消除所有偏差', '加快推理速度'], answer: 1 }
     ]
   };
 
@@ -590,14 +746,125 @@
         const price = choose(next, [100, 200, 400]), tariff = choose(next, [5, 10, 15]);
         return { prompt: '进口货物完税价格 ' + price + ' 万元，关税税率 ' + tariff + '%，应缴关税是？', correct: fixed(price * tariff / 100, 2) + ' 万元', distractors: [fixed(price * tariff / 1000, 2) + ' 万元', fixed(price + tariff, 2) + ' 万元', fixed(price / tariff, 2) + ' 万元'] };
       }
+    ],
+    traffic: [
+      (next) => {
+        const density = int(next, 20, 80), speed = int(next, 20, 60);
+        return { prompt: '某路段交通密度为 ' + density + ' 辆/km，平均速度为 ' + speed + ' km/h，交通流量约为？', correct: density * speed + ' 辆/h', distractors: [density + speed + ' 辆/h', fixed(speed / density, 2) + ' 辆/h', density * speed * 2 + ' 辆/h'] };
+      },
+      (next) => {
+        const headway = int(next, 2, 6);
+        return { prompt: '一条车道的最小车头时距为 ' + headway + ' 秒，理论通行能力约为？', correct: fixed(3600 / headway, 0) + ' 辆/h', distractors: [fixed(headway * 60, 0) + ' 辆/h', fixed(3600 / headway / 2, 0) + ' 辆/h', fixed(3600 * headway, 0) + ' 辆/h'] };
+      },
+      (next) => {
+        const headway = int(next, 6, 12);
+        return { prompt: '铁路区间追踪列车间隔为 ' + headway + ' 分钟，按 1440 分钟计算，通过能力约为？', correct: fixed(1440 / headway, 0) + ' 列/日', distractors: [fixed(headway * 60, 0) + ' 列/日', fixed(1440 / headway / 2, 0) + ' 列/日', fixed(1440 * headway, 0) + ' 列/日'] };
+      },
+      (next) => {
+        const arrival = int(next, 2, 8), service = arrival + int(next, 2, 6);
+        return { prompt: 'M/M/1 排队系统到达率 ' + arrival + ' 人/h、服务率 ' + service + ' 人/h，服务台利用率是？', correct: fixed(arrival / service, 2), distractors: [fixed(service / arrival, 2), fixed(arrival * service, 2), fixed(1 - arrival / service, 2)] };
+      }
+    ],
+    soil: [
+      (next) => {
+        const total = int(next, 100, 300), pore = int(next, 20, 100);
+        return { prompt: '某点总应力为 ' + total + ' kPa，孔隙水压力为 ' + pore + ' kPa，有效应力是？', correct: total - pore + ' kPa', distractors: [total + pore + ' kPa', pore + ' kPa', total + ' kPa'] };
+      },
+      (next) => {
+        const voidVolume = fixed(int(next, 2, 6) / 10, 1), solidVolume = fixed(int(next, 5, 8) / 10, 1);
+        return { prompt: '土体孔隙体积为 ' + voidVolume + ' m³、固体颗粒体积为 ' + solidVolume + ' m³，孔隙比 e 是？', correct: fixed(Number(voidVolume) / Number(solidVolume), 2), distractors: [fixed(Number(solidVolume) / Number(voidVolume), 2), fixed(Number(voidVolume) + Number(solidVolume), 2), fixed(Number(voidVolume) * Number(solidVolume), 2)] };
+      },
+      (next) => {
+        const waterVolume = fixed(int(next, 1, 5) / 10, 1), voidVolume = fixed(int(next, 5, 8) / 10, 1);
+        return { prompt: '土体孔隙体积为 ' + voidVolume + ' m³、孔隙水体积为 ' + waterVolume + ' m³，饱和度约为？', correct: fixed(Number(waterVolume) / Number(voidVolume) * 100, 0) + '%', distractors: [fixed(Number(voidVolume) / Number(waterVolume) * 100, 0) + '%', fixed((Number(voidVolume) - Number(waterVolume)) * 100, 0) + '%', fixed(Number(waterVolume) * 100, 0) + '%'] };
+      }
+    ],
+    machine: [
+      (next) => {
+        const first = int(next, 15, 30), second = first * int(next, 2, 4);
+        return { prompt: '一对齿轮齿数分别为 ' + first + ' 和 ' + second + '，传动比 i 是？', correct: fixed(second / first, 2), distractors: [fixed(first / second, 2), String(first + second), String(second - first)] };
+      },
+      (next) => {
+        const input = choose(next, [500, 1000, 2000]), output = input * choose(next, [0.7, 0.8, 0.9]);
+        return { prompt: '某机械输入功率 ' + input + ' W、输出功率 ' + output + ' W，机械效率是？', correct: fixed(output / input * 100, 0) + '%', distractors: [fixed(input / output * 100, 0) + '%', fixed((input - output) / input * 100, 0) + '%', fixed(output / input * 10, 0) + '%'] };
+      },
+      (next) => {
+        const power = int(next, 2, 10), speed = choose(next, [1000, 1500, 2000, 3000]);
+        return { prompt: '电机功率 ' + power + ' kW、转速 ' + speed + ' r/min，按 T=9550P/n，输出转矩约为？', correct: fixed(9550 * power / speed, 2) + ' N·m', distractors: [fixed(speed / (9550 * power), 2) + ' N·m', fixed(9550 * speed / power, 2) + ' N·m', fixed(power * speed / 9550, 2) + ' N·m'] };
+      },
+      (next) => {
+        const diameter = choose(next, [0.1, 0.2, 0.3, 0.5]), speed = choose(next, [500, 800, 1200]);
+        return { prompt: '带轮直径 ' + diameter + ' m、转速 ' + speed + ' r/min，带速约为？', correct: fixed(Math.PI * diameter * speed / 60, 2) + ' m/s', distractors: [fixed(diameter * speed / 60, 2) + ' m/s', fixed(Math.PI * diameter * speed, 2) + ' m/s', fixed(Math.PI * diameter / speed, 2) + ' m/s'] };
+      }
+    ],
+    power: [
+      (next) => {
+        const current = int(next, 5, 20), factor = choose(next, [0.8, 0.9]);
+        return { prompt: '三相对称负载线电压 380 V、线电流 ' + current + ' A、功率因数 ' + factor + '，有功功率约为？', correct: fixed(Math.sqrt(3) * 380 * current * factor / 1000, 2) + ' kW', distractors: [fixed(380 * current * factor / 1000, 2) + ' kW', fixed(Math.sqrt(3) * 380 * current / 1000, 2) + ' kW', fixed(3 * 380 * current * factor / 1000, 2) + ' kW'] };
+      },
+      (next) => {
+        const high = choose(next, [10000, 35000, 110000]), low = choose(next, [400, 10000]);
+        return { prompt: '变压器一次侧电压 ' + high + ' V、二次侧电压 ' + low + ' V，变比约为？', correct: fixed(high / low, 2), distractors: [fixed(low / high, 2), fixed(high + low, 2), fixed(high * low, 2)] };
+      },
+      (next) => {
+        const frequency = choose(next, [50, 60]), poles = choose(next, [1, 2, 3]);
+        return { prompt: '电源频率 ' + frequency + ' Hz、极对数为 ' + poles + ' 的同步电机，同步转速是？', correct: fixed(60 * frequency / poles, 0) + ' r/min', distractors: [fixed(60 * frequency * poles, 0) + ' r/min', fixed(frequency / poles, 0) + ' r/min', fixed(60 * poles / frequency, 0) + ' r/min'] };
+      },
+      (next) => {
+        const current = int(next, 5, 20), resistance = choose(next, [0.1, 0.2, 0.5, 1]);
+        return { prompt: '线路电流 ' + current + ' A、电阻 ' + resistance + ' Ω，线路有功损耗约为？', correct: fixed(current * current * resistance, 2) + ' W', distractors: [fixed(current * resistance, 2) + ' W', fixed(current * current / resistance, 2) + ' W', fixed(current * resistance * resistance, 2) + ' W'] };
+      }
+    ],
+    signals: [
+      (next) => {
+        const maximum = choose(next, [2, 4, 8, 10]);
+        return { prompt: '某模拟信号最高频率为 ' + maximum + ' kHz，按奈奎斯特采样定理，最低采样频率是？', correct: 2 * maximum + ' kHz', distractors: [maximum + ' kHz', maximum / 2 + ' kHz', 4 * maximum + ' kHz'] };
+      },
+      (next) => {
+        const bandwidth = choose(next, [1, 2, 3]), snr = choose(next, [1, 3, 7, 15]);
+        return { prompt: '信道带宽 ' + bandwidth + ' kHz、信噪比为 ' + snr + '，按香农公式，信道容量约为？', correct: fixed(bandwidth * Math.log2(1 + snr), 2) + ' kb/s', distractors: [fixed(bandwidth * snr, 2) + ' kb/s', fixed(bandwidth * Math.log2(snr), 2) + ' kb/s', fixed(bandwidth * (1 + snr), 2) + ' kb/s'] };
+      },
+      (next) => {
+        const frequency = choose(next, [100, 150, 300, 600]);
+        return { prompt: '频率为 ' + frequency + ' MHz 的电磁波，在自由空间中的波长约为？', correct: fixed(300 / frequency, 2) + ' m', distractors: [fixed(frequency / 300, 2) + ' m', fixed(300 * frequency, 2) + ' m', fixed(300 / frequency / 10, 2) + ' m'] };
+      },
+      (next) => {
+        const frequency = choose(next, [50, 100, 200, 500]);
+        return { prompt: '频率为 ' + frequency + ' Hz 的周期信号，其周期是？', correct: fixed(1000 / frequency, 2) + ' ms', distractors: [fixed(frequency / 1000, 2) + ' ms', fixed(1000 * frequency, 2) + ' ms', fixed(1 / frequency, 2) + ' ms'] };
+      }
+    ],
+    ml: [
+      (next) => {
+        const correct = int(next, 50, 95), total = 100;
+        return { prompt: '某分类器在 ' + total + ' 个样本中预测正确 ' + correct + ' 个，准确率是？', correct: correct + '%', distractors: [100 - correct + '%', fixed(correct / 2, 0) + '%', fixed(correct * 2, 0) + '%'] };
+      },
+      (next) => {
+        const tp = int(next, 20, 60), fp = int(next, 5, 30);
+        return { prompt: '某二分类器 TP=' + tp + '、FP=' + fp + '，精确率约为？', correct: fixed(tp / (tp + fp) * 100, 2) + '%', distractors: [fixed(fp / (tp + fp) * 100, 2) + '%', fixed(tp / fp * 100, 2) + '%', fixed((tp + fp) / tp * 100, 2) + '%'] };
+      },
+      (next) => {
+        const tp = int(next, 20, 60), fn = int(next, 5, 30);
+        return { prompt: '某二分类器 TP=' + tp + '、FN=' + fn + '，召回率约为？', correct: fixed(tp / (tp + fn) * 100, 2) + '%', distractors: [fixed(fn / (tp + fn) * 100, 2) + '%', fixed(tp / fn * 100, 2) + '%', fixed((tp + fn) / tp * 100, 2) + '%'] };
+      },
+      (next) => {
+        const input = choose(next, [16, 32, 64]), kernel = choose(next, [3, 5]), stride = choose(next, [1, 2]);
+        const output = Math.floor((input - kernel) / stride) + 1;
+        return { prompt: '输入尺寸 ' + input + '、卷积核 ' + kernel + '、步长 ' + stride + '、无填充，输出尺寸是？', correct: output + '', distractors: [String(input - kernel + 1), String(Math.floor(input / stride)), String(output + kernel)] };
+      },
+      (next) => {
+        const weight = fixed(int(next, 2, 9) / 10, 1), gradient = fixed(int(next, 1, 9) / 10, 1), rate = choose(next, [0.1, 0.01]);
+        return { prompt: '权重 w=' + weight + '、梯度 g=' + gradient + '、学习率 η=' + rate + '，按 w←w-ηg 更新后 w 约为？', correct: fixed(Number(weight) - rate * Number(gradient), 2), distractors: [fixed(Number(weight) + rate * Number(gradient), 2), fixed(rate * Number(gradient), 2), fixed(Number(weight) * rate, 2)] };
+      }
     ]
   };
 
   function courseById(id) {
     return COURSES.find((course) => course.id === id) || null;
   }
-  function coursesForTerm(term, backgroundId) {
-    return COURSES.filter((course) => course.term === term && (course.background === 'common' || course.background === backgroundId));
+  function coursesForTerm(term, backgroundId, major) {
+    return COURSES.filter((course) => course.term === term
+      && (course.background === 'common' || course.background === backgroundId)
+      && (!course.major || !major || course.major === major));
   }
   function generatedQuestion(course, next, serial) {
     const topics = TOPICS[course.topic];

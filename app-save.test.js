@@ -59,7 +59,7 @@ function app(storage = memory(), withSms = false, withNpc = false) {
       assert.equal(evaluate('dialogMode'), 'tutorial');
       click('#dialogButtons', { dialogAction: 'resume' });
       if (selectCourses && evaluate('dialogMode') === 'courseSelection') {
-        const ids = evaluate('CampusGame.coursesForTerm(state.term, state.background.id).slice(0, 3).map((course) => course.id)');
+        const ids = evaluate('CampusGame.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map((course) => course.id)');
         evaluate('state = CampusGame.selectCourses(state, ' + JSON.stringify(ids) + ', { expectedRevision: state.revision }).state; renderState(); resumePhase()');
         assert.equal(evaluate('state.selectedCourses.length'), 3);
         assert.equal(evaluate('state.phase'), 'playing');
@@ -391,7 +391,7 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
   assert.match(ui.element('#dialogBody').innerHTML, /id="courseForm"/);
   assert.match(ui.element('#dialogBody').innerHTML, /course-card/);
   assert.match(ui.element('#dialogBody').innerHTML, /学分/);
-  const ids = ui.evaluate('CampusGame.coursesForTerm(state.term, state.background.id).slice(0, 3).map((course) => course.id)');
+  const ids = ui.evaluate('CampusGame.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map((course) => course.id)');
   ui.evaluate('state = CampusGame.selectCourses(state, ' + JSON.stringify(ids) + ', { expectedRevision: state.revision }).state; renderState(); dialog.close()');
   ui.click('#endTermButton');
   assert.equal(ui.evaluate('dialogMode'), 'exam');

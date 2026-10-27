@@ -2,11 +2,11 @@
   'use strict';
   const RULES = { version: 3, appVersion: '0.3.1', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
   const TERM_NAMES = ['大一上', '大一下', '大二上', '大二下', '大三上', '大三下', '大四上', '大四下'];
-  // These are deliberately simplified game backgrounds, not real degree programmes.
+  // Majors follow BJTU's public programme names; term order and course load stay game-simplified.
   const BACKGROUNDS = [
-    { id: 'information', college: '信息类学院', majors: ['软件方向', '通信方向'], bonus: '对着屏幕自学更顺手：自主学习少消耗 3 点精力。', action: 'selfStudy', energyDiscount: 3 },
-    { id: 'engineering', college: '工程类学院', majors: ['交通工程方向', '土木工程方向'], bonus: '图纸和方案上手快：项目投入额外增加 5 点学习进度。', action: 'projectWork', preparationBonus: 5 },
-    { id: 'management', college: '经管类学院', majors: ['经营管理方向', '经济分析方向'], bonus: '组局张罗是日常：社团投入额外增加 2 点社交。', action: 'clubWork', socialBonus: 2 }
+    { id: 'information', college: '信息类学院', majors: ['计算机科学与技术', '通信工程', '软件工程', '人工智能'], legacyMajors: ['软件方向', '通信方向'], bonus: '对着屏幕自学更顺手：自主学习少消耗 3 点精力。', action: 'selfStudy', energyDiscount: 3 },
+    { id: 'engineering', college: '工程类学院', majors: ['土木工程', '交通运输', '机械工程', '电气工程及其自动化'], legacyMajors: ['交通工程方向', '土木工程方向'], bonus: '图纸和方案上手快：项目投入额外增加 5 点学习进度。', action: 'projectWork', preparationBonus: 5 },
+    { id: 'management', college: '经管类学院', majors: ['经济学', '金融学', '会计学', '工商管理'], legacyMajors: ['经营管理方向', '经济分析方向'], bonus: '组局张罗是日常：社团投入额外增加 2 点社交。', action: 'clubWork', socialBonus: 2 }
   ];
   const PLACES = {
     activity: { title: '学生活动中心', kicker: '社团与活动', description: '大厅里永远有人。招新季的海报从门口贴到宿舍楼下，吉他社在角落试音，辩论队的学长拉着新生对练。想认识谁，从这里开始。' },

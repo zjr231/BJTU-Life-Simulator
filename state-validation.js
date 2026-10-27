@@ -41,10 +41,14 @@
       const initialBackground = game.createGame({ nickname: replayNickname, seed: state.rng.seed }).background;
       const backgroundReplay = game.replay({ nickname: replayNickname, seed: state.rng.seed, commands: state.history.map((entry) => entry.command) });
       const transferred = state.eventHistory.some((entry) => entry.event === 'transferResult' && entry.choice === 'check') && state.experiences.some((item) => item.type === 'transfer');
+      const legacyBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && (item.legacyMajors || []).includes(background.major));
       const validBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && item.majors.includes(background.major));
-      const backgroundOk = backgroundReplay.ok ? same(state.background, backgroundReplay.state.background) : validBackground(state.background) && (transferred ? state.background.id !== initialBackground.id : same(state.background, initialBackground));
+      const legacy = legacyBackground(state.background);
+      const backgroundOk = legacy
+        ? (transferred ? state.background.id !== initialBackground.id : state.background.id === initialBackground.id)
+        : (backgroundReplay.ok ? same(state.background, backgroundReplay.state.background) : validBackground(state.background) && (transferred ? state.background.id !== initialBackground.id : same(state.background, initialBackground)));
       if (!backgroundOk) return fail('入学背景');
-      if (backgroundReplay.ok) {
+      if (backgroundReplay.ok && !legacy) {
         if (!same(selectedCourses, backgroundReplay.state.selectedCourses)) return fail('选课记录');
         // v2 试卷可精确重放；旧版试卷由上面的题库内容比对保护，避免生成算法升级后无法读取。
         if (exam !== null && exam.generator === 'v2' && !same(exam, backgroundReplay.state.exam)) return fail('试卷内容');

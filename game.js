@@ -287,7 +287,7 @@
     if (selectedCoursesOf(state).length) return { ok: false, reason: '本学期已经完成选课', state };
     if (!Array.isArray(ids) || ids.length !== 3) return { ok: false, reason: '每学期需要选择 3 门课程', state };
     if (new Set(ids).size !== ids.length) return { ok: false, reason: '不能重复选择同一门课程', state };
-    const available = new Set(coursesForTerm(state.term, state.background.id).map((course) => course.id));
+    const available = new Set(coursesForTerm(state.term, state.background.id, state.background.major).map((course) => course.id));
     if (!ids.every((id) => available.has(id))) return { ok: false, reason: '课程不在本学期可选范围', state };
     const next = { ...state, selectedCourses: [...ids] };
     return commit(state, next, { operation: 'selectCourses', id: [...ids] }, { action: 'selectCourses', title: '完成选课' }, command.commandId);

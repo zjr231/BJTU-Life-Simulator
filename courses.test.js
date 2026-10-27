@@ -12,7 +12,7 @@ function memory() {
   return { data, getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
 }
 function selectFirst(state, count = 3) {
-  const ids = game.coursesForTerm(state.term, state.background.id).slice(0, count).map((course) => course.id);
+  const ids = game.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, count).map((course) => course.id);
   const result = game.selectCourses(state, ids);
   assert.equal(result.ok, true, result.reason);
   return result.state;
@@ -35,7 +35,7 @@ function submitAll(state, correct) {
   return result;
 }
 
-test('课程目录覆盖 8 个学期和 3 个背景，每学期至少 5 门可选', () => {
+test('课程目录覆盖 8 个学期、3 个背景和 12 个专业，每学期每个专业至少 5 门可选', () => {
   assert.equal(new Set(game.COURSES.map((course) => course.id)).size, game.COURSES.length);
   for (const course of game.COURSES) {
     assert.ok(Object.hasOwn(game.SUBJECTS, course.subject), course.id);
@@ -47,21 +47,31 @@ test('课程目录覆盖 8 个学期和 3 个背景，每学期至少 5 门可�
   assert.equal(game.courseById('ethics').subject, 'humanities');
   assert.equal(game.courseById('pe1').subject, 'sports');
   assert.equal(game.courseById('law').subject, 'law');
+  assert.equal(game.courseById('soilMechanics').subject, 'civil');
+  assert.equal(game.courseById('powerSystemAnalysis').subject, 'electrical');
+  assert.equal(game.courseById('communicationPrinciples').subject, 'communication');
   assert.ok(game.COURSES.filter((course) => course.subject === 'general').length <= 4);
+  assert.equal(game.BACKGROUNDS.reduce((sum, background) => sum + background.majors.length, 0), 12);
   for (let term = 1; term <= 8; term++) {
     for (const background of game.BACKGROUNDS) {
-      const available = game.coursesForTerm(term, background.id);
-      assert.ok(available.length >= 5, term + ':' + background.id);
-      assert.ok(available.every((course) => course.term === term && (course.background === 'common' || course.background === background.id)));
+      for (const major of background.majors) {
+        const available = game.coursesForTerm(term, background.id, major);
+        assert.ok(available.length >= 5, term + ':' + background.id + ':' + major);
+        assert.ok(available.every((course) => course.term === term
+          && (course.background === 'common' || course.background === background.id)
+          && (!course.major || course.major === major)), term + ':' + major);
+      }
     }
   }
 });
 
-test('十个学科题库充足，定量课程绑定算法生成器', () => {
+test('二十一个学科题库充足，定量课程绑定算法生成器', () => {
+  assert.equal(Object.keys(coursesApi.SUBJECTS).length, 21);
+  assert.equal(Object.keys(coursesApi.QUESTIONS).length, 21);
   const ids = new Set();
   for (const [subject, questions] of Object.entries(coursesApi.QUESTIONS)) {
     assert.ok(Object.hasOwn(game.SUBJECTS, subject));
-    assert.ok(questions.length >= 5, subject);
+    assert.ok(questions.length >= 6, subject);
     for (const question of questions) {
       assert.equal(ids.has(question.id), false, question.id);
       ids.add(question.id);
@@ -80,7 +90,7 @@ test('十个学科题库充足，定量课程绑定算法生成器', () => {
 
 test('选课必须 3 门、不可重复且只能选本学期课程', () => {
   const initial = game.createGame({ seed: 'course-select' });
-  const available = game.coursesForTerm(initial.term, initial.background.id).map((course) => course.id);
+  const available = game.coursesForTerm(initial.term, initial.background.id, initial.background.major).map((course) => course.id);
   assert.equal(game.selectCourses(initial, available.slice(0, 2)).ok, false);
   assert.equal(game.selectCourses(initial, [available[0], available[0], available[1]]).ok, false);
   const unavailable = game.COURSES.find((course) => !available.includes(course.id)).id;
@@ -91,6 +101,19 @@ test('选课必须 3 门、不可重复且只能选本学期课程', () => {
   assert.equal(selected.state.history.at(-1).command.operation, 'selectCourses');
   assert.equal(game.validateState(selected.state).ok, true);
   assert.equal(game.selectCourses(selected.state, available.slice(0, 3)).ok, false);
+});
+
+test('专业课按专业隔离，跨专业课程不可选', () => {
+  const base = game.createGame({ seed: 'major-filter' });
+  const computer = { ...base, term: 5, background: { id: 'information', college: '信息类学院', major: '计算机科学与技术' } };
+  const computerCourses = game.coursesForTerm(5, 'information', '计算机科学与技术');
+  const communicationCourses = game.coursesForTerm(5, 'information', '通信工程');
+  assert.ok(computerCourses.some((course) => course.id === 'computerArchitecture'));
+  assert.ok(!computerCourses.some((course) => course.id === 'communicationPrinciples'));
+  assert.ok(communicationCourses.some((course) => course.id === 'communicationPrinciples'));
+  assert.ok(!communicationCourses.some((course) => course.id === 'computerArchitecture'));
+  const ids = [...computerCourses.slice(0, 2).map((course) => course.id), 'communicationPrinciples'];
+  assert.equal(game.selectCourses(computer, ids).ok, false);
 });
 
 test('开考生成 5 道 20 分题，覆盖所选课程，且阶段锁定', () => {
@@ -210,6 +233,9 @@ test('缺少选课与考试字段的旧存档仍按旧成绩公式结算', () =>
   delete old.selectedCourses;
   delete old.exam;
   assert.equal(game.validateState(old).ok, true);
+  const legacyMajor = game.BACKGROUNDS.find((item) => item.id === old.background.id).legacyMajors[0];
+  const legacyBackground = { ...old, background: { ...old.background, major: legacyMajor } };
+  assert.equal(game.validateState(legacyBackground).ok, true, game.validateState(legacyBackground).reason);
   const storage = memory();
   const service = save.createSaveService(storage);
   assert.equal(service.save(old).ok, true);
