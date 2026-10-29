@@ -1,0 +1,310 @@
+{
+  "date": "2026-10-23",
+  "appVersion": "0.3.1",
+  "priorityWindowInteractions": [
+    {
+      "term": 3,
+      "missing": "transfer",
+      "events": [
+        [
+          "singer1",
+          "signup"
+        ],
+        [
+          "singer2",
+          "advance"
+        ],
+        [
+          "singer3",
+          "perform"
+        ],
+        [
+          "ticket1",
+          "later"
+        ]
+      ],
+      "stateValidated": true,
+      "replayMatched": true,
+      "commands": [
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:1:action:study"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:2:action:study"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "later",
+          "eventInstanceId": "daily:military1:1",
+          "commandId": "rule:3:event:later"
+        },
+        {
+          "operation": "endTerm",
+          "commandId": "rule:4:endTerm"
+        },
+        {
+          "operation": "continueGame",
+          "commandId": "rule:5:continueGame"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:6:action:study"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:7:action:study"
+        },
+        {
+          "operation": "endTerm",
+          "commandId": "rule:8:endTerm"
+        },
+        {
+          "operation": "continueGame",
+          "commandId": "rule:9:continueGame"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:10:action:study"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:11:action:study"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "signup",
+          "eventInstanceId": "daily:singer1:3",
+          "commandId": "rule:12:event:signup"
+        },
+        {
+          "operation": "executeAction",
+          "id": "rest",
+          "commandId": "rule:13:action:rest"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "advance",
+          "eventInstanceId": "daily:singer2:3",
+          "commandId": "rule:14:event:advance"
+        },
+        {
+          "operation": "executeAction",
+          "id": "rest",
+          "commandId": "rule:15:action:rest"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "perform",
+          "eventInstanceId": "daily:singer3:3",
+          "commandId": "rule:16:event:perform"
+        },
+        {
+          "operation": "executeAction",
+          "id": "rest",
+          "commandId": "rule:17:action:rest"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "later",
+          "eventInstanceId": "daily:ticket1:3",
+          "commandId": "rule:18:event:later"
+        },
+        {
+          "operation": "executeAction",
+          "id": "rest",
+          "commandId": "rule:19:action:rest"
+        }
+      ]
+    },
+    {
+      "term": 5,
+      "missing": "contest1",
+      "events": [
+        [
+          "singer1",
+          "signup"
+        ],
+        [
+          "singer2",
+          "advance"
+        ],
+        [
+          "singer3",
+          "perform"
+        ],
+        [
+          "ticket1",
+          "later"
+        ]
+      ],
+      "stateValidated": true,
+      "replayMatched": true,
+      "commands": [
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:1:action:study"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:2:action:study"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "later",
+          "eventInstanceId": "daily:military1:1",
+          "commandId": "rule:3:event:later"
+        },
+        {
+          "operation": "endTerm",
+          "commandId": "rule:4:endTerm"
+        },
+        {
+          "operation": "continueGame",
+          "commandId": "rule:5:continueGame"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:6:action:study"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:7:action:study"
+        },
+        {
+          "operation": "endTerm",
+          "commandId": "rule:8:endTerm"
+        },
+        {
+          "operation": "continueGame",
+          "commandId": "rule:9:continueGame"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:10:action:study"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:11:action:study"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "later",
+          "eventInstanceId": "daily:singer1:3",
+          "commandId": "rule:12:event:later"
+        },
+        {
+          "operation": "endTerm",
+          "commandId": "rule:13:endTerm"
+        },
+        {
+          "operation": "continueGame",
+          "commandId": "rule:14:continueGame"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:15:action:study"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:16:action:study"
+        },
+        {
+          "operation": "endTerm",
+          "commandId": "rule:17:endTerm"
+        },
+        {
+          "operation": "continueGame",
+          "commandId": "rule:18:continueGame"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:19:action:study"
+        },
+        {
+          "operation": "executeAction",
+          "id": "study",
+          "commandId": "rule:20:action:study"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "signup",
+          "eventInstanceId": "daily:singer1:5",
+          "commandId": "rule:21:event:signup"
+        },
+        {
+          "operation": "executeAction",
+          "id": "rest",
+          "commandId": "rule:22:action:rest"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "advance",
+          "eventInstanceId": "daily:singer2:5",
+          "commandId": "rule:23:event:advance"
+        },
+        {
+          "operation": "executeAction",
+          "id": "rest",
+          "commandId": "rule:24:action:rest"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "perform",
+          "eventInstanceId": "daily:singer3:5",
+          "commandId": "rule:25:event:perform"
+        },
+        {
+          "operation": "executeAction",
+          "id": "rest",
+          "commandId": "rule:26:action:rest"
+        },
+        {
+          "operation": "submitEventChoice",
+          "id": "later",
+          "eventInstanceId": "daily:ticket1:5",
+          "commandId": "rule:27:event:later"
+        },
+        {
+          "operation": "executeAction",
+          "id": "rest",
+          "commandId": "rule:28:action:rest"
+        }
+      ]
+    }
+  ],
+  "transferChangesBackground": false,
+  "retakeChangesPreviousCourses": false,
+  "elapsed4Stage": "学期初",
+  "randomSample": {
+    "trials": 10000,
+    "hits": 3445,
+    "hitRate": 0.3445,
+    "frequencies": {
+      "campusDiscussion": 567,
+      "cat": 582,
+      "seat": 561,
+      "card": 556,
+      "canteen": 614,
+      "wall": 565
+    },
+    "scene": "first selfStudy, fixed seed list audit-stat-0..9999"
+  },
+  "scope": "Production commands and replay used for scenario observations. No browser UI or production code changes."
+}
