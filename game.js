@@ -3,7 +3,7 @@
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
   const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
-  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT } = config;
+  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT } = config;
   const { COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
@@ -69,11 +69,40 @@
     if (effect.minFitness && state.fitness < effect.minFitness) return { ok: false, reason: '体能需要达到 ' + effect.minFitness };
     return { ok: true, reason: '' };
   }
-  function availability(state, id) {
+  function getActionInvestment(state, id) {
+    if (!own(ACTION_INVESTMENTS, id)) return null;
+    const original = ACTION_INVESTMENTS[id];
+    const profile = { ...original, rewards: { ...original.rewards }, tiers: original.tiers.map(tier => ({ ...tier })) };
+    const action = getAction(state, id);
+    const discount = original.resource === 'energy' ? ACTIONS[id].energy - action.energy : 0;
+    if (discount) {
+      for (const key of ['min', 'max', 'default', 'h']) profile[key] = Math.max(1, profile[key] - discount);
+      profile.timeEffortOffset = discount;
+      for (const tier of profile.tiers) tier.amount = Math.max(1, tier.amount - discount);
+    }
+    for (const key of Object.keys(profile.rewards)) profile.rewards[key] += 3 * ((action[key] || 0) - (ACTIONS[id][key] || 0));
+    return profile;
+  }
+  function previewActionInvestment(state, id, requestedAmount) {
+    const profile = getActionInvestment(state, id);
+    if (!profile) return null;
+    const amount = requestedAmount === undefined ? profile.default : requestedAmount;
+    const check = investmentCheck(profile, amount);
+    if (!check.ok) return check;
+    const curve = investmentCurve(profile, amount);
+    const effect = investmentEffect(getAction(state, id), profile, amount, curve.mean, curve.q);
+    return { ok: true, amount, effect, level: investmentLevel(profile, amount) };
+  }
+  function availability(state, id, requestedAmount) {
     if (!own(ACTIONS, id)) return { ok: false, reason: '未知行动' };
+    if (activeMilitary(state)) return { ok: false, reason: '请先完成军训汇演，再安排其他行动' };
     if (state.phase === 'eventPending') return { ok: false, reason: '请先处理当前事件' };
     if (state.phase !== 'playing') return { ok: false, reason: '现在这个阶段还不能行动' };
-    const action = getAction(state, id);
+    const profile = getActionInvestment(state, id);
+    if (!profile && requestedAmount !== undefined) return { ok: false, reason: '这个行动不需要设置投入' };
+    const preview = profile && previewActionInvestment(state, id, requestedAmount);
+    if (preview && !preview.ok) return preview;
+    const action = preview ? preview.effect : getAction(state, id);
     if (action.minTerm && state.term < action.minTerm) return { ok: false, reason: '第 ' + action.minTerm + ' 学期开始开放' };
     if (action.maxTerm && state.term > action.maxTerm) return { ok: false, reason: '这一轮的申请时间已经过了' };
     if (action.autumnOnly && state.term % 2 === 0) return { ok: false, reason: '社团招新在秋季学期开放' };
@@ -99,12 +128,27 @@
     return next;
   }
   function instanceFor(state, id) { return { id, term: state.term, instanceId: (EVENTS[id].chain || 'daily') + ':' + id + ':' + state.term }; }
+  function activeMilitary(state) {
+    return ['playing', 'eventPending'].includes(state.phase)
+      && state.eventHistory.some(entry => entry.term === state.term && entry.event === 'military1' && ['join', 'tug', 'choir'].includes(entry.choice))
+      && !state.eventHistory.some(entry => entry.term === state.term && entry.event === 'military2');
+  }
+  function resumeRequiredEvents(state) {
+    return activeMilitary(state) ? attachEvents(state, 'restore') : state;
+  }
   function getTermStage(state) {
     const elapsed = RULES.time - state.time;
     return elapsed <= 4 ? '学期初' : elapsed < 9 ? '学期中' : '学期末';
   }
   function attachEvents(state, triggerAction) {
     if (!['playing', 'eventPending'].includes(state.phase)) return state;
+    if (activeMilitary(state)) {
+      const followup = instanceFor(state, 'military2');
+      const waiting = [...(state.pendingEvent ? [state.pendingEvent] : []), ...state.eventQueue]
+        .filter(item => !['military1', 'military2'].includes(item.id) && !state.eventFlags[item.instanceId]);
+      return { ...state, phase: 'eventPending', pendingEvent: followup,
+        eventQueue: waiting.filter((item, index) => waiting.findIndex(other => other.instanceId === item.instanceId) === index) };
+    }
     // Old saves can contain several optional campus events queued by one action.
     // Keep the visible event and required chain/condition events; reschedule the
     // not-yet-shown optional events on a later action in their valid time window.
@@ -173,28 +217,89 @@
   function commit(state, next, command, entry, commandId) {
     const revision = state.revision + 1;
     const log = { ...entry, term: state.term, revision, commandId, command, before: stateBrief(state), after: stateBrief(next) };
-    return { ok: true, state: { ...next, revision, processedCommands: [...state.processedCommands, commandId], history: [...state.history, log] }, changes: entry.changes, summary: next.summary, entry: log };
+    return { ok: true, state: { ...next, appVersion: RULES.appVersion, revision, processedCommands: [...state.processedCommands, commandId], history: [...state.history, log] }, changes: entry.changes, summary: next.summary, entry: log };
   }
   function executeAction(state, id, options = {}) {
     const command = commandCheck(state, options, 'action:' + id);
     if (!command.ok) return command;
-    const check = availability(state, id);
+    const check = availability(state, id, options.investment);
     if (!check.ok) return { ...check, state };
-    const action = getAction(state, id);
+    const profile = getActionInvestment(state, id);
+    let action = getAction(state, id);
+    let rng = state.rng;
+    let investment;
+    if (profile) {
+      const preview = previewActionInvestment(state, id, options.investment);
+      const curve = investmentCurve(profile, preview.amount);
+      const drawn = random.draw(state.rng);
+      rng = drawn.rng;
+      const factor = curve.factor(drawn.number);
+      action = investmentEffect(action, profile, preview.amount, factor, curve.q);
+      investment = describeInvestment(profile, preview, factor, curve.mean);
+    }
     const changes = previewChanges(state, action);
-    let next = { ...applyChanges(state, changes), counts: { ...state.counts, [id]: (state.counts[id] || 0) + 1 } };
+    let next = { ...applyChanges(state, changes), rng, counts: { ...state.counts, [id]: (state.counts[id] || 0) + 1 } };
     if (action.kind === 'work') next.chains = { ...state.chains, [action.chain]: { ...state.chains[action.chain], progress: state.chains[action.chain].progress + 1 } };
     next = attachEvents(next, id);
-    return commit(state, next, { operation: 'executeAction', id }, { action: id, title: action.title, changes }, command.commandId);
+    return commit(state, next, { operation: 'executeAction', id, ...(investment ? { investment: investment.amount } : {}) }, { action: id, title: action.title, changes, ...(investment ? { investment } : {}) }, command.commandId);
   }
-  function eventAvailability(state, choiceId, instanceId) {
+  function getEventInvestment(state, choiceId) {
+    return state.pendingEvent ? EVENT_INVESTMENTS[state.pendingEvent.id + ':' + choiceId] || null : null;
+  }
+  function investmentCheck(profile, amount) {
+    return Number.isSafeInteger(amount) && profile.tiers.some(tier => tier.amount === amount)
+      ? { ok: true } : { ok: false, reason: '请选择一个完整的投入档位' };
+  }
+  function investmentCurve(profile, amount) {
+    const q = amount / (amount + profile.h);
+    const a = 1 + 2 * q;
+    const mean = a / (a + 1);
+    return { q, mean, factor: probability => (1 - profile.s) * mean + profile.s * probability ** (1 / a) };
+  }
+  function investmentLevel(profile, amount) {
+    return profile.tiers.find(tier => tier.amount === amount).id;
+  }
+  function investmentEffect(choice, profile, amount, factor, q) {
+    const effect = { ...choice, [profile.resource]: amount };
+    effect.time = profile.tiers.find(tier => tier.amount === amount).time;
+    for (const [key, ceiling] of Object.entries(profile.rewards)) effect[key] = Math.round(ceiling * q * factor);
+    return effect;
+  }
+  // Read-only preview: slider movement and reopening a saved event never draw RNG.
+  function previewEventInvestment(state, choiceId, requestedAmount) {
+    const profile = getEventInvestment(state, choiceId);
+    if (!profile) return null;
+    const amount = requestedAmount === undefined ? profile.default : requestedAmount;
+    const check = investmentCheck(profile, amount);
+    if (!check.ok) return check;
+    const choice = EVENTS[state.pendingEvent.id].choices.find(item => item.id === choiceId);
+    const curve = investmentCurve(profile, amount);
+    const effect = investmentEffect(choice, profile, amount, curve.mean, curve.q);
+    return { ok: true, amount, effect, average: previewChanges(state, effect),
+      low: previewChanges(state, investmentEffect(choice, profile, amount, curve.factor(0.1), curve.q)),
+      high: previewChanges(state, investmentEffect(choice, profile, amount, curve.factor(0.9), curve.q)),
+      level: investmentLevel(profile, amount) };
+  }
+  function describeInvestment(profile, preview, factor, mean) {
+    const ratio = factor / mean;
+    const outcome = ratio < 0.55 ? 'setback' : preview.level === 'light'
+      ? (ratio >= 1.2 ? 'surprise' : 'limited') : ratio >= 1.2 ? 'good' : 'steady';
+    return { amount: preview.amount, resource: profile.resource, tier: preview.level, level: preview.level, outcome,
+      description: profile.plans[{ light: 0, steady: 1, deep: 2 }[preview.level]] + profile.outcomes[outcome] };
+  }
+  function eventAvailability(state, choiceId, instanceId, requestedAmount) {
     if (state.phase !== 'eventPending' || !state.pendingEvent) return { ok: false, reason: '当前没有待处理事件' };
+    if (activeMilitary(state) && state.pendingEvent.id !== 'military2') return { ok: false, reason: '请先完成军训汇演' };
     if (instanceId !== undefined && instanceId !== state.pendingEvent.instanceId) return { ok: false, reason: '事件已更新，请重新选择' };
     const event = EVENTS[state.pendingEvent.id];
     const choice = event && event.choices.find((item) => item.id === choiceId);
     if (!choice) return { ok: false, reason: '未知事件选项' };
     if (choice.chainEffect === 'postpone' && state.term === 8) return { ok: false, reason: '最后一个学期了，把经历确认了吧' };
-    return resourceCheck(state, choice);
+    const profile = getEventInvestment(state, choiceId);
+    if (!profile && requestedAmount !== undefined) return { ok: false, reason: '这个选项不需要设置投入' };
+    const preview = profile && previewEventInvestment(state, choiceId, requestedAmount);
+    if (preview && !preview.ok) return preview;
+    return resourceCheck(state, preview ? preview.effect : choice);
   }
   function resolveOutcome(state, choice) {
     if (!choice.outcomeBy) return null;
@@ -204,21 +309,33 @@
   function submitEventChoice(state, choiceId, options = {}) {
     const command = commandCheck(state, options, 'event:' + choiceId);
     if (!command.ok) return command;
-    const check = eventAvailability(state, choiceId, options.eventInstanceId);
+    const check = eventAvailability(state, choiceId, options.eventInstanceId, options.investment);
     if (!check.ok) return { ...check, state };
     const pending = state.pendingEvent;
     const event = EVENTS[pending.id];
     const choice = event.choices.find((item) => item.id === choiceId);
-    // 条件结果（outcomeBy）在提交时按当前数值判定，效果叠加在选项效果之上。
+    const profile = getEventInvestment(state, choiceId);
+    let effect = choice;
+    let rng = state.rng;
+    let investment;
+    if (profile) {
+      const preview = previewEventInvestment(state, choiceId, options.investment);
+      const curve = investmentCurve(profile, preview.amount);
+      const drawn = random.draw(state.rng);
+      rng = drawn.rng;
+      const factor = curve.factor(drawn.number);
+      effect = investmentEffect(choice, profile, preview.amount, factor, curve.q);
+      investment = describeInvestment(profile, preview, factor, curve.mean);
+    }
     const outcome = resolveOutcome(state, choice) || {};
-    // 结果效果与选项效果叠加：数值类相加，标题、经历、标记等以结果为准。
-    const effect = { ...choice, ...outcome };
+    const baseEffect = effect;
+    effect = { ...baseEffect, ...outcome };
     for (const key of ['time', 'energy', 'recovery', 'money', 'income', 'preparation', 'social', 'fitness', 'mood', 'furtherStudy', 'jobPreparation']) {
-      effect[key] = (choice[key] || 0) + (outcome[key] || 0);
+      effect[key] = (baseEffect[key] || 0) + (outcome[key] || 0);
     }
     const changes = previewChanges(state, effect);
-    const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, outcome: outcome.title || null, changes };
-    let next = { ...applyChanges(state, changes), pendingEvent: null, phase: 'playing', eventFlags: { ...state.eventFlags, [pending.instanceId]: true }, eventHistory: [...state.eventHistory, entry] };
+    const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, outcome: outcome.title || null, changes, ...(investment ? { investment } : {}) };
+    let next = { ...applyChanges(state, changes), rng, pendingEvent: null, phase: 'playing', eventFlags: { ...state.eventFlags, [pending.instanceId]: true }, eventHistory: [...state.eventHistory, entry] };
     if (event.chain) {
       const chain = { ...state.chains[event.chain] };
       if (choice.chainEffect === 'accept') Object.assign(chain, { status: 'active', startedTerm: state.term, deadline: Math.min(8, state.term + 1), progress: 0, reviewAfter: state.term });
@@ -247,7 +364,7 @@
       next = { ...next, rng: majorRoll.rng, background: { id: picked.id, college: picked.college, major: picked.majors[Math.min(picked.majors.length - 1, Math.floor(majorRoll.number * picked.majors.length))] } };
     }
     next = attachEvents(next, 'eventChoice');
-    return commit(state, next, { operation: 'submitEventChoice', id: choiceId, eventInstanceId: pending.instanceId }, entry, command.commandId);
+    return commit(state, next, { operation: 'submitEventChoice', id: choiceId, eventInstanceId: pending.instanceId, ...(investment ? { investment: investment.amount } : {}) }, entry, command.commandId);
   }
   function settlementChains(state) {
     const chains = clone(state.chains);
@@ -273,6 +390,7 @@
   function endTerm(state, options = {}) {
     const command = commandCheck(state, options, 'endTerm');
     if (!command.ok) return command;
+    if (activeMilitary(state)) return { ok: false, reason: '请先完成整个军训流程', state };
     if (state.phase === 'eventPending') return { ok: false, reason: '请先处理当前事件', state };
     if (state.phase !== 'playing') return { ok: false, reason: '本学期已经结算或流程已经结束', state };
     if (selectedCoursesOf(state).length) return { ok: false, reason: '请先参加本学期期末考试', state };
@@ -295,6 +413,7 @@
   function beginExam(state, options = {}) {
     const command = commandCheck(state, options, 'beginExam');
     if (!command.ok) return command;
+    if (activeMilitary(state)) return { ok: false, reason: '请先完成整个军训流程', state };
     if (state.phase !== 'playing') return { ok: false, reason: '现在不能开始考试', state };
     if (state.pendingEvent) return { ok: false, reason: '请先处理当前事件', state };
     if (!selectedCoursesOf(state).length) return { ok: false, reason: '请先完成本学期选课', state };
@@ -372,7 +491,7 @@
   function replay({ nickname, seed, commands }) {
     let state = createGame({ nickname, seed });
     for (const [index, command] of commands.entries()) {
-      const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId };
+      const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment };
       const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args) };
       if (!own(handlers, command.operation)) return { ok: false, reason: '第 ' + (index + 1) + ' 步操作未知', state };
       const result = handlers[command.operation]();
@@ -381,7 +500,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, CHAIN_NAMES, AI_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, endTerm, continueGame, evaluateEndings, chooseEnding, validateState, stateBrief, replay, getTermStage };
+  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, CHAIN_NAMES, AI_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, endTerm, continueGame, evaluateEndings, chooseEnding, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

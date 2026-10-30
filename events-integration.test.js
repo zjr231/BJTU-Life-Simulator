@@ -26,8 +26,8 @@ function resolve(state, choices = {}) {
   }
   return state;
 }
-function act(state, id, choices = {}) {
-  const result = game.executeAction(resolve(state, choices), id);
+function act(state, id, choices = {}, investment) {
+  const result = game.executeAction(resolve(state, choices), id, { investment });
   assert.equal(result.ok, true, result.reason);
   return resolve(result.state, choices);
 }
@@ -40,10 +40,10 @@ function nextTerm(state, choices = {}) {
   return resolve(continued.state, choices);
 }
 
-test('军训和歌手链在不同行动间推进，存档不重复经历或奖励', () => {
-  const choices = { military1: 'join', military2: 'march', singer1: 'signup', singer2: 'advance', singer3: 'perform' };
+test('军训连续完成且歌手链在不同行动间推进，存档不重复经历或奖励', () => {
+  const choices = { military1: 'join', military2: 'perform', singer1: 'signup', singer2: 'advance', singer3: 'perform' };
   let state = game.createGame({ seed: 'new-events' });
-  for (const id of ['walk', 'walk', 'walk', 'chat', 'chat', 'rest']) state = act(state, id, choices);
+  for (const id of ['walk', 'walk', 'walk', 'chat', 'chat']) state = act(state, id, choices);
   assert.deepEqual(state.experiences.map(item => item.type), ['military', 'singer']);
   for (const id of Object.keys(choices)) assert.equal(state.eventHistory.filter(item => item.event === id).length, 1, id);
   assert.equal(game.submitEventChoice(roundtrip(state), 'perform').ok, false);
@@ -82,30 +82,26 @@ test('固定通知与竞赛在规定学期出现，八学期后可正常毕业',
   for (let term = 1; term <= 8; term++) {
     assert.equal(state.term, term);
     if (term === 4) {
-      // 第 4 学期转专业报名窗仍在，只安排一次学习触发补测；勤工助学攒钱供第 6 学期看演出，
-      // 并把心情休整到 44 以上——否则第 5 学期室友的关心会挤占体测，体测再把竞赛招募顶出报名窗口。
-      state = study(state, choices);
-      state = act(state, 'work', choices);
-      state = act(state, 'work', choices);
-      state = act(state, 'work', choices);
-      state = act(state, 'rest', choices);
-      state = act(state, 'rest', choices);
-      state = act(state, 'rest', choices);
+      // 新投入按实际成本安排：辅导保证本学期达标，勤工攒观演预算，散步维持下一学期心情。
+      for (let i = 0; i < 3; i++) state = act(state, 'work', choices);
+      state = act(state, 'tutoring', choices, 240);
+      for (let i = 0; i < 2; i++) state = act(state, 'walk', choices);
     } else if (term === 5) {
       // 体测优先于竞赛招募；再打一次工让结余撑过学期结算。
       state = study(study(study(state, choices), choices), choices);
       state = act(state, 'work', choices);
     } else if (term === 6) {
-      // 决赛占用两天时间，若先学习会挤掉宣讲会窗口：先休息依次处理决赛、补测和运动会，再看演出赶上宣讲会。
+      // 决赛占用两点时间：先休息处理答辩与补测，再轻量勤工补足票钱，看演出赶上宣讲会窗口。
       state = act(state, 'rest', choices);
       state = act(state, 'rest', choices);
-      state = act(state, 'rest', choices);
+      state = act(state, 'work', choices, 8);
       state = act(state, 'show', choices);
     } else {
       state = study(study(state, choices), choices);
     }
     if (term === 3) for (let i = 0; i < 2; i++) state = act(state, 'rest', choices);
     if (term === 8) for (let i = 0; i < 5; i++) state = act(state, 'rest', choices);
+    while (state.preparation < 33 && game.availability(state, 'study').ok) state = study(state, choices);
     state = nextTerm(state, choices);
   }
   assert.equal(state.phase, 'endingChoice');
@@ -144,7 +140,7 @@ test('25 种随机事件匹配场景和季节，每学期只抽取一次', () =>
           const calls = state.rng.calls;
           const first = game.executeAction(state, action);
           assert.equal(first.ok, true, action);
-          assert.equal(first.state.rng.calls, calls + 1);
+          assert.equal(first.state.rng.calls, calls + (action === "show" ? 1 : 2));
           assert.deepEqual(first.state.eventQueue, []);
           if (first.state.pendingEvent) {
             const id = first.state.pendingEvent.id;
@@ -156,7 +152,7 @@ test('25 种随机事件匹配场景和季节，每学期只抽取一次', () =>
           }
           state = resolve(first.state);
           const followup = [action, 'walk', 'chat'].find(id => game.availability(state, id).ok);
-          if (followup) assert.equal(game.executeAction(state, followup).state.rng.calls, calls + 1);
+          if (followup) assert.equal(game.executeAction(state, followup).state.rng.calls, first.state.rng.calls + (followup === "show" ? 0 : 1));
         }
       }
     }
@@ -172,14 +168,14 @@ test('25 种随机事件匹配场景和季节，每学期只抽取一次', () =>
       } else {
         // 项目申请要求本学期准备度 40，准备度学期末清零：第 2 学期先学习再申请，第 3 学期开学投入。
         state = nextTerm(study(study(state)));
-        state = study(study(state));
+        while (state.preparation < 40) state = study(state);
         state = act(state, 'applyProject', { projectOffer: 'accept' });
         state = nextTerm(state);
       }
       const calls = state.rng.calls;
       const first = game.executeAction(state, action);
       assert.equal(first.ok, true, action);
-      assert.equal(first.state.rng.calls, calls + 1);
+      assert.equal(first.state.rng.calls, calls + 2);
       if (first.state.pendingEvent) {
         assert.ok(allowed.includes(first.state.pendingEvent.id), action + ': ' + first.state.pendingEvent.id);
         observed.add(first.state.pendingEvent.id);
@@ -197,11 +193,12 @@ test('开局课程学习不会一次排入军训、歌手和订票四连弹', ()
   assert.equal(second.pendingEvent.id, 'military1');
   assert.deepEqual(second.eventQueue, []);
   const joined = game.submitEventChoice(roundtrip(second), 'join').state;
-  assert.equal(joined.pendingEvent, null);
+  assert.equal(joined.pendingEvent.id, 'military2');
   assert.deepEqual(joined.eventQueue, []);
-  const nextAction = game.executeAction(joined, 'rest').state;
-  assert.equal(nextAction.pendingEvent.id, 'military2');
-  assert.deepEqual(nextAction.eventQueue, []);
+  assert.equal(game.executeAction(joined, 'rest').ok, false);
+  const completed = game.submitEventChoice(joined, 'perform').state;
+  assert.equal(completed.pendingEvent, null);
+  assert.deepEqual(completed.eventQueue, []);
 });
 
 test('秋季学期进入末段之前不出现订票，春季不出现寒假订票', () => {
