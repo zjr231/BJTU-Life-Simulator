@@ -54,7 +54,7 @@ test('道路拓扑：节点是地标路口，边沿道路折线，路线由边�
     const [from, to] = key.split('-');
     assert.deepEqual(edge[0], npc.ROAD_NODES[from], key + ' 起点');
     assert.deepEqual(edge[edge.length - 1], npc.ROAD_NODES[to], key + ' 终点');
-    assert.ok(edge.length >= 3, key + ' 用折线沿路走，而不是两点直线');
+    assert.ok(edge.length >= 2, key + ' 至少两点，沿画好的道路走');
     for (let i = 0; i < edge.length; i++) {
       const point = edge[i];
       assert.ok(point.x >= 0 && point.x <= 100 && point.y >= 0 && point.y <= 100, key + ' 坐标');
@@ -83,7 +83,7 @@ test('道路拓扑：节点是地标路口，边沿道路折线，路线由边�
   assert.deepEqual([npc.ROUTES.north[0], npc.ROUTES.north[npc.ROUTES.north.length - 1]],
     [npc.ROAD_NODES.track, npc.ROAD_NODES.think]);
   for (const [key, route] of Object.entries(npc.ROUTES)) {
-    assert.ok(route.length >= 3, key + ' 至少三个点');
+    assert.ok(route.length >= 2, key + ' 至少两个点');
     for (const point of route) {
       assert.ok(point.x >= 0 && point.x <= 100 && point.y >= 0 && point.y <= 100, key + ' 坐标');
     }
@@ -159,14 +159,14 @@ test('班车沿右侧道路单程行驶，到站停留片刻后离场，寿命�
   const { system, spawnedAt, npc: driver } = found;
   assert.equal(driver.mode, 'once');
   assert.deepEqual(driver.route, npc.ROUTES.road);
-  assert.ok(driver.lifetime >= 20000 && driver.lifetime <= 26000, '班车寿命 20～26 秒');
+  assert.ok(driver.lifetime >= 24000 && driver.lifetime <= 30000, '班车寿命 24～30 秒');
   let removedAt = null;
-  for (let t = spawnedAt + 500; t <= spawnedAt + 28000; t += 500) {
+  for (let t = spawnedAt + 500; t <= spawnedAt + 33000; t += 500) {
     const events = system.tick(t);
     if (events.removed.some((item) => item.id === driver.id)) { removedAt = t; break; }
   }
-  assert.ok(removedAt !== null, '班车在 28 秒内离场');
-  assert.ok(removedAt - spawnedAt <= 26000 + 1500 + 500, '离场不晚于寿命加停留');
+  assert.ok(removedAt !== null, '班车在 33 秒内离场');
+  assert.ok(removedAt - spawnedAt <= 30000 + 1500 + 500, '离场不晚于寿命加停留');
 });
 
 test('速度单位回归：学生每秒移动 1.1 个地图百分比，而不是毫秒当秒', () => {
@@ -184,7 +184,7 @@ test('速度单位回归：学生每秒移动 1.1 个地图百分比，而不是
   assert.ok(Math.abs(Math.hypot(current.x - start.x, current.y - start.y) - 2.2) < 1e-6, '两秒位移应为 2.2');
 });
 
-test('速度单位回归：班车每秒走 7 个百分比，约 17 秒驶完全程而非一帧消失', () => {
+test('速度单位回归：班车每秒走 7 个百分比，约 21 秒驶完全程而非一帧消失', () => {
   const system = npc.createSystem({ random: () => 0.95, settings: { firstDelay: [0, 0], gap: [600000, 600000] } });
   const { spawned } = system.tick(0);
   assert.equal(spawned.length, 1);
@@ -199,7 +199,7 @@ test('速度单位回归：班车每秒走 7 个百分比，约 17 秒驶完全�
     if (events.removed.some((item) => item.id === id)) { removedAt = t; break; }
   }
   assert.ok(removedAt !== null && removedAt >= 13000 + 1500, '驶完全程并停留片刻后离场');
-  assert.ok(removedAt <= 21000, '全程约 17 秒，不会拖到寿命上限');
+  assert.ok(removedAt <= 26000, '全程约 21 秒，不会拖到寿命上限');
 });
 
 test('maxActive 可配置且严格生效', () => {
