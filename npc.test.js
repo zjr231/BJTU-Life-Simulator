@@ -159,14 +159,14 @@ test('班车沿右侧道路单程行驶，到站停留片刻后离场，寿命�
   const { system, spawnedAt, npc: driver } = found;
   assert.equal(driver.mode, 'once');
   assert.deepEqual(driver.route, npc.ROUTES.road);
-  assert.ok(driver.lifetime >= 26000 && driver.lifetime <= 32000, '班车寿命 26～32 秒');
+  assert.ok(driver.lifetime >= 20000 && driver.lifetime <= 26000, '班车寿命 20～26 秒');
   let removedAt = null;
-  for (let t = spawnedAt + 500; t <= spawnedAt + 34000; t += 500) {
+  for (let t = spawnedAt + 500; t <= spawnedAt + 28000; t += 500) {
     const events = system.tick(t);
     if (events.removed.some((item) => item.id === driver.id)) { removedAt = t; break; }
   }
-  assert.ok(removedAt !== null, '班车在 34 秒内离场');
-  assert.ok(removedAt - spawnedAt <= 32000 + 1500 + 500, '离场不晚于寿命加停留');
+  assert.ok(removedAt !== null, '班车在 28 秒内离场');
+  assert.ok(removedAt - spawnedAt <= 26000 + 1500 + 500, '离场不晚于寿命加停留');
 });
 
 test('速度单位回归：学生每秒移动 1.1 个地图百分比，而不是毫秒当秒', () => {
@@ -184,22 +184,22 @@ test('速度单位回归：学生每秒移动 1.1 个地图百分比，而不是
   assert.ok(Math.abs(Math.hypot(current.x - start.x, current.y - start.y) - 2.2) < 1e-6, '两秒位移应为 2.2');
 });
 
-test('速度单位回归：班车每秒走 7 个百分比，约 24 秒驶完全程而非一帧消失', () => {
+test('速度单位回归：班车每秒走 7 个百分比，约 17 秒驶完全程而非一帧消失', () => {
   const system = npc.createSystem({ random: () => 0.95, settings: { firstDelay: [0, 0], gap: [600000, 600000] } });
   const { spawned } = system.tick(0);
   assert.equal(spawned.length, 1);
   assert.equal(spawned[0].identityId, 'driver');
   const id = spawned[0].id;
-  for (let t = 1000; t <= 17000; t += 1000) system.tick(t);
+  for (let t = 1000; t <= 12000; t += 1000) system.tick(t);
   const onRoad = system.active().find((item) => item.id === id);
-  assert.ok(onRoad && onRoad.routeDone === false, '17 秒后班车仍在右侧道路上');
+  assert.ok(onRoad && onRoad.routeDone === false, '12 秒后班车仍在右侧道路上');
   let removedAt = null;
-  for (let t = 18000; t <= 36000; t += 1000) {
+  for (let t = 13000; t <= 30000; t += 1000) {
     const events = system.tick(t);
     if (events.removed.some((item) => item.id === id)) { removedAt = t; break; }
   }
-  assert.ok(removedAt !== null && removedAt >= 18000 + 1500, '驶完全程并停留片刻后离场');
-  assert.ok(removedAt <= 28000, '全程约 24 秒，不会拖到寿命上限');
+  assert.ok(removedAt !== null && removedAt >= 13000 + 1500, '驶完全程并停留片刻后离场');
+  assert.ok(removedAt <= 21000, '全程约 17 秒，不会拖到寿命上限');
 });
 
 test('maxActive 可配置且严格生效', () => {
