@@ -593,6 +593,14 @@ function saveCurrent(automatic = false, slotId = activeSaveSlot) {
   }
   return result;
 }
+function hasUnsavedProgress() {
+  return !!state && state.revision !== savedRevision;
+}
+function guardUnsavedProgress(event) {
+  if (!hasUnsavedProgress()) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
 function displayTime(value) { return new Date(value).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }); }
 function saveInfo(slot) {
   if (slot.ok) return h(slot.state.nickname) + ' · ' + game.TERM_NAMES[slot.state.term - 1] + ' · ' + h(displayTime(slot.savedAt));
@@ -1124,6 +1132,7 @@ dialog.addEventListener('cancel', (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && activePlace && !dialog.open) closePlace();
 });
+window.addEventListener('beforeunload', guardUnsavedProgress);
 if (typeof HTMLDialogElement === 'undefined' || typeof HTMLDialogElement.prototype.showModal !== 'function') {
   $('.game-shell').innerHTML = '<div class="browser-notice"><h2>请使用较新的浏览器打开</h2><p>本游戏需要支持弹窗等现代网页特性的浏览器。请升级微信或浏览器，或用系统浏览器打开本地址。</p><p class="browser-notice-url">https://zjr231.github.io/BJTU-Life-Simulator/</p></div>';
 } else {

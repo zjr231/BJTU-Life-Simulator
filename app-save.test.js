@@ -163,6 +163,37 @@ test('切换栏位保存失败时，继续保留原当前栏位及内存进度',
   assert.match(ui.element('#dialogNotice').textContent, /失败/);
 });
 
+test('离开页面时仅对未保存进度发出提醒', () => {
+  const ui = app();
+  let prevented = false;
+  const leave = { preventDefault() { prevented = true; }, returnValue: undefined };
+  ui.window.emit('beforeunload', leave);
+  assert.equal(prevented, false);
+  assert.equal(leave.returnValue, undefined);
+
+  ui.start();
+  prevented = false;
+  leave.returnValue = undefined;
+  ui.window.emit('beforeunload', leave);
+  assert.equal(prevented, true);
+  assert.equal(leave.returnValue, '');
+
+  ui.click('#saveButton');
+  ui.click('#dialogBody', { saveSlot: '1' });
+  prevented = false;
+  leave.returnValue = undefined;
+  ui.window.emit('beforeunload', leave);
+  assert.equal(prevented, false);
+  assert.equal(leave.returnValue, undefined);
+
+  ui.evaluate('state = CampusGame.executeAction(state, "study", { commandId: "unsaved-leave", expectedRevision: state.revision }).state; renderState()');
+  prevented = false;
+  leave.returnValue = undefined;
+  ui.window.emit('beforeunload', leave);
+  assert.equal(prevented, true);
+  assert.equal(leave.returnValue, '');
+});
+
 test('新局未选栏位时结算保留内存，首次选栏后后续结算只自动保存到该栏', () => {
   const ui = app();
   ui.start(false);
