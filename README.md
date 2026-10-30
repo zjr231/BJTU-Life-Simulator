@@ -150,6 +150,7 @@ M4 首次主线集成的 76 项测试、冲突处理和接口对接记录见 [M4
 | scripts/deepseek-relay.js | DeepSeek 在线对话中转云函数（阿里云 FC / 华为云 FunctionGraph），剥离并返回对话质量标记，密钥只存云函数环境变量 |
 | scripts/deepseek-relay.test.js | 中转的参数校验、上游错误、超时、质量标记解析与两种云平台入口签名回归 |
 | scripts/check-release.js | 发布文件、大小写、脚本顺序及可选线上资源一致性检查 |
+| scripts/feishu-notify.js | 提交后把本次改动总结推送到飞书群（本地 git 钩子调用，配置见 [飞书提交通知](docs/飞书提交通知.md)） |
 | .github/workflows/m4-checks.yml | 提交与 PR 的自动测试和静态资源检查 |
 
 玩法参考《中国式人生》《人生重开模拟器》，地图复用项目既有素材。音效与背景音乐由 Web Audio 在浏览器内实时合成，未使用任何外部音频素材或服务；既有图片素材来源和授权仍需团队在发布前整理。

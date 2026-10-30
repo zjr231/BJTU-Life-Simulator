@@ -1,0 +1,9 @@
+#!/bin/sh
+# 提交后异步把本次工作总结推送到飞书群；任何失败都不影响提交。
+# 启用：git config core.hooksPath .githooks
+# 配置与调试见 scripts/feishu-notify.js 顶部注释与 docs/飞书提交通知.md。
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+script="$root/scripts/feishu-notify.js"
+[ -f "$script" ] || exit 0
+( node "$script" >> "$root/.git/feishu-notify.log" 2>&1 & ) >/dev/null 2>&1
+exit 0
