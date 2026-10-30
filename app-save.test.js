@@ -26,7 +26,7 @@ function app(storage = memory(), withSms = false, withNpc = false) {
           toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); } },
         addEventListener: (type, callback) => listeners.set(type, callback),
         emit(type, event = {}) { listeners.get(type)?.(event); },
-        focus() {}, setAttribute() {}, querySelector: () => null, querySelectorAll: () => [],
+        focus() { this.focused = true; }, scrollIntoView() { this.scrolled = true; }, setAttribute() {}, querySelector: () => null, querySelectorAll: () => [],
         showModal() { this.open = true; }, close() { this.open = false; }
       });
     }
@@ -518,6 +518,113 @@ test('待处理校园事件优先展示，不弹出开考确认或生成试卷',
   assert.equal(ui.evaluate('dialogMode'), 'event');
   assert.equal(ui.evaluate('JSON.stringify(state)'), before);
   assert.equal(ui.evaluate('state.exam'), null);
+});
+
+test('考试中每次选择都保存在状态，进度导航标出已答与未答题', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = CampusGame.beginExam(state).state; showExam()');
+  const revision = ui.evaluate('state.revision');
+  assert.equal(ui.element('#dialogSave').hidden, false);
+  assert.match(ui.element('#examProgress').textContent, /已答 0 \/ 5 题/);
+  assert.equal((ui.element('#examNavigation').innerHTML.match(/is-unanswered/g) || []).length, 5);
+  let selected = [1, null, null, null, null];
+  const form = {
+    querySelector(selector) {
+      const index = Number(selector.match(/q(\d+)/)?.[1]);
+      const answer = selected[index];
+      return answer === null || !selector.endsWith(':checked') ? null : { value: String(answer) };
+    }
+  };
+  ui.element('#dialogBody').emit('change', { target: { closest: selector => selector === '#examForm' ? form : null } });
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state.exam.answers)')), selected);
+  assert.equal(ui.evaluate('state.revision'), revision + 1);
+  assert.match(ui.element('#examProgress').textContent, /已答 1 \/ 5 题/);
+  assert.equal((ui.element('#examNavigation').innerHTML.match(/is-answered/g) || []).length, 1);
+  assert.equal((ui.element('#examNavigation').innerHTML.match(/is-unanswered/g) || []).length, 4);
+  selected = [1, null, 3, null, 2];
+  ui.element('#dialogBody').emit('change', { target: { closest: selector => selector === '#examForm' ? form : null } });
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state.exam.answers)')), selected);
+  assert.match(ui.element('#examProgress').textContent, /已答 3 \/ 5 题/);
+  assert.equal((ui.element('#examNavigation').innerHTML.match(/is-answered/g) || []).length, 3);
+});
+
+test('考试中打开存档栏位后返回，部分答案不丢；刷新后答案仍勾选', () => {
+  const storage = memory();
+  const ui = app(storage);
+  ui.start();
+  ui.evaluate('state = CampusGame.beginExam(state).state; showExam()');
+  const answers = [null, 2, null, 1, null];
+  ui.evaluate('state = CampusGame.updateExamAnswers(state, ' + JSON.stringify(answers) + ').state; showExam()');
+  ui.click('#dialogSave');
+  assert.equal(ui.evaluate('dialogMode'), 'save');
+  ui.click('#dialogButtons', { dialogAction: 'resume' });
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state.exam.answers)')), answers);
+  assert.match(ui.element('#dialogBody').innerHTML, /value="2"[^>]* checked/);
+  ui.click('#dialogSave');
+  ui.click('#dialogBody', { saveSlot: '2' });
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state.exam.answers)')), answers);
+  assert.equal(ui.evaluate('activeSaveSlot'), 2);
+  assert.match(ui.element('#dialogBody').innerHTML, /value="2"[^>]* checked/);
+  assert.match(ui.element('#dialogBody').innerHTML, /value="1"[^>]* checked/);
+  const restored = app(storage);
+  restored.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(restored.evaluate('dialogMode'), 'exam');
+  assert.deepEqual(JSON.parse(restored.evaluate('JSON.stringify(state.exam.answers)')), answers);
+  assert.match(restored.element('#examProgress').textContent, /已答 2 \/ 5 题/);
+  assert.match(restored.element('#dialogBody').innerHTML, /value="2"[^>]* checked/);
+  assert.match(restored.element('#dialogBody').innerHTML, /value="1"[^>]* checked/);
+});
+
+test('提交不完整试卷报告漏题并定位，全部答完后才能结算', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = CampusGame.beginExam(state).state; state = CampusGame.updateExamAnswers(state, [0, null, null, 1, null]).state; showExam()');
+  const answers = [0, null, null, 1, null];
+  const form = {
+    id: 'examForm',
+    querySelector(selector) {
+      const index = Number(selector.match(/q(\d+)/)?.[1]);
+      const answer = answers[index];
+      return answer === null || !selector.endsWith(':checked') ? null : { value: String(answer) };
+    }
+  };
+  ui.element('#dialogBody').emit('submit', { target: form, preventDefault() {} });
+  assert.match(ui.element('#examError').textContent, /第 2、3、5 题/);
+  assert.equal(ui.element('#examQuestion1').scrolled, true);
+  assert.equal(ui.evaluate('state.phase'), 'examPending');
+  answers[1] = 2; answers[2] = 1; answers[4] = 0;
+  ui.element('#dialogBody').emit('change', { target: { closest: selector => selector === '#examForm' ? form : null } });
+  assert.match(ui.element('#examProgress').textContent, /已答 5 \/ 5 题/);
+  assert.equal(ui.element('#examMissing').disabled, true);
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state.exam.answers)')), answers);
+  ui.element('#dialogBody').emit('submit', { target: form, preventDefault() {} });
+  assert.equal(ui.evaluate('state.phase'), 'summary');
+  assert.equal(ui.evaluate('dialogMode'), 'summary');
+});
+
+test('题号导航定位指定题和首个漏题，不会修改答题状态', () => {
+  const ui = app();
+  ui.start();
+  ui.click('#endTermButton');
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('uiLocked'), true);
+  assert.doesNotMatch(ui.element('#examNavigation').innerHTML, / disabled/);
+  ui.click('#dialogBody', { examQuestion: '4' });
+  assert.equal(ui.element('#examQuestion4').scrolled, true);
+  ui.flush();
+  assert.equal(ui.evaluate('uiLocked'), false);
+  ui.evaluate('state = CampusGame.updateExamAnswers(state, [0, null, null, 2, null]).state; showExam()');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#dialogBody', { examQuestion: '3' });
+  assert.equal(ui.element('#examQuestion3').scrolled, true);
+  ui.click('#dialogBody', { examMissing: 'true' });
+  assert.equal(ui.element('#examQuestion1').scrolled, true);
+  ui.click('#dialogBody', { examQuestion: '0' });
+  assert.match(ui.element('#examProgress').textContent, /已答 2 \/ 5 题/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
 });
 
 test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当前进度和目标新档', () => {

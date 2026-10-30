@@ -280,3 +280,114 @@ test('篡改选课或试卷答案会被存档校验拒绝', () => {
   changedSummary.courses.at(-1).examScore = 80;
   assert.equal(game.validateState(changedSummary).ok, false);
 });
+
+test('答题草稿允许跳题与改选，只更新答案及操作历史，不消耗资源或随机数', () => {
+  const started = game.beginExam(selectFirst(game.createGame({ seed: 'draft-edit' }))).state;
+  const before = structuredClone(started);
+  const answers = [0, null, 3, null, null];
+  const first = game.updateExamAnswers(started, answers);
+  assert.equal(first.ok, true, first.reason);
+  assert.deepEqual(started, before);
+  answers[0] = 2;
+  assert.deepEqual(first.state.exam.answers, [0, null, 3, null, null]);
+  const edited = game.updateExamAnswers(first.state, answers);
+  assert.equal(edited.ok, true, edited.reason);
+  assert.deepEqual(edited.state.exam.answers, [2, null, 3, null, null]);
+  assert.deepEqual(edited.state.exam.questions, started.exam.questions);
+  assert.deepEqual(edited.state.rng, started.rng);
+  for (const key of ['term', 'phase', 'time', 'energy', 'money', 'preparation', 'social', 'fitness', 'mood', 'courses', 'summary']) assert.deepEqual(edited.state[key], started[key], key);
+  assert.equal(edited.state.revision, started.revision + 2);
+  assert.equal(game.validateState(edited.state).ok, true);
+});
+
+test('答题草稿拒绝非法答案、错误阶段、重复命令、无变化和过期操作', () => {
+  const initial = game.createGame();
+  assert.equal(game.updateExamAnswers(initial, [0, null, null, null, null]).ok, false);
+  const started = game.beginExam(selectFirst(initial)).state;
+  const before = structuredClone(started);
+  for (const answers of [null, [], [0], [0, null, null, null, null, null], [4, null, null, null, null], [-1, null, null, null, null], ['0', null, null, null, null], [0.5, null, null, null, null], Array(5), [NaN, null, null, null, null]]) assert.equal(game.updateExamAnswers(started, answers).ok, false);
+  assert.equal(game.updateExamAnswers(started, Array(5).fill(null)).ok, false);
+  assert.deepEqual(started, before);
+  const first = game.updateExamAnswers(started, [0, null, null, null, null], { commandId: 'draft:1' }).state;
+  assert.equal(game.updateExamAnswers(first, [0, null, null, null, null]).ok, false);
+  assert.equal(game.updateExamAnswers(first, [1, null, null, null, null], { commandId: 'draft:1' }).ok, false);
+  assert.equal(game.updateExamAnswers(first, [1, null, null, null, null], { expectedRevision: started.revision }).ok, false);
+  const summary = submitAll(first, true).state;
+  assert.equal(game.updateExamAnswers(summary, [0, null, null, null, null]).ok, false);
+});
+
+test('部分答案在三个栏位独立保存与恢复，草稿和结算均可精确重放', () => {
+  const started = game.beginExam(selectFirst(game.createGame({ seed: 'draft-slots' }))).state;
+  const first = game.updateExamAnswers(started, [0, null, 2, null, null]).state;
+  const second = game.updateExamAnswers(first, [3, null, 2, 1, null]).state;
+  const service = save.createSlotService(memory());
+  for (const [slot, state] of [[1, started], [2, first], [3, second]]) {
+    assert.equal(service.save(state, slot).ok, true);
+    const loaded = service.load(slot);
+    assert.equal(loaded.ok, true, loaded.reason);
+    assert.deepEqual(loaded.state, state);
+    const commands = state.history.map(entry => ({ ...entry.command, commandId: entry.commandId }));
+    const replayed = game.replay({ nickname: state.nickname, seed: state.rng.seed, commands });
+    assert.equal(replayed.ok, true, replayed.reason);
+    assert.deepEqual(replayed.state, state);
+  }
+  assert.equal(service.save(second, 2).ok, true);
+  assert.deepEqual(service.load(2, 'backup').state, first);
+  const completed = game.updateExamAnswers(second, second.exam.questions.map(question => question.answer)).state;
+  const submitted = game.submitExam(completed, completed.exam.answers);
+  assert.equal(submitted.ok, true, submitted.reason);
+  assert.equal(submitted.summary.examScore, 100);
+  assert.equal(submitted.state.exam, null);
+  assert.equal(game.submitExam(submitted.state, completed.exam.answers).ok, false);
+  const commands = submitted.state.history.map(entry => ({ ...entry.command, commandId: entry.commandId }));
+  assert.deepEqual(game.replay({ nickname: started.nickname, seed: started.rng.seed, commands }).state, submitted.state);
+});
+
+test('草稿未答不能交卷，进入下一学期的试卷不会沿用旧答案', () => {
+  const started = game.beginExam(selectFirst(game.createGame({ seed: 'draft-next' }))).state;
+  const partial = game.updateExamAnswers(started, [0, null, null, null, null]).state;
+  const rejected = game.submitExam(partial, partial.exam.answers);
+  assert.equal(rejected.ok, false);
+  assert.deepEqual(rejected.state, partial);
+  const settled = submitAll(partial, true).state;
+  const next = game.beginExam(selectFirst(clearEvents(game.continueGame(settled).state))).state;
+  assert.deepEqual(next.exam.answers, []);
+  assert.equal(game.validateState(next).ok, true);
+});
+
+test('旧版空草稿及题库试卷仍可读取、记录答案和保存', () => {
+  const selected = selectFirst(game.createGame({ seed: 'legacy-exam-draft' }));
+  const course = game.courseById(selected.selectedCourses[0]);
+  const legacy = { ...selected, phase: 'examPending', exam: {
+    questions: coursesApi.LEGACY_QUESTIONS.general.slice(0, 5).map(question => ({ ...question, subject: 'general', courseId: course.id, courseName: course.name, points: 20 })),
+    answers: [], score: null, submitted: false
+  } };
+  const service = save.createSaveService(memory());
+  for (const initial of [game.beginExam(selected).state, legacy]) {
+    assert.equal(service.save(initial).ok, true);
+    const loaded = service.load().state;
+    assert.deepEqual(loaded.exam.answers, []);
+    const updated = game.updateExamAnswers(loaded, [null, 0, null, null, 3]);
+    assert.equal(updated.ok, true, updated.reason);
+    assert.equal(game.validateState(updated.state).ok, true);
+    assert.equal(service.save(updated.state).ok, true);
+    assert.deepEqual(service.load().state.exam.answers, [null, 0, null, null, 3]);
+  }
+});
+
+test('损坏的草稿结构、草稿历史和与重放不符的答案都被拒绝', () => {
+  const started = game.beginExam(selectFirst(game.createGame({ seed: 'draft-invalid' }))).state;
+  const valid = game.updateExamAnswers(started, [0, null, 2, null, null]).state;
+  for (const change of [
+    state => { state.exam.answers = [0]; },
+    state => { state.exam.answers[0] = 4; },
+    state => { state.exam.answers[0] = false; },
+    state => { state.exam.answers[0] = undefined; },
+    state => { state.exam.answers[0] = 1; },
+    state => { state.history.at(-1).command.id[1] = 9; }
+  ]) {
+    const state = structuredClone(valid); change(state);
+    assert.equal(game.validateState(state).ok, false);
+    assert.equal(save.createSaveService(memory()).save(state).ok, false);
+  }
+});

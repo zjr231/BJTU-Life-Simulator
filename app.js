@@ -263,7 +263,7 @@ function renderState() {
   $('#directionBrief').innerHTML = '<div>本学期课程 <b>' + h(selectedNames) + '</b>' + (state.phase === 'examPending' ? ' · 考试待提交' : '') + '</div><div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
   $('#endTermButton').textContent = ({ eventPending: '处理当前事件', examPending: '继续期末考试', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果' })[state.phase] || (selectedIds.length ? '结束学期并考试' : '结束学期');
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
-  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'exam'].includes(dialogMode);
+  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection'].includes(dialogMode);
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
@@ -523,7 +523,7 @@ function showDialog(mode, title, body, buttons = []) {
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
   $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
-  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'exam'].includes(mode);
+  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection'].includes(mode);
   if (!dialog.open) dialog.showModal();
   (dialog.querySelector('input') || $('#dialogTitle')).focus({ preventScroll: true });
   dialog.scrollTop = 0;
@@ -533,18 +533,20 @@ function lockUi() {
   clearTimeout(unlockTimer);
   if (activePlace) renderActions();
   dialog.querySelectorAll('[data-dialog-action], [data-event-choice], [data-ending]').forEach((button) => { button.disabled = true; });
+  dialog.querySelectorAll('#examForm input, #examForm > button[type="submit"]').forEach((input) => { input.disabled = true; });
   unlockTimer = setTimeout(() => {
     uiLocked = false;
     if (activePlace) renderActions();
     dialog.querySelectorAll('[data-dialog-action]').forEach((button) => { button.disabled = false; });
     dialog.querySelectorAll('[data-event-choice]').forEach((button) => { button.disabled = !game.eventAvailability(state, button.dataset.eventChoice, button.dataset.instance).ok; });
     dialog.querySelectorAll('[data-ending]').forEach((button) => { button.disabled = !state.endingOptions.options.find((item) => item.id === button.dataset.ending)?.available; });
+    dialog.querySelectorAll('#examForm input, #examForm > button[type="submit"]').forEach((input) => { input.disabled = false; });
   }, 300);
 }
 function runCommand(operation, id, expectedRevision, eventInstanceId) {
   if (!state || uiLocked) return null;
   const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId };
-  const result = ['executeAction', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'submitExam'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const result = ['executeAction', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'updateExamAnswers', 'submitExam'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');
@@ -552,7 +554,7 @@ function runCommand(operation, id, expectedRevision, eventInstanceId) {
     return null;
   }
   state = result.state;
-  lockUi();
+  if (operation !== 'updateExamAnswers') lockUi();
   renderState();
   return result;
 }
@@ -739,16 +741,43 @@ function submitCourseSelection(form) {
 }
 function showExam() {
   if (!state || state.phase !== 'examPending' || !state.exam) { resumePhase(); return; }
-  const questions = state.exam.questions.map((question, index) => '<article class="exam-question"><div class="exam-question-head"><span class="exam-index">第 ' + (index + 1) + ' 题</span><span class="exam-tag">' + h(question.courseName) + ' · ' + h(game.SUBJECTS[question.subject]) + '</span><span class="exam-points">20 分</span></div><p class="exam-prompt">' + mathText(question.prompt) + '</p><div class="exam-options">' + question.options.map((option, optionIndex) => '<label class="exam-option"><input type="radio" name="q' + index + '" value="' + optionIndex + '"><span>' + String.fromCharCode(65 + optionIndex) + '</span>' + mathText(option) + '</label>').join('') + '</div></article>').join('');
-  showDialog('exam', game.TERM_NAMES[state.term - 1] + ' · 期末考试', '<p>平时分 <b>' + state.preparation + ' / 100</b>，占总评 40%。考试共 5 题，每题 20 分，占总评 60%。</p><form id="examForm">' + questions + '<p id="examError" class="action-reason" role="alert"></p><button type="submit">提交试卷</button></form><p class="dialog-note">提交后立即结算，不能修改答案。</p>');
+  const questions = state.exam.questions.map((question, index) => '<article class="exam-question" id="examQuestion' + index + '"><div class="exam-question-head"><span class="exam-index">第 ' + (index + 1) + ' 题</span><span class="exam-tag">' + h(question.courseName) + ' · ' + h(game.SUBJECTS[question.subject]) + '</span><span class="exam-points">20 分</span></div><p class="exam-prompt">' + mathText(question.prompt) + '</p><div class="exam-options">' + question.options.map((option, optionIndex) => '<label class="exam-option"><input type="radio" name="q' + index + '" value="' + optionIndex + '" aria-label="第 ' + (index + 1) + ' 题，' + String.fromCharCode(65 + optionIndex) + '：' + h(option) + '"' + (state.exam.answers[index] === optionIndex ? ' checked' : '') + (uiLocked ? ' disabled' : '') + '><span>' + String.fromCharCode(65 + optionIndex) + '</span>' + mathText(option) + '</label>').join('') + '</div></article>').join('');
+  showDialog('exam', game.TERM_NAMES[state.term - 1] + ' · 期末考试', '<p>平时分 <b>' + state.preparation + ' / 100</b>，占总评 40%。考试共 5 题，每题 20 分，占总评 60%。</p><div class="exam-progress"><p id="examProgress" role="status" aria-live="polite"></p><nav id="examNavigation" class="exam-navigation" aria-label="答题导航"></nav><button type="button" class="utility-button" id="examMissing" data-exam-missing="true">定位首道未答题</button></div><form id="examForm"><p id="examError" class="action-reason" role="alert"></p>' + questions + '<button type="submit"' + (uiLocked ? ' disabled' : '') + '>提交试卷</button></form><p class="dialog-note">答案保存在当前进度。离开前请保存；读取该存档后可继续作答。提交后立即结算，不能修改答案。</p>');
+  updateExamProgress();
 }
-function submitExamForm(form) {
-  if (!state?.exam) return;
-  const answers = state.exam.questions.map((_, index) => {
+function readExamAnswers(form) {
+  return state.exam.questions.map((_, index) => {
     const checked = form.querySelector('input[name="q' + index + '"]:checked');
     return checked ? Number(checked.value) : null;
   });
-  if (answers.some((answer) => answer === null)) { $('#examError').textContent = '请为每道题选择一个答案'; audio?.play('deny'); return; }
+}
+function updateExamProgress() {
+  const answers = state.exam.questions.map((_, index) => state.exam.answers[index] ?? null);
+  const answered = answers.filter((answer) => answer !== null).length;
+  $('#examProgress').textContent = '已答 ' + answered + ' / ' + answers.length + ' 题';
+  $('#examNavigation').innerHTML = answers.map((answer, index) => {
+    const done = answer !== null;
+    return '<button type="button" data-exam-question="' + index + '" class="' + (done ? 'is-answered' : 'is-unanswered') + '" aria-label="第 ' + (index + 1) + ' 题，' + (done ? '已作答' : '未作答') + '"><b>' + (index + 1) + '</b><small>' + (done ? '已答' : '未答') + '</small></button>';
+  }).join('');
+  $('#examMissing').disabled = answered === answers.length;
+}
+function focusExamQuestion(index) {
+  if (state?.phase !== 'examPending' || dialogMode !== 'exam' || !Number.isInteger(index) || index < 0 || index >= state.exam.questions.length) return;
+  const question = $('#examQuestion' + index);
+  question.scrollIntoView({ block: 'start' });
+  (question.querySelector('input:checked') || question.querySelector('input'))?.focus({ preventScroll: true });
+}
+function submitExamForm(form) {
+  if (!state?.exam) return;
+  const answers = readExamAnswers(form);
+  const missing = answers.map((answer, index) => answer === null ? index : -1).filter((index) => index >= 0);
+  if (missing.length) {
+    $('#examError').textContent = '还有 ' + missing.length + ' 题未作答（第 ' + missing.map((index) => index + 1).join('、') + ' 题），已定位到第 ' + (missing[0] + 1) + ' 题。';
+    audio?.play('deny');
+    focusExamQuestion(missing[0]);
+    return;
+  }
+  $('#examError').textContent = '';
   const result = runCommand('submitExam', answers, state.revision);
   if (!result) return;
   audio?.play('success');
@@ -858,6 +887,14 @@ $('#dialogBody').addEventListener('submit', (event) => {
   else if (event.target.id === 'examForm') { event.preventDefault(); submitExamForm(event.target); }
 });
 $('#dialogBody').addEventListener('change', (event) => {
+  const examForm = event.target.closest('#examForm');
+  if (examForm && dialogMode === 'exam' && state?.phase === 'examPending') {
+    if (runCommand('updateExamAnswers', readExamAnswers(examForm), state.revision)) {
+      $('#examError').textContent = '';
+      updateExamProgress();
+    }
+    return;
+  }
   const form = event.target.closest('#courseForm');
   if (!form) return;
   const count = form.querySelectorAll('input[name="course"]:checked').length;
@@ -877,6 +914,10 @@ $('#dialogBody').addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
   if (button.id === 'smsSendButton') { requestSmsCode(); return; }
+  if (dialogMode === 'exam' && state?.phase === 'examPending') {
+    if (button.dataset.examQuestion !== undefined) { focusExamQuestion(Number(button.dataset.examQuestion)); return; }
+    if (button.dataset.examMissing) { focusExamQuestion(state.exam.questions.findIndex((_, index) => state.exam.answers[index] === undefined || state.exam.answers[index] === null)); return; }
+  }
   if (button.dataset.saveSlot) {
     if (dialogMode === 'save') selectSaveSlot(Number(button.dataset.saveSlot));
   } else if (button.dataset.loadSlot) {
