@@ -3,7 +3,7 @@
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
   const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
-  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT } = config;
+  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
   const { COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
@@ -36,7 +36,7 @@
       nickname: nickname.value, background: { id: background.id, college: background.college, major: background.majors[Math.floor(second.number * background.majors.length)] }, rng: second.rng,
       term: 1, phase: 'playing', revision: 0, processedCommands: [], time: RULES.time, energy: RULES.energy, money: RULES.initialMoney,
       social: RULES.initialSocial, fitness: RULES.initialFitness, mood: RULES.initialMood, preparation: 0, furtherStudy: 0, jobPreparation: 0,
-      counts: {}, courses: [], selectedCourses: [], exam: null, history: [], summary: null, pendingEvent: null, eventQueue: [], eventFlags: {}, eventHistory: [], experiences: [], chains, endingOptions: null, result: null
+      counts: {}, courses: [], selectedCourses: [], exam: null, history: [], summary: null, pendingEvent: null, eventQueue: [], eventFlags: {}, eventHistory: [], experiences: [], chains, endingOptions: null, result: null, npcChats: {}
     };
   }
   function getAction(state, id) {
@@ -344,7 +344,7 @@
     if (state.phase !== 'summary') return { ok: false, reason: '当前没有待确认的学期总结', state };
     const next = state.term === 8
       ? { ...state, phase: 'endingChoice', endingOptions: evaluateEndings(state), selectedCourses: [], exam: null }
-      : attachEvents({ ...state, term: state.term + 1, phase: 'playing', time: 12, energy: 80, preparation: 0, counts: {}, summary: null, selectedCourses: [], exam: null }, 'newTerm');
+      : attachEvents({ ...state, term: state.term + 1, phase: 'playing', time: 12, energy: 80, preparation: 0, counts: {}, summary: null, selectedCourses: [], exam: null, npcChats: {} }, 'newTerm');
     return commit(state, next, { operation: 'continueGame' }, { action: 'continueGame', title: state.term === 8 ? '评估毕业方向' : '进入下一学期' }, command.commandId);
   }
   function chooseEnding(state, id, options = {}) {
@@ -356,6 +356,48 @@
     const result = { direction: ending.id, title: ending.title, requirements: clone(ending.requirements), average: state.endingOptions.average, passed: state.endingOptions.passed, experiences: clone(state.experiences), courses: clone(state.courses) };
     return commit(state, { ...state, phase: 'finished', result }, { operation: 'chooseEnding', id }, { action: 'chooseEnding', title: ending.title }, command.commandId);
   }
+  // NPC 聊天预检（只读）：界面发消息前 fail-fast 用，与命令内的检查同一套规则。
+  // 返回本次将消耗的精力/时间，以及该身份本学期是否还有收益与学业指点名额。
+  function npcChatAvailability(state, identityId) {
+    if (!own(NPC_CHAT.identities, identityId)) return { ok: false, reason: '这位路人不认识，聊不上', state };
+    if (state.phase !== 'playing') return { ok: false, reason: '现在这个阶段只能闲聊，不消耗资源', state };
+    const energy = NPC_CHAT.energyPerMessage;
+    if (state.energy < energy) return { ok: false, reason: '精力不够：需要 ' + energy + '，现在剩 ' + state.energy, state };
+    const record = (state.npcChats || {})[identityId] || { messages: 0, rewards: 0, preps: 0, timeCharged: false };
+    const charged = Object.values(state.npcChats || {}).filter((item) => item && item.timeCharged).length;
+    const time = record.messages === 0 && charged < NPC_CHAT.timeChargeCapPerTerm ? NPC_CHAT.timeFirstChatPerIdentity : 0;
+    if (state.time < time) return { ok: false, reason: '时间不够：需要 ' + time + '，现在剩 ' + state.time, state };
+    return {
+      ok: true, reason: '', state, energy, time,
+      rewardAvailable: record.rewards < NPC_CHAT.rewardMessagesPerIdentity,
+      prepAvailable: NPC_CHAT.academicIdentities.includes(identityId) && record.preps < NPC_CHAT.academicPrepPerIdentity
+    };
+  }
+  // NPC 聊天：效果完全由命令参数（身份 + 对话质量 0/1/2）决定，不消耗随机数，可精确重放。
+  // 每条消息扣精力；学期内每身份首条消息扣时间（整学期有上限）；质量>0 且未超收益次数时加社交/心情；
+  // 学业身份（学长/学姐/任课老师/教授）另有学习进度加成，计入平时分（期末按 40% 结算）。
+  // 收益名额用尽后仍可闲聊（照扣精力、写历史）；不触发校园事件调度。
+  function chatWithNpc(state, payload, options = {}) {
+    const identityId = payload && typeof payload === 'object' ? payload.identityId : undefined;
+    const command = commandCheck(state, options, 'chatWithNpc:' + identityId);
+    if (!command.ok) return command;
+    const quality = payload && typeof payload === 'object' ? payload.quality : undefined;
+    if (!own(NPC_CHAT.identities, identityId) || !Number.isSafeInteger(quality) || quality < 0 || quality > 2) return { ok: false, reason: '无效的聊天参数', state };
+    const check = npcChatAvailability(state, identityId);
+    if (!check.ok) return check;
+    const record = (state.npcChats || {})[identityId] || { messages: 0, rewards: 0, preps: 0, timeCharged: false };
+    const effect = { energy: check.energy, time: check.time };
+    const reward = check.rewardAvailable && quality > 0;
+    if (reward) Object.assign(effect, NPC_CHAT.qualityEffects[quality]);
+    if (reward && check.prepAvailable) effect.preparation = NPC_CHAT.academicPrep[quality];
+    const changes = previewChanges(state, effect);
+    // 只有真正到账的收益才占用名额：属性已满时不会白白消耗次数。
+    const prepGained = changes.preparation > 0;
+    const gained = prepGained || changes.social > 0 || changes.mood > 0;
+    const nextRecord = { messages: record.messages + 1, rewards: record.rewards + (gained ? 1 : 0), preps: record.preps + (prepGained ? 1 : 0), timeCharged: record.timeCharged || check.time > 0 };
+    const next = { ...applyChanges(state, changes), npcChats: { ...(state.npcChats || {}), [identityId]: nextRecord } };
+    return commit(state, next, { operation: 'chatWithNpc', identityId, quality }, { action: 'chatWithNpc', identity: '和' + NPC_CHAT.identities[identityId] + '聊天', changes, quality }, command.commandId);
+  }
   function validateState(state) {
     const validator = typeof module !== 'undefined' && module.exports ? require('./state-validation.js') : root.CampusStateValidation;
     return validator.validate(state, api, random);
@@ -364,7 +406,7 @@
     let state = createGame({ nickname, seed });
     for (const [index, command] of commands.entries()) {
       const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId };
-      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), submitExam: () => submitExam(state, command.id, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args) };
+      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), submitExam: () => submitExam(state, command.id, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args) };
       if (!own(handlers, command.operation)) return { ok: false, reason: '第 ' + (index + 1) + ' 步操作未知', state };
       const result = handlers[command.operation]();
       if (!result.ok) return { ...result, reason: '第 ' + (index + 1) + ' 步：' + result.reason };
@@ -372,7 +414,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, CHAIN_NAMES, AI_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, submitExam, endTerm, continueGame, evaluateEndings, chooseEnding, validateState, stateBrief, replay, getTermStage };
+  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, submitExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

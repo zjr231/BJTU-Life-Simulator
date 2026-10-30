@@ -33,7 +33,7 @@
     ]
   };
   const IDENTITIES = [
-    { id: 'student', label: '学生', figure: 'student', weight: 18, route: 'campus', mode: 'loop', speed: 1.1, lines: [
+    { id: 'student', label: '学生', figure: 'student', weight: 14, route: 'campus', mode: 'loop', speed: 1.1, lines: [
       '刚下课从思源楼出来，这老师点名太狠了。你呢，最近忙啥？',
       '食堂三楼的麻辣香锅你试过没？我每周必去两次。',
       '社团那边又在招新了，大一不参加，后面时间更少，真的。',
@@ -44,6 +44,12 @@
       '实习别拖到大四才找，大三寒暑假是最好的窗口期。',
       '图书馆靠窗的位置最适合自习，早上八点前基本都有座。',
       '我当年就是社团玩得太疯，绩点拉了。爱好和学习要会平衡。'
+    ] },
+    { id: 'seniorGirl', label: '学姐', figure: 'seniorGirl', weight: 4, route: 'campus', mode: 'loop', speed: 1.05, lines: [
+      '选课别光看给分，先想想这门课和你想走的方向有没有关系。',
+      '考研英语要早点开始背单词，临到考前再抱佛脚来不及的。',
+      '我保研那年最庆幸的是大二就把六级过了，后面轻松不少。',
+      '找实习前先把简历改两遍，写清楚你做了什么、结果怎么样。'
     ] },
     { id: 'canteenAunt', label: '食堂阿姨', figure: 'canteen', weight: 7, route: 'dormRoad', mode: 'bounce', speed: 1.0, lines: [
       '同学，怎么才来？给你多打一勺，正长身体呢！',
@@ -226,7 +232,22 @@
     return identity ? identity.lines : [];
   }
 
-  const api = { IDENTITIES, ROUTES, DEFAULTS, createSystem, linesFor };
+  // 本地启发式对话质量评分（0/1/2）：在线中转不可用或未返回质量标记时的兜底。
+  // 问候、提问、礼貌称呼、消息长度各计分，综合分决定档位；只是粗略分层，防刷靠次数上限。
+  function heuristicQuality(text) {
+    const value = String(text || '').trim();
+    if (!value) return 0;
+    let score = 0;
+    if (/(你好|您好|嗨|哈喽|hi|hello|早上好|下午好|晚上好)/i.test(value)) score++;
+    if (/[？?]|吗|怎么|如何|为什么|什么|哪|几|推荐|建议|请教|请问|能不能|可不|帮我/i.test(value)) score++;
+    if (/请|谢谢|您|麻烦|辛苦|同学|老师|学长|学姐|阿姨|大叔|师傅/.test(value)) score++;
+    const length = [...value].length;
+    if (length >= 10) score++;
+    if (length >= 25) score++;
+    return score >= 4 ? 2 : score >= 2 ? 1 : 0;
+  }
+
+  const api = { IDENTITIES, ROUTES, DEFAULTS, createSystem, linesFor, heuristicQuality };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusNpc = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

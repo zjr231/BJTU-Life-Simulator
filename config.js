@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.3.1', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.4.0', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
   const TERM_NAMES = ['大一上', '大一下', '大二上', '大二下', '大三上', '大三下', '大四上', '大四下'];
   // Majors follow BJTU's public programme names; term order and course load stay game-simplified.
   const BACKGROUNDS = [
@@ -311,7 +311,22 @@
   // 可选在线对话：relay 为云函数中转地址，空字符串表示关闭（NPC 只回本地台词）。
   // 密钥只放在云函数的环境变量里，前端永远接触不到；未连接或超时自动回退本地台词。
   const AI_CHAT = { relay: 'https://deepseek-relay-bsxioiwmxt.cn-hangzhou.fcapp.run', timeoutMs: 15000 };
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT };
+  // NPC 聊天规则：聊天不再纯观感，走统一规则入口 chatWithNpc（见 game.js）。
+  // 每条消息扣精力；学期内每个身份第一次搭话扣时间（整学期有上限）；
+  // 社交/心情按对话质量分档，学长学姐和老师（academicIdentities）还能指点学习进度（平时分）。
+  // identities 是校验白名单与历史标题用的完整身份表，需与 npc.js 的 IDENTITIES 保持一致（有测试守护）。
+  const NPC_CHAT = {
+    energyPerMessage: 1,
+    timeFirstChatPerIdentity: 1,
+    timeChargeCapPerTerm: 2,
+    rewardMessagesPerIdentity: 3,
+    academicPrepPerIdentity: 2,
+    identities: { student: '学生', senior: '学长', seniorGirl: '学姐', canteenAunt: '食堂阿姨', chef: '食堂厨师', dormAunt: '宿管阿姨', lecturer: '任课老师', staff: '行政老师', professor: '教授', librarian: '图书管理员', internationalStudent: '留学生', security: '保安大叔', courier: '快递小哥', rider: '外卖骑手', coach: '体育老师', doctor: '校医', driver: '班车司机' },
+    academicIdentities: ['senior', 'seniorGirl', 'lecturer', 'professor'],
+    qualityEffects: { 0: {}, 1: { social: 1, mood: 2 }, 2: { social: 2, mood: 4 } },
+    academicPrep: { 1: 3, 2: 5 }
+  };
+  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

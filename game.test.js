@@ -369,6 +369,218 @@ test('转专业结果按平均成绩判定：达标换学院背景并留经历�
   assert.equal(skipped.experiences.length, 0);
 });
 
+test('NPC 聊天：二档对话扣精力与首聊时间，社交心情与学业指点按档位结算', () => {
+  const state = game.createGame();
+  const before = structuredClone(state);
+  const result = game.chatWithNpc(state, { identityId: 'senior', quality: 2 });
+  assert.equal(result.ok, true);
+  assert.deepEqual(state, before, '不修改输入状态');
+  assert.equal(result.state.energy, 79, '每条消息扣 1 精力');
+  assert.equal(result.state.time, 11, '本学期首次搭话扣 1 时间');
+  assert.equal(result.state.social, 22, '二档社交 +2');
+  assert.equal(result.state.mood, 74, '二档心情 +4');
+  assert.equal(result.state.preparation, 5, '学业身份二档学习进度 +5');
+  assert.deepEqual(result.changes, { time: -1, energy: -1, money: 0, preparation: 5, social: 2, fitness: 0, mood: 4, furtherStudy: 0, jobPreparation: 0 });
+  assert.deepEqual(result.state.npcChats.senior, { messages: 1, rewards: 1, preps: 1, timeCharged: true });
+  const entry = result.state.history.at(-1);
+  assert.deepEqual(entry.command, { operation: 'chatWithNpc', identityId: 'senior', quality: 2 });
+  assert.equal(result.state.revision, 1);
+  assert.deepEqual(result.state.processedCommands, [entry.commandId]);
+  assert.equal(result.state.rng.calls, state.rng.calls, '聊天不消耗随机数，可精确重放');
+  assert.equal(game.validateState(result.state).ok, true);
+});
+
+test('NPC 聊天：零档只扣精力不占收益名额，一档给小额收益', () => {
+  let state = game.createGame();
+  // 连续三条零档：只有消耗，收益计数不动。
+  for (let index = 0; index < 3; index++) state = game.chatWithNpc(state, { identityId: 'senior', quality: 0 }).state;
+  assert.equal(state.social, 20);
+  assert.equal(state.mood, 70);
+  assert.equal(state.preparation, 0);
+  assert.deepEqual(state.npcChats.senior, { messages: 3, rewards: 0, preps: 0, timeCharged: true });
+  assert.equal(state.time, 11, '同一身份的后续消息不再扣时间');
+  // 第四条换成二档：名额没被废话消耗，照常给收益。
+  const second = game.chatWithNpc(state, { identityId: 'senior', quality: 1 });
+  assert.equal(second.state.social, 21, '一档社交 +1');
+  assert.equal(second.state.mood, 72, '一档心情 +2');
+  assert.equal(second.state.preparation, 3, '一档学习进度 +3');
+  assert.equal(second.state.npcChats.senior.rewards, 1);
+});
+
+test('NPC 聊天：属性已满时按真实增量计数，不白占收益名额', () => {
+  // 学习进度已满：社交心情照涨、占收益名额，但指点次数不增加。
+  const fullPrep = game.chatWithNpc({ ...game.createGame(), preparation: 100 }, { identityId: 'senior', quality: 2 });
+  assert.equal(fullPrep.changes.preparation, 0);
+  assert.equal(fullPrep.state.npcChats.senior.rewards, 1);
+  assert.equal(fullPrep.state.npcChats.senior.preps, 0);
+  // 社交心情都满的普通身份：只剩消耗，收益名额也不消耗。
+  const capped = game.chatWithNpc({ ...game.createGame(), social: 100, mood: 100 }, { identityId: 'student', quality: 2 });
+  assert.equal(capped.state.npcChats.student.messages, 1);
+  assert.equal(capped.state.npcChats.student.rewards, 0);
+  assert.equal(capped.state.energy, 79);
+  assert.equal(game.validateState(capped.state).ok, true);
+  // 学业身份社交心情满、学习进度未满：仍能拿到指点，计数保持 preps ≤ rewards。
+  const academic = game.chatWithNpc({ ...game.createGame(), social: 100, mood: 100 }, { identityId: 'lecturer', quality: 2 });
+  assert.equal(academic.state.npcChats.lecturer.rewards, 1);
+  assert.equal(academic.state.npcChats.lecturer.preps, 1);
+  assert.equal(academic.state.preparation, 5);
+  assert.equal(game.validateState(academic.state).ok, true);
+});
+
+test('NPC 聊天：非学业身份只影响社交心情，不加学习进度', () => {
+  const result = game.chatWithNpc(game.createGame(), { identityId: 'student', quality: 2 });
+  assert.equal(result.ok, true);
+  assert.equal(result.state.social, 22);
+  assert.equal(result.state.mood, 74);
+  assert.equal(result.state.preparation, 0);
+  assert.equal(result.state.npcChats.student.preps, 0);
+});
+
+test('NPC 聊天：每身份收益消息与学业指点次数封顶，封顶后仍可闲聊扣精力', () => {
+  let state = game.createGame();
+  for (let index = 0; index < 3; index++) state = game.chatWithNpc(state, { identityId: 'lecturer', quality: 2 }).state;
+  assert.deepEqual(state.npcChats.lecturer, { messages: 3, rewards: 3, preps: 2, timeCharged: true });
+  assert.equal(state.preparation, 10, '学业指点两次封顶：5 + 5');
+  const socialBefore = state.social;
+  const capped = game.chatWithNpc(state, { identityId: 'lecturer', quality: 2 });
+  assert.equal(capped.ok, true, '收益到头也能继续聊');
+  assert.equal(capped.state.social, socialBefore, '社交不再增长');
+  assert.equal(capped.state.preparation, 10, '学习进度不再增长');
+  assert.equal(capped.state.energy, state.energy - 1, '仍扣精力');
+  assert.equal(capped.state.npcChats.lecturer.messages, 4);
+  assert.equal(capped.state.npcChats.lecturer.rewards, 3);
+});
+
+test('NPC 聊天：每学期时间扣减按不同身份计数，达到上限后新身份首聊不再扣时间', () => {
+  let state = game.createGame();
+  for (const identityId of ['senior', 'seniorGirl']) {
+    state = game.chatWithNpc(state, { identityId, quality: 0 }).state;
+  }
+  assert.equal(state.time, 10, '两个身份各扣 1 点时间');
+  const third = game.chatWithNpc(state, { identityId: 'lecturer', quality: 0 });
+  assert.equal(third.ok, true);
+  assert.equal(third.state.time, 10, '达到学期上限后，新身份首聊不再扣时间');
+  assert.equal(third.state.npcChats.lecturer.timeCharged, false);
+});
+
+test('NPC 聊天：非行动阶段与资源不足都原样拒绝，不扣费不写历史', () => {
+  for (const phase of ['eventPending', 'examPending', 'summary', 'endingChoice', 'finished']) {
+    const state = { ...game.createGame(), phase };
+    const before = structuredClone(state);
+    const result = game.chatWithNpc(state, { identityId: 'senior', quality: 2 });
+    assert.equal(result.ok, false, phase);
+    assert.strictEqual(result.state, state);
+    assert.deepEqual(state, before);
+  }
+  const tired = { ...game.createGame(), energy: 0 };
+  const tiredBefore = structuredClone(tired);
+  const rejected = game.chatWithNpc(tired, { identityId: 'senior', quality: 2 });
+  assert.equal(rejected.ok, false);
+  assert.match(rejected.reason, /精力不够/);
+  assert.deepEqual(tired, tiredBefore);
+  const noTime = { ...game.createGame(), time: 0 };
+  assert.equal(game.chatWithNpc(noTime, { identityId: 'student', quality: 2 }).ok, false, '首聊没有时间则拒绝');
+  // 已经搭过话的身份，时间耗尽后仍可继续聊。
+  const spoken = game.chatWithNpc(game.createGame(), { identityId: 'student', quality: 0 }).state;
+  const repeat = game.chatWithNpc({ ...spoken, time: 0 }, { identityId: 'student', quality: 2 });
+  assert.equal(repeat.ok, true);
+  assert.equal(repeat.state.time, 0);
+});
+
+test('NPC 聊天：未知身份与非法质量分不修改状态，含原型键', () => {
+  const state = game.createGame();
+  const before = structuredClone(state);
+  for (const identityId of ['missing', '__proto__', 'constructor', 'toString', undefined]) {
+    const result = game.chatWithNpc(state, { identityId, quality: 2 });
+    assert.equal(result.ok, false, String(identityId));
+    assert.strictEqual(result.state, state);
+  }
+  for (const quality of [-1, 3, 2.5, '2', null, undefined]) {
+    const result = game.chatWithNpc(state, { identityId: 'senior', quality });
+    assert.equal(result.ok, false, String(quality));
+    assert.strictEqual(result.state, state);
+  }
+  assert.deepEqual(state, before);
+});
+
+test('NPC 聊天：命令编号幂等与过期的 revision 都能拦住重复提交', () => {
+  const state = game.createGame();
+  const once = game.chatWithNpc(state, { identityId: 'senior', quality: 1 }, { commandId: 'chat-1' });
+  assert.equal(once.ok, true);
+  const again = game.chatWithNpc(once.state, { identityId: 'senior', quality: 1 }, { commandId: 'chat-1' });
+  assert.equal(again.ok, false);
+  assert.equal(again.reason, '这次操作已经提交');
+  const stale = game.chatWithNpc(once.state, { identityId: 'senior', quality: 1 }, { expectedRevision: 0 });
+  assert.equal(stale.ok, false);
+  assert.match(stale.reason, /状态已更新/);
+});
+
+test('NPC 聊天：新学期清空计数，同身份重新扣首聊时间', () => {
+  let state = game.chatWithNpc(game.createGame(), { identityId: 'senior', quality: 2 }).state;
+  assert.equal(state.time, 11);
+  state = game.endTerm(state).state;
+  state = game.continueGame(state).state;
+  // 低成绩会触发补考事件，先处理掉再聊。
+  while (state.pendingEvent) state = game.submitEventChoice(state, 'later').state;
+  assert.equal(state.term, 2);
+  assert.deepEqual(state.npcChats, {}, '新学期重置聊天计数');
+  const again = game.chatWithNpc(state, { identityId: 'senior', quality: 2 });
+  assert.equal(again.ok, true);
+  assert.equal(again.state.time, 11, '新学期首次搭话重新扣时间');
+});
+
+test('NPC 聊天可重放，存档校验接受新字段并拒绝被篡改的计数', () => {
+  let state = game.createGame();
+  for (const [identityId, quality] of [['senior', 2], ['student', 1], ['lecturer', 0], ['senior', 2]]) {
+    state = game.chatWithNpc(state, { identityId, quality }).state;
+  }
+  const replay = game.replay({ nickname: state.nickname, seed: state.rng.seed, commands: state.history.map((entry) => entry.command) });
+  assert.equal(replay.ok, true);
+  assert.deepEqual(replay.state.npcChats, state.npcChats);
+  assert.equal(replay.state.energy, state.energy);
+  assert.equal(replay.state.social, state.social);
+  assert.equal(replay.state.preparation, state.preparation);
+  assert.equal(game.validateState(state).ok, true);
+
+  const legacy = { ...game.createGame() };
+  delete legacy.npcChats;
+  assert.equal(game.validateState(legacy).ok, true, '旧存档没有聊天字段也能读');
+
+  const bad = [
+    (s) => { s.npcChats.missing = { messages: 1, rewards: 0, preps: 0, timeCharged: false }; },
+    (s) => { s.npcChats.senior.rewards = 4; },
+    (s) => { s.npcChats.senior.messages = 1; },
+    (s) => { s.npcChats.student.preps = 1; },
+    (s) => { s.npcChats.senior.rewards = 1; },
+    (s) => { s.history[0].command.quality = 3; }
+  ];
+  for (const mutate of bad) {
+    const copy = structuredClone(state);
+    mutate(copy);
+    assert.equal(game.validateState(copy).ok, false);
+  }
+  const exceeded = structuredClone(state);
+  exceeded.npcChats = {};
+  for (const identityId of ['senior', 'seniorGirl', 'lecturer']) {
+    exceeded.npcChats[identityId] = { messages: 1, rewards: 0, preps: 0, timeCharged: true };
+  }
+  assert.equal(game.validateState(exceeded).ok, false, '时间标记超过学期上限');
+});
+
+test('NPC 身份表与 config 白名单一致，防止跨模块漂移', () => {
+  const npc = require('./npc.js');
+  const identities = game.NPC_CHAT.identities;
+  assert.equal(Object.keys(identities).length, npc.IDENTITIES.length);
+  for (const identity of npc.IDENTITIES) {
+    assert.equal(identities[identity.id], identity.label, identity.id);
+  }
+  for (const id of game.NPC_CHAT.academicIdentities) assert.ok(Object.hasOwn(identities, id), id);
+  for (const quality of [0, 1, 2]) {
+    const effect = game.NPC_CHAT.qualityEffects[quality];
+    assert.ok(!Object.hasOwn(effect, 'preparation'), '社交心情效果里不能混入学习进度');
+  }
+});
+
 test('运动会：短跑按体能出结果，趣味项目保底，观众席免费', () => {
   let state = { ...game.createGame(), term: 2 };
   for (let index = 0; index < 3; index++) state = game.executeAction(state, 'rest').state;

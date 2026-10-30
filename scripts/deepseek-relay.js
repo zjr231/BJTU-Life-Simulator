@@ -48,9 +48,19 @@ async function relay(body, options = {}) {
       return { statusCode: 502, body: { error: '模型服务返回 ' + response.status + (detail ? '：' + detail : '') } };
     }
     const data = await response.json();
-    const reply = String(data?.choices?.[0]?.message?.content ?? '').trim().slice(0, MAX_REPLY);
+    // 前端提示词要求模型在回复末尾单独输出对话质量标记【Q:0/1/2】（游戏按质量结算社交/心情收益）。
+    // 先剥离标记再做长度截断，避免截断把标记切成半截；没有标记时 quality 为 null，前端退回本地启发式评分。
+    const raw = String(data?.choices?.[0]?.message?.content ?? '').trim();
+    let quality = null;
+    let content = raw;
+    const marker = raw.match(/【\s*Q[:：]?\s*([012])\s*】\s*$/);
+    if (marker) {
+      quality = Number(marker[1]);
+      content = raw.slice(0, marker.index).trimEnd();
+    }
+    const reply = content.slice(0, MAX_REPLY);
     if (!reply) return { statusCode: 502, body: { error: '模型没有返回内容' } };
-    return { statusCode: 200, body: { reply } };
+    return { statusCode: 200, body: { reply, quality } };
   } catch (error) {
     return { statusCode: 504, body: { error: error && error.name === 'AbortError' ? '模型响应超时' : '中转调用失败' } };
   } finally {

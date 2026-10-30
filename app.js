@@ -40,7 +40,8 @@ let uiLocked = false;
 let unlockTimer;
 let toastTimer;
 let placeEnterTimer;
-// 校园偶遇 NPC：纯逻辑在 npc.js，渲染与点击对话在这里；属于观感层，不进入存档格式。
+// 校园偶遇 NPC：纯逻辑在 npc.js，渲染与点击对话在这里。
+// 聊天记录与走位仍是观感层、不进存档；playing 阶段每条消息会走规则命令 chatWithNpc 结算消耗与收益。
 const npc = typeof CampusNpc !== 'undefined' ? CampusNpc : null;
 let npcSystem = null;
 let npcTimer = null;
@@ -212,6 +213,7 @@ const NPC_GLASSES = '<circle cx="16" cy="12" r="2.2" fill="none" stroke="#22262b
 const NPC_FIGURES = {
   student: npcBody({ top: '#2e6fae', bottom: '#f4f4f4', accessory: NPC_HAIR + '<rect x="29" y="21" width="7" height="14" rx="2.5" fill="#7c4a21"/>' }),
   senior: npcBody({ top: '#5b6b7c', bottom: '#8a97a5', accessory: NPC_HAIR + NPC_GLASSES + '<rect x="29" y="21" width="7" height="14" rx="2.5" fill="#6b4a2b"/>' }),
+  seniorGirl: npcBody({ top: '#8a5ba6', bottom: '#4c5866', accessory: NPC_HAIR + '<path d="M26 7 q7 4 6 12 l-2.4 1 q1.4-7-4.6-10z" fill="#2b2b33"/>' + '<rect x="4" y="24" width="7" height="10" rx="1.5" fill="#5d4037"/>' }),
   canteen: npcBody({ skin: '#f0c39a', top: '#f7f7f2', bottom: '#f7f7f2', accessory: NPC_HAIR + '<rect x="12" y="2" width="16" height="7" rx="2" fill="#f7f7f2"/><rect x="12" y="2" width="16" height="3" rx="1.5" fill="#d94f4f"/>' }),
   lecturer: npcBody({ top: '#3f5c77', bottom: '#333a45', accessory: NPC_HAIR + '<path d="M19 21l2 6-2 1-2-1z" fill="#b03a2e"/>' }),
   staff: npcBody({ top: '#6f7f8f', bottom: '#4c5866', accessory: NPC_HAIR + '<rect x="17" y="21" width="6" height="2" fill="#c26a2e"/><rect x="18" y="23" width="4" height="5" rx="0.8" fill="#f7f7f2"/>' }),
@@ -406,6 +408,8 @@ function talkToNpc(npcId) {
   showNpcChat();
 }
 // 聊天窗口：点击即打开，开场白进历史，气泡式展示；配置了在线中转时输入直接走云函数，失败自动回退本地台词。
+// playing 阶段每条消息走规则命令 chatWithNpc：扣精力（学期内每身份首聊再扣时间），按对话质量加社交/心情，
+// 学长学姐和老师还能指点学习进度；其他阶段纯闲聊，不消耗资源。
 function showNpcChat() {
   npcTyping = false;
   // 清掉已离场人物的聊天记录，控制总量；每条对话保留最近 12 条消息。
@@ -421,7 +425,7 @@ function showNpcChat() {
     npcTalkIndex.set(npcTalking.id, 1);
   }
   const chatForm = '<form id="npcChatForm" class="npc-chat-form"><div class="npc-chat-row"><input id="npcChatInput" maxlength="200" placeholder="说点什么…" autocomplete="off"><button type="submit" class="utility-button">发送</button></div></form>';
-  showDialog('npc', npcTalking.label, '<div class="npc-chat"><div class="npc-chat-history" id="npcChatHistory">' + renderNpcHistory(history) + '</div>' + chatForm + '<p class="dialog-note">校园里的人会随机出现，聊几句不消耗资源；离开后聊天记录会清空。</p></div>', [{ id: 'npcLeave', text: '退出聊天', secondary: true }]);
+  showDialog('npc', npcTalking.label, '<div class="npc-chat"><div class="npc-chat-history" id="npcChatHistory">' + renderNpcHistory(history) + '</div>' + chatForm + '<p class="dialog-note">校园里的人会随机出现。聊天每句花 1 点精力；学期内第一次和某个人搭话花 1 点时间（整学期最多 2 点）。聊得好能涨社交和心情，学长学姐和老师的指点还能加学习进度。事件、考试和总结期间只能闲聊，不消耗资源；离开后聊天记录会清空。</p></div>', [{ id: 'npcLeave', text: '退出聊天', secondary: true }]);
   scrollNpcChat();
 }
 function npcBubbleMarkup(message) {
@@ -458,6 +462,11 @@ async function sendNpcChat() {
   const input = $('#npcChatInput');
   const text = String(input?.value || '').trim();
   if (!text) { input?.focus(); return; }
+  // playing 阶段聊天要扣资源：先按规则模块预检，不通过就不发这条消息（不写日志、不扣费、输入保留）。
+  if (state && state.phase === 'playing') {
+    const precheck = game.npcChatAvailability(state, talking.identityId);
+    if (!precheck.ok) { showToast(precheck.reason); audio?.play('deny'); input?.focus(); return; }
+  }
   const history = npcChatLogs.get(talking.id) || [];
   history.push({ role: 'user', content: text });
   npcChatLogs.set(talking.id, history.slice(-12));
@@ -477,11 +486,12 @@ async function sendNpcChat() {
     timeoutTimer = setTimeout(() => controller.abort(), (game.AI_CHAT && game.AI_CHAT.timeoutMs) || 15000);
   }
   let reply = null;
+  let relayQuality = null;
   if (online) {
     try {
       const persona = npc.IDENTITIES.find((item) => item.id === talking.identityId);
       const messages = [
-        { role: 'system', content: '你是《北交人生》校园游戏地图上的一位NPC：' + talking.label + '。用中文回答，两三句以内，口语化，符合你的身份。不要用列表和表情包，不要透露你是AI。你常说的话例如：' + persona.lines.join('') },
+        { role: 'system', content: '你是《北交人生》校园游戏地图上的一位NPC：' + talking.label + '。用中文回答，两三句以内，口语化，符合你的身份。不要用列表和表情包，不要透露你是AI。你常说的话例如：' + persona.lines.join('') + '。另外，每次回复的最后一行单独输出对方这句话的对话质量标记，格式必须是【Q:0】【Q:1】【Q:2】之一：0=敷衍或无关，1=正常礼貌，2=真诚具体、对对方有帮助。' },
         { role: 'system', content: '正在和你说话的是北京交通大学的学生：' + npcPlayerContext() },
         ...history.slice(-12)
       ];
@@ -490,6 +500,7 @@ async function sendNpcChat() {
       const candidate = typeof data?.reply === 'string' ? data.reply.trim() : '';
       if (!response.ok || !candidate) throw new Error('bad relay response');
       reply = candidate;
+      relayQuality = Number.isSafeInteger(data?.quality) && data.quality >= 0 && data.quality <= 2 ? data.quality : null;
       $('#dialogNotice').textContent = '';
     } catch (_) {
       // 中转不可达或服务异常：回退本地台词，聊天不中断。
@@ -500,17 +511,34 @@ async function sendNpcChat() {
     }
   }
   if (npcTalking !== talking) return; // 期间换了聊天对象或已退出，不再写入
+  // 对话质量（0/1/2）：优先用中转返回的 quality；旧版中转没剥离标记时在前端剥离尾部【Q:n】；都没有用本地启发式。
+  let quality = relayQuality;
+  const marker = reply === null ? null : reply.match(/【\s*Q[:：]?\s*([012])\s*】\s*$/);
+  if (marker) {
+    if (quality === null) quality = Number(marker[1]);
+    reply = reply.slice(0, marker.index).trimEnd();
+  }
   if (!reply) {
-    // 本地台词兜底：按发送次数轮换该身份台词库，离线也能聊起来。
+    // 本地台词兜底：按发送次数轮换该身份台词库，离线或回复只剩标记时也能聊起来。
     const lines = npc.linesFor(talking.identityId);
     const index = npcTalkIndex.get(talking.id) || 0;
     npcTalkIndex.set(talking.id, index + 1);
     reply = lines[index % lines.length];
   }
+  if (quality === null) quality = npc.heuristicQuality(text);
   npcTyping = false;
   history.push({ role: 'assistant', content: reply });
   npcChatLogs.set(talking.id, history.slice(-12));
   updateNpcHistory();
+  // playing 阶段这条消息走规则入口：扣精力（首聊再扣时间），按质量加社交、心情，学业身份另有学习进度。
+  if (state && state.phase === 'playing') {
+    const result = runCommand('chatWithNpc', { identityId: talking.identityId, quality }, state.revision);
+    if (result) {
+      const notice = $('#dialogNotice');
+      const previous = notice.textContent ? notice.textContent + ' ' : '';
+      notice.textContent = previous + '这次聊天：' + changeText(result.changes);
+    }
+  }
   if (input) { input.disabled = false; input.focus(); }
   if (sendButton) { sendButton.disabled = false; sendButton.textContent = buttonText; }
 }
@@ -544,7 +572,7 @@ function lockUi() {
 function runCommand(operation, id, expectedRevision, eventInstanceId) {
   if (!state || uiLocked) return null;
   const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId };
-  const result = ['executeAction', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'submitExam'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const result = ['executeAction', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'submitExam', 'chatWithNpc'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');

@@ -375,6 +375,9 @@ test('NPC 在线对话：发送消息走云端回复，气泡就地追加且历�
   assert.equal(ui.element('#npcChatInput').value, '', '发送后输入框清空');
   assert.equal(ui.element('#npcChatInput').disabled, false, '发送完成后输入框恢复可用');
   assert.equal(ui.evaluate('npcChatLogs.get(' + JSON.stringify(id) + ').length'), 3, '开场白加一问一答共三条');
+  // 在线回复不带质量标记时用本地启发式评分结算：'你好呀'是零档，只扣精力与该身份本学期首聊时间。
+  assert.match(ui.element('#dialogNotice').textContent, /这次聊天：时间 −1 · 精力 −1/);
+  assert.equal(ui.evaluate('state.history.at(-1).command.operation'), 'chatWithNpc');
 });
 
 test('NPC 在线对话：中转不可达时回退本地台词并提示，聊天不中断', async () => {
@@ -388,12 +391,73 @@ test('NPC 在线对话：中转不可达时回退本地台词并提示，聊天�
   ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
   ui.evaluate('fetch = async () => { throw new Error("offline"); }');
   ui.element('#npcChatInput').value = '在吗';
+  const before = ui.evaluate('({ revision: state.revision, energy: state.energy, time: state.time })');
   await ui.evaluate('sendNpcChat()');
-  assert.match(ui.element('#dialogNotice').textContent, /本地台词/);
+  // 中转失败的提示随后被结算摘要覆盖；离线兜底照常评分扣费（'在吗'是零档，只有消耗）。
+  assert.match(ui.element('#dialogNotice').textContent, /这次聊天：时间 −1 · 精力 −1/);
+  const after = ui.evaluate('({ revision: state.revision, energy: state.energy, time: state.time })');
+  assert.equal(after.revision, before.revision + 1, '聊天消息提交为一条规则命令');
+  assert.equal(after.energy, before.energy - 1, '每条消息扣 1 精力');
+  assert.equal(after.time, before.time - 1, '学期内首次搭话扣 1 时间');
   const history = ui.element('#npcChatHistory').innerHTML;
   assert.match(history, /在吗/, '玩家消息留在历史里，聊天不中断');
   const lines = ui.evaluate('CampusNpc.linesFor(' + JSON.stringify(identityId) + ')');
   assert.ok(lines.some((line) => history.includes(line)), '回退台词来自该身份台词库');
+});
+
+test('NPC 聊天规则结算：中转返回质量分按档位加属性，旧版中转的尾部标记被前端剥离', async () => {
+  const ui = app(memory(), false, true);
+  ui.start();
+  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
+  ui.flush(); ui.flush();
+  const id = ui.evaluate('npcSystem.active()[0].id');
+  const identityId = ui.evaluate('npcSystem.active()[0].identityId');
+  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
+  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
+  // 新版中转：{ reply, quality } 结构，质量 2 档。
+  ui.evaluate('fetch = async () => ({ ok: true, json: async () => ({ reply: "谢谢你的建议，加油！", quality: 2 }) })');
+  ui.element('#npcChatInput').value = '老师您好，请问期末复习的重点是什么？';
+  const before = ui.evaluate('({ social: state.social, mood: state.mood, preparation: state.preparation })');
+  await ui.evaluate('sendNpcChat()');
+  assert.equal(ui.evaluate('state.history.at(-1).command.quality'), 2, '采用中转返回的质量分');
+  assert.equal(ui.evaluate('state.social'), before.social + 2, '二档社交 +2');
+  assert.equal(ui.evaluate('state.mood'), before.mood + 4, '二档心情 +4');
+  if (['senior', 'seniorGirl', 'lecturer', 'professor'].includes(identityId)) {
+    assert.equal(ui.evaluate('state.preparation'), before.preparation + 5, '学业身份另加学习进度 +5');
+  }
+  // 旧版中转：回复末尾带标记、不返回 quality，前端负责剥离并取分。
+  ui.evaluate('fetch = async () => ({ ok: true, json: async () => ({ reply: "不客气，去忙吧。【Q:2】" }) })');
+  ui.element('#npcChatInput').value = '谢谢老师，我明白了！';
+  await ui.evaluate('sendNpcChat()');
+  assert.doesNotMatch(ui.element('#npcChatHistory').innerHTML, /【Q:2】/, '质量标记不进聊天气泡');
+  assert.equal(ui.evaluate('state.history.at(-1).command.quality'), 2, '尾部标记里的质量分被采用');
+  assert.equal(ui.evaluate('state.history.at(-1).changes.social'), 2, '第二条照常按二档结算');
+});
+
+test('NPC 聊天规则结算：非 playing 阶段纯闲聊零消耗，精力不足时预检拦下不发消息', async () => {
+  const ui = app(memory(), false, true);
+  ui.start();
+  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
+  ui.flush(); ui.flush();
+  const id = ui.evaluate('npcSystem.active()[0].id');
+  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
+  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
+  ui.evaluate('fetch = async () => ({ ok: true, json: async () => ({ reply: "考试加油。", quality: 2 }) })');
+  // 总结阶段：消息照发（观感层），但不走规则命令，零消耗零收益。
+  ui.evaluate('state = { ...state, phase: "summary", summary: { term: 1 } }; renderState()');
+  const idle = ui.evaluate('({ revision: state.revision, energy: state.energy, time: state.time })');
+  ui.element('#npcChatInput').value = '在吗';
+  await ui.evaluate('sendNpcChat()');
+  assert.deepEqual(ui.evaluate('({ revision: state.revision, energy: state.energy, time: state.time })'), idle, '非 playing 阶段不提交规则命令');
+  assert.doesNotMatch(ui.element('#dialogNotice').textContent, /这次聊天/);
+  // 回到 playing 但精力耗尽：预检拦截，消息不发送、输入保留。
+  ui.evaluate('state = { ...state, phase: "playing", energy: 0 }; renderState()');
+  ui.element('#npcChatInput').value = '还想聊聊';
+  await ui.evaluate('sendNpcChat()');
+  assert.match(ui.element('#dialogNotice').textContent, /精力不够/);
+  assert.ok(!ui.element('#npcChatHistory').innerHTML.includes('还想聊聊'), '预检失败时玩家消息不进历史');
+  assert.equal(ui.element('#npcChatInput').value, '还想聊聊', '输入内容保留可修改');
+  assert.equal(ui.element('#npcChatInput').disabled, false, '输入框未被禁用');
 });
 
 test('开学选课、结束学期开考与期末总结界面可依次渲染', () => {

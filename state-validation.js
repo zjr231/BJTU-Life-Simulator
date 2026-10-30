@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function validate(state, game, random) {
-    const { RULES, ACTIONS, EVENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, gradeFor, ratingFor } = game;
+    const { RULES, ACTIONS, EVENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, gradeFor, ratingFor, NPC_CHAT } = game;
     const fail = (reason) => ({ ok: false, reason: '存档状态无效：' + reason });
     const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
     const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -57,16 +57,32 @@
       if (!object(state.counts) || !object(state.eventFlags) || !object(state.chains)) return fail('次数、事件标记或事件链');
       const validCounts = (counts) => object(counts) && Object.entries(counts).every(([id, count]) => own(ACTIONS, id) && integer(count, 0, ACTIONS[id].limit || 12));
       if (!validCounts(state.counts)) return fail('行动次数');
+      // 旧存档没有 NPC 聊天计数字段，读取时按空对象处理；一旦存在就校验结构与交叉约束。
+      const npcChats = state.npcChats === undefined ? {} : state.npcChats;
+      if (!object(npcChats)) return fail('NPC 聊天计数');
+      const academicSet = new Set(NPC_CHAT.academicIdentities);
+      let chargedIdentities = 0;
+      for (const [id, record] of Object.entries(npcChats)) {
+        if (!own(NPC_CHAT.identities, id)) return fail('NPC 聊天身份');
+        if (!object(record) || !integer(record.messages, 0, 200) || !integer(record.rewards, 0, NPC_CHAT.rewardMessagesPerIdentity) || !integer(record.preps, 0, NPC_CHAT.academicPrepPerIdentity) || typeof record.timeCharged !== 'boolean') return fail('NPC 聊天计数');
+        if (record.rewards > record.messages) return fail('NPC 聊天收益次数');
+        if (record.preps > record.rewards) return fail('NPC 聊天指点次数');
+        if (!academicSet.has(id) && record.preps !== 0) return fail('NPC 聊天指点身份');
+        if (record.timeCharged && record.messages < 1) return fail('NPC 聊天时间标记');
+        if (record.timeCharged) chargedIdentities++;
+      }
+      if (chargedIdentities > NPC_CHAT.timeChargeCapPerTerm) return fail('NPC 聊天时间上限');
       if (state.history.length !== state.revision || state.processedCommands.length !== state.revision || new Set(state.processedCommands).size !== state.revision) return fail('操作序号');
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'beginExam', 'submitExam', 'endTerm', 'continueGame', 'chooseEnding'].includes(command.operation)) return fail('历史操作类型');
+        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'beginExam', 'submitExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'executeAction' && !own(ACTIONS, command.id)) return fail('历史行动');
         if (command.operation === 'submitEventChoice' && (!own(EVENTS, entry.event) || !EVENTS[entry.event].choices.some((choice) => choice.id === command.id) || command.eventInstanceId !== entry.instanceId)) return fail('历史事件');
         if (command.operation === 'selectCourses' && (!Array.isArray(command.id) || command.id.length !== 3 || new Set(command.id).size !== 3 || !command.id.every((id) => COURSES.some((course) => course.id === id)))) return fail('历史选课');
         if (command.operation === 'submitExam' && (!Array.isArray(command.id) || command.id.length !== 5 || !command.id.every((answer) => integer(answer, 0, 3)))) return fail('历史考试答案');
         if (command.operation === 'chooseEnding' && !['ordinary', 'employment', 'furtherStudy', 'notQualified'].includes(command.id)) return fail('历史方向');
+        if (command.operation === 'chatWithNpc' && (!own(NPC_CHAT.identities, command.identityId) || !integer(command.quality, 0, 2))) return fail('历史对话');
         for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !integer(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 100)) return fail('历史状态摘要');
       }
       const expectedCourses = ['summary', 'endingChoice', 'finished'].includes(state.phase) ? state.term : state.term - 1;

@@ -9,13 +9,13 @@ function makeRandom(seed) {
   return () => { const result = draw(rng); rng = result.rng; return result.number; };
 }
 
-test('十六种身份权重合计 100，台词库完整且风格贴合职位', () => {
+test('十七种身份权重合计 100，台词库完整且风格贴合职位', () => {
   const total = npc.IDENTITIES.reduce((sum, item) => sum + item.weight, 0);
   assert.equal(total, 100);
-  assert.equal(npc.IDENTITIES.length, 16);
-  assert.equal(new Set(npc.IDENTITIES.map((item) => item.id)).size, 16);
-  assert.equal(new Set(npc.IDENTITIES.map((item) => item.label)).size, 16);
-  assert.equal(new Set(npc.IDENTITIES.map((item) => item.figure)).size, 16);
+  assert.equal(npc.IDENTITIES.length, 17);
+  assert.equal(new Set(npc.IDENTITIES.map((item) => item.id)).size, 17);
+  assert.equal(new Set(npc.IDENTITIES.map((item) => item.label)).size, 17);
+  assert.equal(new Set(npc.IDENTITIES.map((item) => item.figure)).size, 17);
   for (const identity of npc.IDENTITIES) {
     assert.ok(identity.label && identity.figure && identity.route && identity.mode && identity.speed > 0, identity.id);
     assert.ok(identity.lines.length >= 4, identity.id + ' 台词至少 4 句');
@@ -37,7 +37,18 @@ test('十六种身份权重合计 100，台词库完整且风格贴合职位', (
   spot('rider', /外卖|餐/);
   spot('coach', /体测|操场/);
   spot('doctor', /医|体温|药/);
+  spot('seniorGirl', /保研|考研|实习|方向/);
   assert.deepEqual(npc.linesFor('unknown'), []);
+});
+
+test('本地启发式评分：问候、提问、礼貌称呼与长度综合分档，空消息为零分', () => {
+  assert.equal(npc.heuristicQuality(''), 0);
+  assert.equal(npc.heuristicQuality(null), 0);
+  assert.equal(npc.heuristicQuality('你好'), 0);
+  assert.equal(npc.heuristicQuality('在吗'), 0);
+  assert.equal(npc.heuristicQuality('学长你好'), 1);
+  assert.equal(npc.heuristicQuality('请问学长，数据结构第三章要怎么复习？'), 1);
+  assert.equal(npc.heuristicQuality('学长您好，想请教一下期末复习应该怎么安排比较好？'), 2);
 });
 
 test('路线坐标都在地图范围内，右侧道路经过南门、宾馆、逸夫楼、图书馆、宿舍', () => {
