@@ -54,6 +54,9 @@ let commandSequence = 0;
 let savedRevision = -1;
 let savedAt = '';
 let saveNotice = '';
+const eventDrafts = new Map();
+const actionDrafts = new Map();
+let acknowledgedResultRevision = -1;
 const failures = [];
 const sessionId = Date.now().toString(36);
 function showToast(message) {
@@ -271,13 +274,6 @@ function changeText(changes) {
   const names = { time: '时间', energy: '精力', money: '钱包', preparation: '学习进度', social: '社交', fitness: '体能', mood: '心情', furtherStudy: '深造准备', jobPreparation: '求职准备' };
   return Object.entries(changes || {}).filter(([, value]) => value !== 0).map(([key, value]) => names[key] + ' ' + (value > 0 ? '+' : '−') + Math.abs(value) + (key === 'money' ? ' 元' : '')).join(' · ') || '没什么明显变化';
 }
-function gains(effect) {
-  const changes = game.previewChanges(state, effect);
-  const positives = Object.fromEntries(Object.entries(changes).filter(([, value]) => value > 0));
-  if (effect.kind === 'apply') return '申请后选择是否加入';
-  const chainEffect = { accept: '事件链开启', defer: '暂缓申请', postpone: '投入保留，延后一学期', complete: '经历完成', abandon: '投入记录保留，放弃完成经历' }[effect.chainEffect];
-  return [Object.keys(positives).length ? changeText(positives) : '', effect.kind === 'work' ? '事件链投入 +1' : '', chainEffect || ''].filter(Boolean).join(' · ') || '保留资源，继续安排';
-}
 function costs(effect) {
   return [(effect.time ? '时间 −' + effect.time : ''), (effect.energy ? '精力 −' + effect.energy : ''), (effect.money ? '钱包 −' + effect.money + ' 元' : ''), (effect.mood < 0 ? '心情 −' + Math.min(state.mood, Math.abs(effect.mood)) : '')].filter(Boolean).join(' · ') || '不消耗资源';
 }
@@ -285,8 +281,11 @@ function renderActions() {
   const actions = Object.keys(game.ACTIONS).filter((id) => game.ACTIONS[id].place === activePlace);
   $('#actionList').innerHTML = actions.length ? actions.map((id) => {
     const action = game.getAction(state, id);
-    const check = game.availability(state, id);
-    return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div><p>' + h(action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景加成：' + h(action.backgroundBonus) + '</p>' : '') + '<div class="action-cost">' + h(costs(action)) + '</div><div class="action-gain">' + h(gains(action)) + '</div><button type="button" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>执行' + h(action.title) + '</button>' + (!check.ok ? '<div class="action-reason">' + h(check.reason) + '</div>' : '') + '</article>';
+    const profile = game.getActionInvestment(state, id);
+    const amount = actionDraft(id);
+    const preview = profile && game.previewActionInvestment(state, id, amount);
+    const check = game.availability(state, id, amount);
+    return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div><p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : action)) + '</div><button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>确认' + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
   }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
 }
 function openPlace(key, hotspot) {
@@ -299,7 +298,7 @@ function openPlace(key, hotspot) {
   $('#placeTitle').textContent = game.PLACES[key].title;
   $('#placeKicker').textContent = '主校区 · ' + game.PLACES[key].kicker;
   $('#placeDescription').textContent = game.PLACES[key].description;
-  $('#actionFeedback').textContent = '逛逛不花资源。收益接近上限时，显示实际增加的数值。';
+  $('#actionFeedback').textContent = '先安排投入，再决定行动。完成之后，会记下这次发生的事。';
   hotspots.forEach((item) => item.classList.toggle('is-active', item.dataset.place === key));
   // 过场动画：地图聚焦压暗离场，场所屏入场时内容错落升起；入场标记随后清理，避免每次行动重绘都重播动画。
   $('#mapScreen').classList.add('is-leaving');
@@ -518,7 +517,7 @@ function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
   stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', exam: '期末考试', endingChoice: '毕业方向', finished: '四年手账', npc: '校园偶遇' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', exam: '期末考试', endingChoice: '毕业方向', finished: '四年手账', npc: '校园偶遇' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
@@ -537,13 +536,13 @@ function lockUi() {
     uiLocked = false;
     if (activePlace) renderActions();
     dialog.querySelectorAll('[data-dialog-action]').forEach((button) => { button.disabled = false; });
-    dialog.querySelectorAll('[data-event-choice]').forEach((button) => { button.disabled = !game.eventAvailability(state, button.dataset.eventChoice, button.dataset.instance).ok; });
+    dialog.querySelectorAll('[data-event-choice]').forEach((button) => { button.disabled = !game.eventAvailability(state, button.dataset.eventChoice, button.dataset.instance, eventDraft(button.dataset.eventChoice)).ok; });
     dialog.querySelectorAll('[data-ending]').forEach((button) => { button.disabled = !state.endingOptions.options.find((item) => item.id === button.dataset.ending)?.available; });
   }, 300);
 }
-function runCommand(operation, id, expectedRevision, eventInstanceId) {
+function runCommand(operation, id, expectedRevision, eventInstanceId, investment) {
   if (!state || uiLocked) return null;
-  const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId };
+  const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId, investment };
   const result = ['executeAction', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'submitExam'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
@@ -701,21 +700,90 @@ function showEnrollment() {
   showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p><p class="dialog-note">背景只影响一项行动加成，不会锁死你的毕业路线。看完玩法说明后先完成本学期选课。</p>', [{ id: 'resume', text: '看看怎么安排' }]);
 }
 function showTutorial() {
-  showDialog('tutorial', '八学期怎么安排', '<ol><li>每学期开学先选 3 门课程，再去地图上安排行动。选课决定期末考试覆盖的学科；数学、物理、计算机、交通、土木、经管等定量课程会按主题随机生成计算题。</li><li>点击地图上的地点，先看成本和收益，再决定做不做。逛逛、返回都不花钱。</li><li>学习和自学都攒同一个学习进度，它是总评里的平时分（40%）。</li><li>期末参加 5 题考试，覆盖所选课程，每题 20 分；总评 = 平时分 × 40% + 考试 × 60%，60 分达标。</li><li>每学期 12 点时间。休息能回精力，回不了时间；长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目的成果在之后的学期确认，社团和实习在投入完成后即可收尾。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
+  showDialog('tutorial', '八学期怎么安排', '<ol><li>每学期开学先选 3 门课程，再去地图上安排行动。选课决定期末考试覆盖的学科；数学、物理、计算机、交通、土木、经管等定量课程会按主题随机生成计算题。</li><li>点击地图上的地点，先看活动安排和成本，再决定做不做。逛逛、返回都不花钱。</li><li>日常行动和部分事件可选固定投入档位；确认前查看时间及资源成本，完成后揭晓实际收益，并写入成长记录。军训成本包含训练和汇演，汇演免费连续完成。</li><li>学习和自学都攒同一个学习进度，它是总评里的平时分（40%）。</li><li>期末参加 5 题考试，覆盖所选课程，每题 20 分；总评 = 平时分 × 40% + 考试 × 60%，60 分达标。</li><li>每学期 12 点时间。休息能回精力，回不了时间；长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目的成果在之后的学期确认，社团和实习在投入完成后即可收尾。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
 }
 function showBackground() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
   showDialog('background', '入学背景', '<p><b>' + h(state.nickname) + '</b> · ' + h(state.background.college) + ' · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p><p>专业与课程参考学校公开培养方案，学期顺序、学分和选课限制为玩法简化。背景不会锁死你的毕业路线。</p>', [{ id: 'resume', text: '继续安排' }]);
 }
+function defaultInvestment(profile, available) {
+  if (available(profile.default)) return profile.default;
+  return profile.tiers.find(tier => available(tier.amount))?.amount ?? profile.default;
+}
+function eventDraft(choiceId, resetInvalid = false) {
+  const profile = game.getEventInvestment(state, choiceId);
+  if (!profile) return undefined;
+  const key = state.pendingEvent.instanceId + ':' + choiceId;
+  const current = eventDrafts.get(key);
+  if (!eventDrafts.has(key) || (resetInvalid && !profile.tiers.some(tier => tier.amount === current))) eventDrafts.set(key, defaultInvestment(profile, amount => game.eventAvailability(state, choiceId, state.pendingEvent.instanceId, amount).ok));
+  return eventDrafts.get(key);
+}
+function investmentTierButtons(choice, profile, amount, kind) {
+  const data = kind === 'action' ? 'data-action-investment-preset' : 'data-investment-preset';
+  return profile.tiers.map(tier => {
+    const preview = kind === 'action' ? game.previewActionInvestment(state, choice.id, tier.amount) : game.previewEventInvestment(state, choice.id, tier.amount);
+    return '<button type="button" class="investment-tier' + (tier.amount === amount ? ' is-selected' : '') + '" ' + data + '="' + choice.id + '" data-amount="' + tier.amount + '" aria-pressed="' + (tier.amount === amount) + '"><b>' + h(tier.label) + '</b><span>' + h(costs(preview.effect)) + '</span></button>';
+  }).join('');
+}
+function investmentControls(choice, profile, preview, kind = 'event') {
+  const id = (kind === 'action' ? 'action-' : '') + choice.id;
+  return '<fieldset class="investment-controls"><legend>' + h(profile.label) + '</legend><div class="investment-options" id="investment-options-' + id + '">' + investmentTierButtons(choice, profile, preview.amount, kind) + '</div><small>确认后完成本档安排，再揭晓实际结果。</small></fieldset>';
+}
+
+function investmentUnit(resource) {
+  return { money: '元', energy: '点精力', time: '点时间' }[resource];
+}
+function actionDraft(id) {
+  const profile = game.getActionInvestment(state, id);
+  if (!profile) return undefined;
+  const key = state.term + ':' + id;
+  if (!actionDrafts.has(key)) actionDrafts.set(key, defaultInvestment(profile, amount => game.availability(state, id, amount).ok));
+  return actionDrafts.get(key);
+}
+function updateActionInvestment(id, amount, sourceId) {
+  const profile = game.getActionInvestment(state, id);
+  if (!profile || game.ACTIONS[id].place !== activePlace || dialog.open) return;
+  actionDrafts.set(state.term + ':' + id, amount);
+  const preview = game.previewActionInvestment(state, id, amount);
+  const check = game.availability(state, id, amount);
+  $('#action-choice-' + id).disabled = !check.ok || uiLocked;
+  $('#investment-reason-action-' + id).textContent = check.ok ? '' : check.reason;
+  $('#investment-cost-action-' + id).textContent = preview.ok ? costs(preview.effect) : '请设置有效的投入';
+  $('#investment-options-action-' + id).innerHTML = investmentTierButtons({ id }, profile, amount, 'action');
+
+}
+function updateInvestment(choiceId, amount, sourceId) {
+  const profile = game.getEventInvestment(state, choiceId);
+  if (!profile || dialogMode !== 'event') return;
+  eventDrafts.set(state.pendingEvent.instanceId + ':' + choiceId, amount);
+  const preview = game.previewEventInvestment(state, choiceId, amount);
+  const check = game.eventAvailability(state, choiceId, state.pendingEvent.instanceId, amount);
+  $('#event-choice-' + choiceId).disabled = !check.ok || uiLocked;
+  $('#investment-reason-' + choiceId).textContent = check.ok ? '' : check.reason;
+  $('#investment-cost-' + choiceId).textContent = preview.ok ? costs(preview.effect) : '请设置有效的投入';
+  $('#investment-options-' + choiceId).innerHTML = investmentTierButtons({ id: choiceId }, profile, amount, 'event');
+
+}
 function showEvent() {
   audio?.play('event');
   const pending = state.pendingEvent;
   const event = game.EVENTS[pending.id];
-  const choices = event.choices.map((choice) => {
-    const check = game.eventAvailability(state, choice.id);
-    return '<article class="event-choice"><h3>' + h(choice.title) + '</h3><p>' + h(choice.description) + '</p><div class="action-cost">' + h(costs(choice)) + '</div><div class="action-gain">' + h(gains(choice)) + '</div><button type="button" data-event-choice="' + choice.id + '" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '"' + (!check.ok || uiLocked ? ' disabled' : '') + '>选择：' + h(choice.title) + '</button>' + (check.ok ? '' : '<div class="action-reason">' + h(check.reason) + '</div>') + '</article>';
+  const choices = event.choices.filter(choice => !choice.legacyHidden).map((choice) => {
+    const profile = game.getEventInvestment(state, choice.id);
+    const amount = eventDraft(choice.id, true);
+    const preview = profile && game.previewEventInvestment(state, choice.id, amount);
+    const check = game.eventAvailability(state, choice.id, pending.instanceId, amount);
+    return '<article class="event-choice' + (profile ? ' has-investment' : '') + '"><h3>' + h(choice.title) + '</h3><p>' + h(profile ? profile.description : choice.description) + '</p>' + (profile ? investmentControls(choice, profile, preview) : '') + '<div class="action-cost" id="investment-cost-' + choice.id + '">' + h(costs(preview?.ok ? preview.effect : choice)) + '</div>' + '<button type="button" id="event-choice-' + choice.id + '" data-event-choice="' + choice.id + '" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '"' + (!check.ok || uiLocked ? ' disabled' : '') + '>' + (profile ? '确认投入，' : '选择：') + h(choice.title) + '</button><div class="action-reason" id="investment-reason-' + choice.id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
   }).join('');
-  showDialog('event', event.title, '<p>' + h(event.description) + '</p><p class="dialog-note">' + h(event.trigger) + '。先做个选择，再继续。事件进行中也可以保存。</p><div class="event-choice-list">' + choices + '</div>');
+  showDialog('event', event.title, '<p>' + h(event.description) + '</p><p class="dialog-note">' + h(event.trigger) + '。剩余时间 ' + state.time + ' · 精力 ' + state.energy + ' · 钱包 ' + state.money + ' 元。确认才扣费，切换档位不会结算。</p><div class="event-choice-list">' + choices + '</div>');
+}
+const INVESTMENT_OUTCOMES = { setback: '发挥失常', limited: '收获有限', steady: '有所收获', good: '状态出色', surprise: '意外收获' };
+function showEventResult(entry) {
+  const result = entry.investment;
+  const profile = entry.event ? game.EVENT_INVESTMENTS[entry.event + ':' + entry.choice] || game.LEGACY_INVESTMENTS.events[entry.event + ':' + entry.choice] : game.getActionInvestment(state, entry.action) || game.LEGACY_INVESTMENTS.actions[entry.action];
+  const capped = Object.keys(profile.rewards).some(key => state[key === 'recovery' ? 'energy' : key] === 100);
+  const title = entry.event ? game.EVENTS[entry.event].title : game.ACTIONS[entry.action].title;
+  showDialog('eventResult', title + ' · 结果', '<div class="investment-result"><span class="outcome-badge outcome-' + result.outcome + '">' + INVESTMENT_OUTCOMES[result.outcome] + '</span><p class="investment-spent">本次投入 <b>' + result.amount + ' ' + investmentUnit(result.resource) + '</b></p><p class="investment-story">' + h(result.description) + '</p><div class="investment-actual"><span>实际变化</span><b>' + h(changeText(entry.changes)) + '</b></div>' + (capped ? '<p>部分属性已达上限，实际增加量以当前状态为准。</p>' : '') + '<p class="dialog-note">这次结果已经记入成长记录，继续或保存都不会重新结算。</p></div>', [{ id: 'eventContinue', text: state.pendingEvent?.id === 'military2' ? '继续军训汇演' : state.pendingEvent ? '处理下一个事件' : '继续安排' }]);
 }
 function needsCourseSelection() {
   return !!state && state.phase === 'playing' && !(state.selectedCourses || []).length && !state.history.some((entry) => entry.term === state.term && entry.command.operation === 'executeAction');
@@ -792,8 +860,12 @@ const EXPERIENCE_LABELS = {
   military: '军训汇演完成', singer: '歌手大赛经历', trip: '返乡分享经历', contest: '学科竞赛经历',
   sportsMeet: '运动会经历', transfer: '转专业经历'
 };
+function investmentRecord() {
+  const entries = state.history.filter(entry => entry.investment).slice().reverse();
+  return '<h3>投入与收获</h3>' + (entries.length ? entries.map(entry => '<article class="investment-record"><h4>' + game.TERM_NAMES[entry.term - 1] + ' · ' + h(entry.event ? game.EVENTS[entry.event].title : game.ACTIONS[entry.action].title) + '</h4><span class="outcome-badge outcome-' + entry.investment.outcome + '">' + INVESTMENT_OUTCOMES[entry.investment.outcome] + '</span><p>投入 ' + entry.investment.amount + ' ' + investmentUnit(entry.investment.resource) + '</p><p>' + h(entry.investment.description) + '</p><div class="action-gain">' + h(changeText(entry.changes)) + '</div></article>').join('') : '<p>完成自主投入的行动后，这里会记下你的选择和结果。</p>');
+}
 function growthRecord() {
-  return courseTable() + '<h3>校园经历</h3>' + (state.experiences.length ? '<ul>' + state.experiences.map((item) => '<li>' + game.TERM_NAMES[item.term - 1] + '：' + h(EXPERIENCE_LABELS[item.type] || '校园经历') + '</li>').join('') + '</ul>' : '<p>还没有拿得出手的经历。</p>') + '<h3>事件链进度</h3><ul>' + Object.entries(state.chains).map(([id, chain]) => '<li>' + game.CHAIN_NAMES[id] + '：' + chainLabel(chain) + (chain.status === 'active' ? '，预计第 ' + chain.deadline + ' 学期出结果' : '') + '</li>').join('') + '</ul><h3>毕业条件进度</h3>' + game.evaluateEndings(state).options.filter((item) => item.id !== 'notQualified').map((item) => '<h4>' + h(item.title) + '</h4>' + requirementsMarkup(item.requirements)).join('');
+  return courseTable() + investmentRecord() + '<h3>校园经历</h3>' + (state.experiences.length ? '<ul>' + state.experiences.map((item) => '<li>' + game.TERM_NAMES[item.term - 1] + '：' + h(EXPERIENCE_LABELS[item.type] || '校园经历') + '</li>').join('') + '</ul>' : '<p>还没有拿得出手的经历。</p>') + '<h3>事件链进度</h3><ul>' + Object.entries(state.chains).map(([id, chain]) => '<li>' + game.CHAIN_NAMES[id] + '：' + chainLabel(chain) + (chain.status === 'active' ? '，预计第 ' + chain.deadline + ' 学期出结果' : '') + '</li>').join('') + '</ul><h3>毕业条件进度</h3>' + game.evaluateEndings(state).options.filter((item) => item.id !== 'notQualified').map((item) => '<h4>' + h(item.title) + '</h4>' + requirementsMarkup(item.requirements)).join('');
 }
 const ENDING_TEXT = {
   ordinary: '毕业典礼的台子搭在操场边上，学士服领到手的时候还带着消毒水味。你想起大一第一次进校门，行李箱的轮子在石板路上响了一路。四年的账算下来不复杂：八张成绩单、几场活动、一次体测、几个没说出口的遗憾。有人去了远方，有人留在北京，你选了最稳的一条路。稳妥不是妥协，是你一个学期一个学期攒出来的底气。银杏大道下个秋天还会金黄，只是看它的人换了一批。行李打包完，你在宿舍门口站了会儿，把钥匙放在了宿管阿姨的窗口。出门的时候，风里有北京秋天常有的那种凉。你回头看了一眼，楼还是那栋楼。',
@@ -807,6 +879,9 @@ function showResult() {
 }
 function resumePhase() {
   if (!state) { showAdmission(); return; }
+  state = game.resumeRequiredEvents(state);
+  const last = state.history.at(-1);
+  if (last?.investment && acknowledgedResultRevision !== state.revision) { showEventResult(last); return; }
   if (state.phase === 'eventPending') showEvent();
   else if (state.phase === 'examPending') showExam();
   else if (state.phase === 'summary') showSummary();
@@ -823,8 +898,11 @@ function loadGame(slotId, source = 'primary') {
   const result = saves.load(slotId, source);
   if (!result.ok) { showToast(result.reason); return; }
   closePlace();
-  state = result.state;
+  state = game.resumeRequiredEvents(result.state);
   activeSaveSlot = slotId;
+  actionDrafts.clear();
+  eventDrafts.clear();
+  acknowledgedResultRevision = -1;
   savedRevision = state.revision;
   savedAt = result.savedAt;
   saveNotice = '已恢复栏位 ' + slotId + ' · ' + displayTime(savedAt);
@@ -865,13 +943,15 @@ $('#dialogBody').addEventListener('change', (event) => {
   if (label) label.textContent = '已选 ' + count + ' / 3 门';
 });
 $('#actionList').addEventListener('click', (event) => {
-  const button = event.target.closest('[data-action]');
+  const button = event.target.closest('button');
+  if (button?.dataset.actionInvestmentPreset) { updateActionInvestment(button.dataset.actionInvestmentPreset, Number(button.dataset.amount)); return; }
   if (!button || game.ACTIONS[button.dataset.action]?.place !== activePlace || dialog.open) return;
-  const result = runCommand('executeAction', button.dataset.action, button.dataset.revision);
+  const result = runCommand('executeAction', button.dataset.action, button.dataset.revision, undefined, actionDraft(button.dataset.action));
   if (!result) return;
   audio?.play(ACTION_SOUNDS[button.dataset.action] || 'success');
-  $('#actionFeedback').textContent = (ACTION_FLAVOR[result.entry.action] || result.entry.title + '完成') + (state.time === 0 ? ' 时间用完了，回地图结束这个学期吧。' : '');
-  if (state.phase === 'eventPending') showEvent();
+  $('#actionFeedback').textContent = (result.entry.investment?.description || ACTION_FLAVOR[result.entry.action] || result.entry.title + '完成') + ' ' + changeText(result.changes) + (state.time === 0 ? ' 时间用完了，回地图结束这个学期吧。' : '');
+  if (result.entry.investment) showEventResult(result.entry);
+  else if (state.phase === 'eventPending') showEvent();
 });
 $('#dialogBody').addEventListener('click', (event) => {
   const button = event.target.closest('button');
@@ -881,13 +961,16 @@ $('#dialogBody').addEventListener('click', (event) => {
     if (dialogMode === 'save') selectSaveSlot(Number(button.dataset.saveSlot));
   } else if (button.dataset.loadSlot) {
     if (['load', 'admission'].includes(dialogMode)) loadGame(Number(button.dataset.loadSlot), button.dataset.saveSource);
+  } else if (button.dataset.investmentPreset) {
+    updateInvestment(button.dataset.investmentPreset, Number(button.dataset.amount));
   } else if (button.dataset.eventChoice) {
-    const result = runCommand('submitEventChoice', button.dataset.eventChoice, button.dataset.revision, button.dataset.instance);
+    const result = runCommand('submitEventChoice', button.dataset.eventChoice, button.dataset.revision, button.dataset.instance, eventDraft(button.dataset.eventChoice));
     if (!result) return;
     audio?.play('success');
-    const feedback = EVENT_CHOICE_FLAVOR[result.entry.event + ':' + result.entry.choice] || (result.entry.outcome ? result.entry.outcome + '。' : result.entry.title + '。');
+    const feedback = result.entry.investment?.description || EVENT_CHOICE_FLAVOR[result.entry.event + ':' + result.entry.choice] || (result.entry.outcome ? result.entry.outcome + '。' : result.entry.title + '。');
     $('#actionFeedback').textContent = feedback;
-    if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; }
+    if (result.entry.investment) showEventResult(result.entry);
+    else if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; }
     else if (needsCourseSelection()) { showCourseSelection(); $('#dialogNotice').textContent = feedback; }
     else { dialog.close(); showToast(feedback); }
   } else if (button.dataset.ending) {
@@ -899,6 +982,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
   if (!button || uiLocked) return;
   const id = button.dataset.dialogAction;
   if (id === 'resume') { if (dialogMode === 'finished') dialog.close(); else if (dialogMode === 'enrollment') showTutorial(); else resumePhase(); }
+  else if (id === 'eventContinue' && dialogMode === 'eventResult') { acknowledgedResultRevision = state.revision; resumePhase(); }
   else if (id === 'admission') showAdmission();
   else if (id === 'loginPrompt') { loginSkipped = false; try { storage?.removeItem(LOGIN_SKIP_KEY); } catch (_) {} showLogin(); }
   else if (id === 'switchAccount') {
@@ -929,6 +1013,9 @@ $('#dialogButtons').addEventListener('click', (event) => {
     resetNpcSystem();
     audio?.stopBgm();
     state = null;
+    eventDrafts.clear();
+    actionDrafts.clear();
+    acknowledgedResultRevision = -1;
     activeSaveSlot = null;
     saveTarget = null;
     savedRevision = -1;

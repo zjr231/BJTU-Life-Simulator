@@ -36,6 +36,7 @@ function app(storage = memory(), withSms = false, withNpc = false) {
   let sequence = 0;
   const window = element('window');
   window.localStorage = storage;
+  window.crypto = { getRandomValues(values) { values[0] = 1; return values; } };
   const globals = { CampusGame: game, CampusSave: saves, window,
     HTMLDialogElement: class { showModal() {} },
     document: { querySelector: element, querySelectorAll: () => [], body: { style: {} }, addEventListener() {} },
@@ -421,12 +422,12 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
 test('开考确认显示剩余时间和平时分，打开与取消均不生成试卷或修改进度', () => {
   const ui = app();
   ui.start();
-  ui.evaluate('state = CampusGame.executeAction(state, "study").state; while (state.pendingEvent) state = CampusGame.submitEventChoice(state, "later").state; renderState()');
+  ui.evaluate('state = CampusGame.executeAction(state, "study").state; while (state.pendingEvent) state = CampusGame.submitEventChoice(state, "later").state; acknowledgedResultRevision = state.revision; renderState()');
   const before = ui.evaluate('JSON.stringify(state)');
   ui.click('#endTermButton');
   assert.equal(ui.evaluate('dialogMode'), 'confirmExam');
   assert.match(ui.element('#dialogBody').innerHTML, /剩余时间 <b>10 点/);
-  assert.match(ui.element('#dialogBody').innerHTML, /当前平时分 <b>20 \/ 100/);
+  assert.match(ui.element('#dialogBody').innerHTML, new RegExp('当前平时分 <b>' + ui.evaluate('state.preparation') + ' / 100'));
   assert.match(ui.element('#dialogBody').innerHTML, /不能再安排学习、休息等行动/);
   assert.match(ui.element('#dialogButtons').innerHTML, /继续安排/);
   assert.match(ui.element('#dialogButtons').innerHTML, /确认开考/);
@@ -546,4 +547,155 @@ test('新增校园经历从存档恢复后显示中文名称，成长记录不�
   const html = ui.element('#dialogBody').innerHTML;
   for (const name of ['军训', '歌手大赛', '返乡', '竞赛']) assert.ok(html.includes(name), name);
   assert.doesNotMatch(html, /undefined/);
+});
+
+test('事件只预览成本，确认后显示具体结果；保存、读档和成长记录保留叙述且不重抽', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate("state = game.executeAction(game.executeAction(state, 'study').state, 'study').state; showEvent()");
+  assert.match(ui.element('#dialogBody').innerHTML, /整个军训的安排/);
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#dialogBody', { investmentPreset: 'join', amount: '26' });
+  assert.match(ui.element('#investment-options-join').innerHTML, /data-amount="26" aria-pressed="true"/);
+  assert.match(ui.element('#investment-cost-join').textContent, /精力 −26/);
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /常见|预计|平均|约八成|体能 约/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.match(ui.element('#dialogBody').innerHTML, /本次投入.*26 点精力/);
+  assert.match(ui.element('#dialogBody').innerHTML, /实际变化/);
+  assert.equal(ui.evaluate('state.energy'), 24);
+  const settled = ui.evaluate('JSON.stringify(state)');
+  const story = ui.evaluate('state.history.at(-1).investment.description');
+  assert.ok(ui.element('#dialogBody').innerHTML.includes(story));
+  ui.flush();
+  ui.click('#dialogSave');
+  ui.click('#dialogBody', { saveSlot: '2' });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'military2');
+  ui.click('#dialogBody', { eventChoice: 'perform', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  ui.flush();
+  ui.click('#loadButton');
+  ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.equal(ui.evaluate('JSON.stringify(state)'), settled);
+  ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  ui.click('#historyButton');
+  assert.ok(ui.element('#dialogBody').innerHTML.includes(story));
+  assert.match(ui.element('#dialogBody').innerHTML, /投入与收获/);
+});
+
+test('档位按钮拒绝任意数字，资源不足可改选有效档位', () => {
+  const ui = app(); ui.start();
+  ui.evaluate("state = game.executeAction(game.executeAction(state, 'study').state, 'study').state; showEvent()");
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /type="range"|type="number"/);
+  const original = ui.evaluate('JSON.stringify(state)');
+  for (const amount of ['4', '11', '24', '3.5']) {
+    ui.click('#dialogBody', { investmentPreset: 'join', amount });
+    assert.equal(ui.element('#event-choice-join').disabled, true);
+    ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+    assert.equal(ui.evaluate('JSON.stringify(state)'), original);
+  }
+  ui.evaluate('state.energy = 9');
+  ui.click('#dialogBody', { investmentPreset: 'join', amount: '10' });
+  assert.equal(ui.element('#event-choice-join').disabled, true);
+  assert.match(ui.element('#investment-reason-join').textContent, /精力不够/);
+  ui.evaluate('state.energy = 10');
+  ui.click('#dialogBody', { investmentPreset: 'join', amount: '10' });
+  assert.equal(ui.element('#event-choice-join').disabled, false);
+});
+
+test('军训回顾后直接进入汇演，室友关心等待军训完成', () => {
+  const ui = app(); ui.start();
+  ui.evaluate("state = game.executeAction(game.executeAction(state, 'study').state, 'study').state; state.mood = 20; showEvent()");
+  ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'military2');
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  const settled = ui.evaluate('JSON.stringify(state)');
+  ui.flush(); ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  assert.equal(ui.evaluate('dialogMode'), 'event');
+  assert.match(ui.element('#dialogTitle').textContent, /军训汇演/);
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /investment-tier/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), settled);
+  ui.click('#dialogBody', { eventChoice: 'perform', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'roommateCare');
+});
+
+test('所有地点的日常行动及固定、可调事件都不展示收益预测，仅显示投入成本', () => {
+  const ui = app();
+  ui.start();
+  const original = ui.evaluate('JSON.stringify(state)');
+  for (const place of Object.keys(game.PLACES)) {
+    ui.evaluate('openPlace(' + JSON.stringify(place) + ')');
+    const html = ui.element('#actionList').innerHTML;
+    assert.doesNotMatch(html, /预计|预期|平均收益|常见|八成|action-gain|investment-preview|学习进度 \+|社交 \+|心情 \+|体能 \+/);
+    assert.doesNotMatch(html, /type="range"|type="number"/);
+    assert.ok(html.includes('action-cost'));
+  }
+  assert.equal(ui.evaluate('JSON.stringify(state)'), original);
+  for (const id of ['roommateCare', 'military1', 'projectOffer']) {
+    ui.evaluate('state = { ...state, phase: "eventPending", pendingEvent: { id: ' + JSON.stringify(id) + ', term: 1, instanceId: "daily:' + id + ':1" } }; showEvent()');
+    assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /预计|预期|平均收益|常见|八成|action-gain|investment-preview|学习进度 \+|社交 \+|心情 \+|体能 \+/);
+  }
+});
+
+test('天佑会堂只有固定观演成本，不提供预算档位或收益预测', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('openPlace("auditorium")');
+  const html = ui.element('#actionList').innerHTML;
+  assert.match(html, /时间 −1.*精力 −2.*钱包 −40 元/);
+  assert.doesNotMatch(html, /investment-tier|investment-controls|type="range"|type="number"|心情 \+|社交 \+/);
+});
+
+test('常规课程可调成本，提交后揭晓并保存结果；下一行动的校园事件在回顾之后展示', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("think")');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '15' });
+  assert.match(ui.element('#investment-options-action-study').innerHTML, /data-amount="15" aria-pressed="true"/);
+  assert.match(ui.element('#investment-cost-action-study').textContent, /精力 −15/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.equal(ui.evaluate('state.energy'), 65);
+  assert.equal(ui.evaluate('state.history.find(entry => entry.investment).investment.amount'), 15);
+  assert.match(ui.element('#dialogBody').innerHTML, /课程学习|实际变化/);
+  const settled = ui.evaluate('JSON.stringify(state)');
+  ui.flush(); ui.click('#dialogSave'); ui.click('#dialogBody', { saveSlot: '3' });
+  ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  ui.click('#loadButton'); ui.click('#dialogBody', { loadSlot: '3', saveSource: 'primary' });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.equal(ui.evaluate('JSON.stringify(state)'), settled);
+  ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  ui.evaluate('openPlace("think")');
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '5' });
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'military1');
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  ui.flush(); ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  assert.equal(ui.evaluate('dialogMode'), 'event');
+  assert.match(ui.element('#dialogTitle').textContent, /军训开训/);
+});
+
+test('界面同步展示联动时间，时间不够禁用高投入，少量投入仍能执行且不泄露收益', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state.time = 2; openPlace("think")');
+  const original = ui.evaluate('JSON.stringify(state)');
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '30' });
+  assert.match(ui.element('#investment-cost-action-study').textContent, /时间 −3.*精力 −30/);
+  assert.equal(ui.element('#action-choice-study').disabled, true);
+  assert.match(ui.element('#investment-reason-action-study').textContent, /时间不够/);
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), original);
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '5' });
+  assert.match(ui.element('#investment-cost-action-study').textContent, /时间 −1.*精力 −5/);
+  assert.equal(ui.element('#action-choice-study').disabled, false);
+  assert.doesNotMatch(ui.element('#actionList').innerHTML, /预计|预期|平均收益|常见|investment-preview/);
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.time'), 1);
+  assert.equal(ui.evaluate('state.energy'), 75);
+  assert.match(ui.element('#dialogBody').innerHTML, /时间 −1.*精力 −5/);
 });
