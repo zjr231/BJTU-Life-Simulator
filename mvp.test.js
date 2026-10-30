@@ -14,16 +14,22 @@ function resolve(state, mode = 'accept') {
   }
   return state;
 }
-function act(state, id) {
+function act(state, id, investment) {
   state = resolve(state);
-  const result = game.executeAction(state, id);
+  const result = game.executeAction(state, id, { investment });
   assert.equal(result.ok, true, 'term ' + state.term + ' ' + id + ': ' + result.reason);
   const next = resolve(result.state);
   assert.equal(game.validateState(next).ok, true, JSON.stringify(game.validateState(next)));
   return next;
 }
 function nextTerm(state) {
-  const settled = game.endTerm(resolve(state));
+  state = resolve(state);
+  let settled;
+  if (state.selectedCourses?.length) {
+    const exam = game.beginExam(state);
+    assert.equal(exam.ok, true, exam.reason);
+    settled = game.submitExam(exam.state, exam.state.exam.questions.map(question => question.answer));
+  } else settled = game.endTerm(state);
   assert.equal(settled.ok, true);
   assert.equal(game.validateState(settled.state).ok, true);
   const next = resolve(game.continueGame(settled.state).state);
@@ -32,29 +38,33 @@ function nextTerm(state) {
 }
 function route(kind) {
   let state = game.createGame({ nickname: '路线测试', seed: 'routes' });
+  const perform = (id, investment) => {
+    state = resolve(state);
+    const preview = game.previewActionInvestment(state, id, investment);
+    const cost = preview?.effect || game.getAction(state, id);
+    while (state.energy < cost.energy && state.time > cost.time) state = act(state, 'rest', 1);
+    state = act(state, id, investment);
+  };
   for (let term = 1; term <= 8; term++) {
-    const studies = kind === 'failed' ? 0 : kind === 'ordinary' || kind === 'employment' ? 2 : 4;
-    for (let i = 0; i < studies; i++) state = act(state, 'study');
+    if (kind === 'both') state = game.selectCourses(state, game.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map(course => course.id)).state;
+    const target = kind === 'both' ? 55 : kind === 'failed' ? 0 : ['ordinary', 'employment'].includes(kind) ? 45 : 75;
+    while (state.preparation < target && (state.counts.study || 0) < 4) perform('study', 15);
     if (['deep', 'both', 'turn'].includes(kind)) {
-      if (term === 2) { state = act(state, 'applyProject'); state = act(state, 'projectWork'); }
-      if (term === 3) state = act(state, 'projectWork');
+      if (term === 2) { perform('applyProject'); perform('projectWork', 15); }
+      if (term === 3) perform('projectWork', 15);
     }
     if (['employment', 'both', 'turn'].includes(kind)) {
-      if (term === 5) { state = act(state, 'applyInternship'); state = act(state, 'internshipWork'); }
-      if (term === 6) state = act(state, 'internshipWork');
+      if (term === 5) { perform('applyInternship'); perform('internshipWork', 15); }
+      if (term === 6) perform('internshipWork', 15);
     }
-    if (kind === 'deep' && [5, 6].includes(term)) {
-      state = act(state, 'furtherStudy');
-      if (term === 5) state = act(state, 'furtherStudy');
-    }
-    if (kind === 'employment' && [7, 8].includes(term)) {
-      state = act(state, 'jobPreparation');
-      if (term === 7) state = act(state, 'jobPreparation');
-    }
-    if (['both', 'turn'].includes(kind) && [7, 8].includes(term)) {
-      state = act(state, 'rest');
-      const schedule = kind === 'turn' ? ['jobPreparation', 'jobPreparation'] : term === 7 ? ['furtherStudy', 'furtherStudy', 'jobPreparation'] : ['furtherStudy', 'jobPreparation', 'jobPreparation'];
-      for (const id of schedule) state = act(state, id);
+    if (term >= 5) {
+      const goals = kind === 'both' ? ['furtherStudy', 'jobPreparation'] : kind === 'deep' ? ['furtherStudy'] : ['employment', 'turn'].includes(kind) ? ['jobPreparation'] : [];
+      for (const id of goals.sort((a, b) => state[a] - state[b])) {
+        while (state[id] < 60 && (state.counts[id] || 0) < 2 && state.time >= (state.energy < 8 ? 2 : 1)) {
+          const investment = kind === 'both' && state[id] < 45 && state.time >= (state.energy < 20 ? 3 : 2) ? 20 : 8;
+          perform(id, investment);
+        }
+      }
     }
     state = nextTerm(state);
   }
@@ -121,7 +131,9 @@ test('统一学习进度：课程、自学和补习都增加 preparation；资�
   for (const [id, amount] of [['study', 20], ['selfStudy', 20], ['tutoring', 25]]) {
     const state = game.createGame({ seed: 'learning' });
     const before = structuredClone(state);
-    assert.equal(game.executeAction(state, id).state.preparation, amount);
+    const result = game.executeAction(state, id);
+    assert.ok(result.state.preparation > 0);
+    assert.equal(result.entry.investment.amount, game.getActionInvestment(state, id).default);
     assert.deepEqual(state, before);
   }
   const state = game.createGame();
@@ -164,8 +176,7 @@ test('社团投入完成当学期收尾并记录经历；项目成果在之后�
   assert.equal(game.executeAction(state, 'clubWork').ok, false);
   // 项目：第二学期完成两次投入，成果确认到下一学期才出现
   state = nextTerm(roundtrip(state));
-  state = act(state, 'study');
-  state = act(state, 'study');
+  while (state.preparation < 40) state = act(state, 'study');
   state = act(state, 'applyProject');
   state = act(state, 'projectWork');
   state = act(state, 'projectWork');
@@ -273,7 +284,7 @@ test('固定随机机会、预览不消耗随机数，中途读档后随机序�
     const continuous = nextTerm(resolve(first));
     const loaded = nextTerm(resumed);
     assert.deepEqual(game.executeAction(continuous, 'selfStudy'), game.executeAction(loaded, 'selfStudy'));
-    assert.equal(first.rng.calls, 3);
+    assert.equal(first.rng.calls, 4);
   }
   assert.equal(opportunities.size, 2);
 });
@@ -364,7 +375,7 @@ test('两标签页冲突拒绝覆盖，主动读取后可保存；临时档不�
   storage.setItem(save.KEYS.temporary, raw);
   const fresh = save.createSaveService(storage);
   assert.equal(fresh.inspect().temporary, true);
-  assert.equal(fresh.load().state.preparation, 20);
+  assert.deepEqual(fresh.load().state, game.executeAction(loaded.state, 'study').state);
 });
 
 test('成果确认可以免费延期或放弃；最后学期仍有免费放弃路径', () => {

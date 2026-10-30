@@ -3,34 +3,73 @@
   // 校园偶遇 NPC 纯逻辑：身份权重、行走路线、移动与生命周期、台词库。
   // 渲染与点击对话由 app.js 负责；属于观感层，不进入存档格式。
   // 地图坐标与地标按钮一致，均为地图层的百分比坐标（左/上）。
-  // 每种身份在对应的区域道路上走动：南门区域、宿舍生活区、操场、校医院、右侧道路与校园中环线。
+  //
+  // 道路拓扑：节点是紧贴地标的道路路口，边是沿插画底图上真实道路描出的折线。
+  // 坐标对着底图逐段核对过：折线走沥青路和铺装步道，绕开建筑与水面；
+  // 节点放在建筑旁的道路上，而不是地标气泡本身，人物不会走到楼里或图外。
+  // 改动坐标时请打开页面里的「路线图」开关，对照底图核对。
+  const ROAD_NODES = {
+    activity: { x: 17.57, y: 54.64 },
+    ginkgo: { x: 23.5, y: 37.94 },
+    think: { x: 45.5, y: 36.31 },
+    library: { x: 64.93, y: 43.74 },
+    hospital: { x: 83.93, y: 52.44 },
+    gate: { x: 36.43, y: 74.71 },
+    track: { x: 50.29, y: 23.32 },
+    auditorium: { x: 46.36, y: 56.5 },
+    yifu: { x: 84.21, y: 71.23 },
+    dorm: { x: 74.79, y: 30.16 },
+    hotel: { x: 54.0, y: 68.1 },
+  };
+  const ROAD_EDGES = {
+    'activity-ginkgo': [{ x: 17.57, y: 54.64 }, { x: 23.5, y: 37.94 }],
+    'ginkgo-think': [{ x: 23.5, y: 37.94 }, { x: 27.57, y: 26.68 }, { x: 45.5, y: 34.8 }, { x: 45.86, y: 35.15 }, { x: 45.5, y: 36.31 }],
+    'think-library': [{ x: 45.5, y: 36.31 }, { x: 46.0, y: 35.03 }, { x: 64.93, y: 43.74 }],
+    'library-auditorium': [{ x: 64.93, y: 43.74 }, { x: 53.14, y: 38.4 }, { x: 46.36, y: 56.5 }],
+    'auditorium-activity': [{ x: 46.36, y: 56.5 }, { x: 47.86, y: 52.67 }, { x: 47.93, y: 51.86 }, { x: 32.36, y: 44.43 }, { x: 28.07, y: 55.1 }, { x: 17.57, y: 54.64 }],
+    'gate-hotel': [{ x: 36.43, y: 74.71 }, { x: 40.29, y: 63.92 }, { x: 43.07, y: 65.31 }, { x: 44.14, y: 62.76 }, { x: 54.0, y: 68.1 }],
+    'hotel-yifu': [{ x: 54.0, y: 68.1 }, { x: 56.71, y: 69.37 }, { x: 61.14, y: 58.0 }, { x: 71.43, y: 63.23 }, { x: 72.29, y: 60.79 }, { x: 75, y: 60.2 }, { x: 78, y: 61.0 }, { x: 81, y: 62.8 }, { x: 84, y: 65.2 }, { x: 85.43, y: 67.4 }, { x: 85.5, y: 67.98 }, { x: 84.21, y: 71.23 }],
+    'library-yifu': [{ x: 64.93, y: 43.74 }, { x: 76.14, y: 48.84 }, { x: 76.0, y: 50.0 }, { x: 72.29, y: 60.79 }, { x: 75, y: 60.2 }, { x: 78, y: 61.0 }, { x: 81, y: 62.8 }, { x: 84, y: 65.2 }, { x: 85.43, y: 67.4 }, { x: 85.5, y: 67.98 }, { x: 84.21, y: 71.23 }],
+    'library-dorm': [{ x: 64.93, y: 43.74 }, { x: 66.43, y: 44.2 }, { x: 72.14, y: 28.89 }, { x: 74.79, y: 30.16 }],
+    'library-hospital': [{ x: 64.93, y: 43.74 }, { x: 83.93, y: 52.44 }],
+    'track-think': [{ x: 50.29, y: 23.32 }, { x: 45.5, y: 36.31 }],
+  };
+
+  function edgePoints(key) {
+    if (ROAD_EDGES[key]) return ROAD_EDGES[key];
+    const parts = key.split('-');
+    const reversed = ROAD_EDGES[parts[1] + '-' + parts[0]];
+    return reversed ? reversed.slice().reverse() : null;
+  }
+
+  // 路线 = 若干条边首尾相接；相邻边共用的路口只保留一个点。
+  function routeOf(...keys) {
+    const points = [];
+    for (const key of keys) {
+      const edge = edgePoints(key);
+      if (!edge) throw new Error('未知道路边：' + key);
+      for (const point of edge) {
+        const last = points[points.length - 1];
+        if (last && last.x === point.x && last.y === point.y) continue;
+        points.push({ x: point.x, y: point.y });
+      }
+    }
+    return points;
+  }
+
   const ROUTES = {
-    // 中环线：学生活动中心→银杏大道→思源楼→图书馆→天佑会堂，绕校园一周。
-    campus: [
-      { x: 6.75, y: 31.12 }, { x: 28.32, y: 35.77 }, { x: 44.22, y: 28.8 },
-      { x: 76.18, y: 43.82 }, { x: 43.46, y: 51.62 }
-    ],
+    // 中环线：学生活动中心→银杏大道→思源楼→图书馆→天佑会堂，再沿西侧回到活动中心，绕校园一周。
+    campus: routeOf('activity-ginkgo', 'ginkgo-think', 'think-library', 'library-auditorium', 'auditorium-activity'),
     // 右侧道路：南门→红果园宾馆→逸夫楼→图书馆→宿舍。
-    road: [
-      { x: 30.57, y: 78.17 }, { x: 64.67, y: 62.82 }, { x: 92.74, y: 73.28 },
-      { x: 76.18, y: 43.82 }, { x: 77.35, y: 20.66 }
-    ],
+    road: routeOf('gate-hotel', 'hotel-yifu', 'yifu-library', 'library-dorm'),
     // 南门区域：南门↔红果园宾馆，保安与快递在这里巡逻取件。
-    south: [
-      { x: 30.57, y: 78.17 }, { x: 64.67, y: 62.82 }
-    ],
+    south: routeOf('gate-hotel'),
     // 宿舍生活区：宿舍↔图书馆，宿管、食堂工作人员在生活区走动。
-    dormRoad: [
-      { x: 77.35, y: 20.66 }, { x: 76.18, y: 43.82 }
-    ],
+    dormRoad: routeOf('dorm-library'),
     // 校医院区域：图书馆↔校医院。
-    hospitalLine: [
-      { x: 76.18, y: 43.82 }, { x: 87.93, y: 39.34 }
-    ],
+    hospitalLine: routeOf('library-hospital'),
     // 操场区域：操场↔思源楼。
-    north: [
-      { x: 44.58, y: 5.39 }, { x: 44.22, y: 28.8 }
-    ]
+    north: routeOf('track-think')
   };
   const IDENTITIES = [
     { id: 'student', label: '学生', figure: 'student', weight: 14, route: 'campus', mode: 'loop', speed: 1.1, lines: [
@@ -129,7 +168,7 @@
       '你这嗓子是熬夜熬的，少喝冰的。',
       '体检报告出来了，指标都正常，继续保持。'
     ] },
-    { id: 'driver', label: '班车司机', figure: 'bus', weight: 6, route: 'road', mode: 'once', speed: 7, lifetime: [16000, 22000], lines: [
+    { id: 'driver', label: '班车司机', figure: 'bus', weight: 6, route: 'road', mode: 'once', speed: 7, lifetime: [24000, 30000], lines: [
       '校车来了！去西直门、家属区的上车，别坐错方向。',
       '这班车人不多，高峰期你可得提前排队。',
       '开了这么多年车，你们一届一届我都能认个脸熟。',
@@ -247,7 +286,7 @@
     return score >= 4 ? 2 : score >= 2 ? 1 : 0;
   }
 
-  const api = { IDENTITIES, ROUTES, DEFAULTS, createSystem, linesFor, heuristicQuality };
+  const api = { IDENTITIES, ROUTES, ROAD_NODES, ROAD_EDGES, DEFAULTS, createSystem, linesFor, heuristicQuality };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusNpc = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

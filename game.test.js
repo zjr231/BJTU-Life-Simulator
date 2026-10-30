@@ -24,13 +24,16 @@ test('未知行动不会修改状态，包括对象原型上的名字', () => {
   assert.deepEqual(state, before);
 });
 
-test('固定收益与实际扣费：不同精力获得相同课程准备，不修改输入状态', () => {
+test('同样的投入与随机条件获得同样的课程回报，不受剩余精力影响且不修改输入', () => {
+  let reward;
   for (const energy of [15, 80, 100]) {
     const state = { ...game.createGame(), time: 2, energy };
     const before = structuredClone(state);
     const result = game.executeAction(state, 'study');
     assert.equal(result.ok, true);
-    assert.equal(result.state.preparation, 20);
+    if (reward === undefined) reward = result.state.preparation;
+    assert.equal(result.state.preparation, reward);
+    assert.ok(reward > 0);
     assert.equal(result.state.energy, energy - 15);
     assert.equal(result.state.time, 0);
     assert.deepEqual(state, before);
@@ -84,7 +87,7 @@ test('结算预览不修改状态，成绩不跨学期累加，资源仅扣一�
   const before = structuredClone(state);
   const preview = game.previewSettlement(state);
   assert.deepEqual(state, before);
-  assert.equal(preview.grade, 64);
+  assert.equal(preview.grade, Math.round(40 + state.preparation * 0.6));
   assert.equal(preview.passed, true);
   const settled = game.endTerm(state).state;
   assert.equal(settled.money, state.money - 300);
@@ -148,12 +151,12 @@ test('连续八学期完整流程，第八学期只结算一次，不创建第�
   state = game.chooseEnding(state, 'ordinary').state;
   assert.equal(state.phase, 'finished');
   assert.equal(state.courses.length, 8);
-  assert.equal(state.social, 88);
-  assert.equal(state.fitness, 98);
-  assert.equal(state.mood, 100);
+  assert.ok(state.social > 20 && state.social <= 100);
+  assert.ok(state.fitness > 50 && state.fitness <= 100);
+  assert.ok(state.mood >= 70 && state.mood <= 100);
   assert.equal(state.experiences.length, 3);
   assert.equal(state.experiences.every((item) => item.type === 'fitnessTest'), true);
-  assert.equal(state.courses.every((course) => course.grade === 64), true);
+  assert.equal(state.courses.every((course) => course.grade === Math.round(40 + course.preparation * 0.6)), true);
   assert.equal(game.endTerm(state).ok, false);
   assert.equal(game.continueGame(state).ok, false);
   assert.equal(game.executeAction(state, 'rest').ok, false);
@@ -176,13 +179,13 @@ test('锻炼消耗精力并提升长期体能，散步恢复心情与精力但�
   const exercise = game.executeAction(initial, 'exercise');
   assert.equal(exercise.state.time, 11);
   assert.equal(exercise.state.energy, 70);
-  assert.equal(exercise.state.fitness, 56);
-  assert.equal(exercise.state.mood, 74);
+  assert.ok(exercise.state.fitness > initial.fitness);
+  assert.ok(exercise.state.mood > initial.mood);
   const walk = game.executeAction(exercise.state, 'walk');
   assert.equal(walk.state.time, 10);
-  assert.equal(walk.state.energy, 80);
-  assert.equal(walk.state.fitness, 56);
-  assert.equal(walk.state.mood, 84);
+  assert.ok(walk.state.energy > exercise.state.energy);
+  assert.equal(walk.state.fitness, exercise.state.fitness);
+  assert.ok(walk.state.mood > exercise.state.mood);
   assert.deepEqual(initial, game.createGame());
 });
 
@@ -341,9 +344,11 @@ test('转专业结果按平均成绩判定：达标换学院背景并留经历�
   const play = (studiesPerTerm, checkChoice) => {
     let state = game.createGame();
     for (let term = 1; term <= 3; term++) {
-      const actions = term === 3 ? ['rest'] : Array(studiesPerTerm).fill('study');
+      const actions = term === 3 ? ['rest'] : studiesPerTerm === 4 ? ['study', 'study', 'study', 'tutoring'] : Array(studiesPerTerm).fill('study');
       for (const id of actions) {
-        state = game.executeAction(state, id).state;
+        const action = game.executeAction(state, id, id === 'tutoring' ? { investment: 240 } : {});
+        assert.equal(action.ok, true, action.reason);
+        state = action.state;
         while (state.pendingEvent) {
           const eventId = state.pendingEvent.id;
           const choice = eventId === 'transfer' ? 'apply' : eventId === 'transferResult' ? checkChoice : 'later';

@@ -1,12 +1,27 @@
 (function (root) {
   'use strict';
   function validate(state, game, random) {
-    const { RULES, ACTIONS, EVENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, gradeFor, ratingFor, NPC_CHAT } = game;
+    const { RULES, ACTIONS, EVENTS, EVENT_INVESTMENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, gradeFor, ratingFor, NPC_CHAT } = game;
     const fail = (reason) => ({ ok: false, reason: '存档状态无效：' + reason });
     const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
     const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
     const own = (value, key) => typeof key === 'string' && Object.hasOwn(value, key);
     const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const validInvestment = entry => {
+      if (entry.investment === undefined) return true; // Earlier saves have fixed event rewards.
+      let profiles;
+      if (entry.action && entry.command?.operation === 'executeAction') {
+        // A successful transfer changes the current bonus, but earlier allocations
+        // still use the original college's discount and must remain readable.
+        const original = game.createGame({ seed: state.rng.seed }).background;
+        profiles = [state.background, original].map(background => game.getActionInvestment({ ...state, background }, entry.action) || game.LEGACY_INVESTMENTS.actions[entry.action]);
+      } else profiles = [EVENT_INVESTMENTS[entry.event + ':' + entry.choice] || game.LEGACY_INVESTMENTS.events[entry.event + ':' + entry.choice]];
+      const value = entry.investment;
+      return profiles.some(profile => profile && object(value) && integer(value.amount, profile.min, profile.max) && value.resource === profile.resource
+        && ['light', 'steady', 'deep'].includes(value.level) && Object.hasOwn(profile.outcomes, value.outcome)
+        && (value.tier === undefined || profile.tiers?.some(tier => tier.id === value.tier && tier.amount === value.amount))
+        && typeof value.description === 'string' && value.description.length > 0 && value.description.length <= 1000);
+    };
     try {
       if (!object(state)) return fail('缺少状态对象');
       if (state.version !== RULES.version || state.rulesVersion !== RULES.version || state.saveFormatVersion !== RULES.saveFormatVersion) return fail('格式或规则版本不兼容');
@@ -20,7 +35,7 @@
       if (!Array.isArray(selectedCourses) || ![0, 3].includes(selectedCourses.length) || new Set(selectedCourses).size !== selectedCourses.length || !selectedCourses.every((id) => COURSES.some((course) => course.id === id))) return fail('选课记录');
       const exam = state.exam === undefined ? null : state.exam;
       if (exam !== null) {
-        if (!object(exam) || !Array.isArray(exam.questions) || exam.questions.length !== 5 || !Array.isArray(exam.answers) || exam.answers.length !== 0 || exam.score !== null || exam.submitted !== false) return fail('试卷结构');
+        if (!object(exam) || !Array.isArray(exam.questions) || exam.questions.length !== 5 || !Array.isArray(exam.answers) || ![0, 5].includes(exam.answers.length) || !Array.from(exam.answers).every((answer) => answer === null || integer(answer, 0, 3)) || exam.score !== null || exam.submitted !== false) return fail('试卷结构');
         if (exam.generator !== undefined && exam.generator !== 'v2') return fail('试卷版本');
         if (!exam.questions.every((question) => object(question) && typeof question.id === 'string' && question.id.length < 80 && typeof question.prompt === 'string' && question.prompt.length < 500 && Array.isArray(question.options) && question.options.length === 4 && question.options.every((option) => typeof option === 'string' && option.length < 200) && integer(question.answer, 0, 3) && question.points === 20 && own(SUBJECTS, question.subject) && COURSES.some((course) => course.id === question.courseId) && typeof question.courseName === 'string' && question.courseName.length < 200)) return fail('试卷题目');
         if (exam.generator !== 'v2') {
@@ -32,7 +47,7 @@
         }
       }
       if ((state.phase === 'examPending') !== (exam !== null)) return fail('阶段与试卷不一致');
-      if (!object(state.rng) || state.rng.algorithm !== 'mulberry32-v1' || typeof state.rng.seed !== 'string' || !state.rng.seed.length || state.rng.seed.length > 64 || !integer(state.rng.value, 0, 4294967295) || !integer(state.rng.calls, 2, 100)) return fail('随机数状态');
+      if (!object(state.rng) || state.rng.algorithm !== 'mulberry32-v1' || typeof state.rng.seed !== 'string' || !state.rng.seed.length || state.rng.seed.length > 64 || !integer(state.rng.value, 0, 4294967295) || !integer(state.rng.calls, 2, 2010)) return fail('随机数状态');
       if (state.rng.value !== ((random.create(state.rng.seed).value + Math.imul(0x6D2B79F5, state.rng.calls)) >>> 0)) return fail('随机数调用位置');
       // 入学背景核对：转专业成功才会更换学院方向。新存档按操作历史重放精确核对；
       // 旧版本存档或无法重放的存档退化为结构校验（学院、专业必须与配置一致，未转专业时必须与入学时一致）。
@@ -76,14 +91,16 @@
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'beginExam', 'submitExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
-        if (command.operation === 'executeAction' && !own(ACTIONS, command.id)) return fail('历史行动');
+        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
+        if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');
         if (command.operation === 'submitEventChoice' && (!own(EVENTS, entry.event) || !EVENTS[entry.event].choices.some((choice) => choice.id === command.id) || command.eventInstanceId !== entry.instanceId)) return fail('历史事件');
         if (command.operation === 'selectCourses' && (!Array.isArray(command.id) || command.id.length !== 3 || new Set(command.id).size !== 3 || !command.id.every((id) => COURSES.some((course) => course.id === id)))) return fail('历史选课');
+        if (command.operation === 'updateExamAnswers' && (!Array.isArray(command.id) || command.id.length !== 5 || !Array.from(command.id).every((answer) => answer === null || integer(answer, 0, 3)))) return fail('历史答题草稿');
         if (command.operation === 'submitExam' && (!Array.isArray(command.id) || command.id.length !== 5 || !command.id.every((answer) => integer(answer, 0, 3)))) return fail('历史考试答案');
+        if (!validInvestment(entry) || command.investment !== entry.investment?.amount) return fail('历史事件投入');
         if (command.operation === 'chooseEnding' && !['ordinary', 'employment', 'furtherStudy', 'notQualified'].includes(command.id)) return fail('历史方向');
         if (command.operation === 'chatWithNpc' && (!own(NPC_CHAT.identities, command.identityId) || !integer(command.quality, 0, 2))) return fail('历史对话');
-        for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !integer(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 100)) return fail('历史状态摘要');
+        for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !integer(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 2010)) return fail('历史状态摘要');
       }
       const expectedCourses = ['summary', 'endingChoice', 'finished'].includes(state.phase) ? state.term : state.term - 1;
       if (state.courses.length !== expectedCourses) return fail('课程记录数量与阶段不符');
@@ -107,6 +124,7 @@
       const seen = new Set();
       for (const entry of state.eventHistory) {
         if (!object(entry) || !own(EVENTS, entry.event) || !integer(entry.term, 1, state.term) || entry.instanceId !== (EVENTS[entry.event].chain || 'daily') + ':' + entry.event + ':' + entry.term || !EVENTS[entry.event].choices.some((choice) => choice.id === entry.choice) || state.eventFlags[entry.instanceId] !== true || seen.has(entry.instanceId)) return fail('事件历史');
+        if (!validInvestment(entry) || (entry.investment && !state.history.some(log => log.instanceId === entry.instanceId && same(log.investment, entry.investment) && same(log.changes, entry.changes)))) return fail('事件投入记录');
         seen.add(entry.instanceId);
       }
       // fitnessRetest 是跨学期的持久标记（体测未达标/请假后设置），不属于事件实例标记。

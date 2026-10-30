@@ -51,20 +51,56 @@ test('本地启发式评分：问候、提问、礼貌称呼与长度综合分�
   assert.equal(npc.heuristicQuality('学长您好，想请教一下期末复习应该怎么安排比较好？'), 2);
 });
 
-test('路线坐标都在地图范围内，右侧道路经过南门、宾馆、逸夫楼、图书馆、宿舍', () => {
-  for (const [key, route] of Object.entries(npc.ROUTES)) {
-    assert.ok(route.length >= 2, key);
-    for (const point of route) assert.ok(point.x >= 0 && point.x <= 100 && point.y >= 0 && point.y <= 100, key + ' 坐标');
-  }
-  assert.deepEqual(npc.ROUTES.road, [
-    { x: 30.57, y: 78.17 }, { x: 64.67, y: 62.82 }, { x: 92.74, y: 73.28 },
-    { x: 76.18, y: 43.82 }, { x: 77.35, y: 20.66 }
+test('道路拓扑：节点是地标路口，边沿道路折线，路线由边首尾拼接', () => {
+  const names = Object.keys(npc.ROAD_NODES).sort();
+  assert.deepEqual(names, [
+    'activity', 'auditorium', 'dorm', 'gate', 'ginkgo', 'hospital',
+    'hotel', 'library', 'think', 'track', 'yifu'
   ]);
-  // 各区域路线与对应地标按钮坐标一致：南门区域、宿舍生活区、校医院、操场。
-  assert.deepEqual(npc.ROUTES.south, [{ x: 30.57, y: 78.17 }, { x: 64.67, y: 62.82 }]);
-  assert.deepEqual(npc.ROUTES.dormRoad, [{ x: 77.35, y: 20.66 }, { x: 76.18, y: 43.82 }]);
-  assert.deepEqual(npc.ROUTES.hospitalLine, [{ x: 76.18, y: 43.82 }, { x: 87.93, y: 39.34 }]);
-  assert.deepEqual(npc.ROUTES.north, [{ x: 44.58, y: 5.39 }, { x: 44.22, y: 28.8 }]);
+  for (const [name, node] of Object.entries(npc.ROAD_NODES)) {
+    assert.ok(node.x >= 0 && node.x <= 100 && node.y >= 0 && node.y <= 100, name + ' 坐标');
+  }
+  // 每条边的首尾必须落在同名节点上，中间点都在地图内、相邻点不重合，且不是一条横穿校园的长直线。
+  for (const [key, edge] of Object.entries(npc.ROAD_EDGES)) {
+    const [from, to] = key.split('-');
+    assert.deepEqual(edge[0], npc.ROAD_NODES[from], key + ' 起点');
+    assert.deepEqual(edge[edge.length - 1], npc.ROAD_NODES[to], key + ' 终点');
+    assert.ok(edge.length >= 2, key + ' 至少两点，沿画好的道路走');
+    for (let i = 0; i < edge.length; i++) {
+      const point = edge[i];
+      assert.ok(point.x >= 0 && point.x <= 100 && point.y >= 0 && point.y <= 100, key + ' 坐标');
+      if (i) {
+        const prev = edge[i - 1];
+        assert.ok(point.x !== prev.x || point.y !== prev.y, key + ' 相邻点不重合');
+        assert.ok(Math.hypot(point.x - prev.x, point.y - prev.y) <= 35, key + ' 单段不过长');
+      }
+    }
+  }
+  // 右侧道路：南门出发，途经宾馆、逸夫楼、图书馆，最后到宿舍。
+  const road = npc.ROUTES.road;
+  assert.deepEqual(road[0], npc.ROAD_NODES.gate);
+  assert.deepEqual(road[road.length - 1], npc.ROAD_NODES.dorm);
+  const at = (name) => road.findIndex((p) => p.x === npc.ROAD_NODES[name].x && p.y === npc.ROAD_NODES[name].y);
+  assert.ok(at('hotel') > 0 && at('hotel') < at('yifu'), '先到宾馆再到逸夫楼');
+  assert.ok(at('yifu') < at('library'), '逸夫楼之后到图书馆');
+  assert.ok(road.length >= 16, '右侧道路是沿路折线，不是几个地标的连线');
+  // 各区域路线：两端就是对应地标，且至少三个点。
+  assert.deepEqual([npc.ROUTES.south[0], npc.ROUTES.south[npc.ROUTES.south.length - 1]],
+    [npc.ROAD_NODES.gate, npc.ROAD_NODES.hotel]);
+  assert.deepEqual([npc.ROUTES.dormRoad[0], npc.ROUTES.dormRoad[npc.ROUTES.dormRoad.length - 1]],
+    [npc.ROAD_NODES.dorm, npc.ROAD_NODES.library]);
+  assert.deepEqual([npc.ROUTES.hospitalLine[0], npc.ROUTES.hospitalLine[npc.ROUTES.hospitalLine.length - 1]],
+    [npc.ROAD_NODES.library, npc.ROAD_NODES.hospital]);
+  assert.deepEqual([npc.ROUTES.north[0], npc.ROUTES.north[npc.ROUTES.north.length - 1]],
+    [npc.ROAD_NODES.track, npc.ROAD_NODES.think]);
+  for (const [key, route] of Object.entries(npc.ROUTES)) {
+    assert.ok(route.length >= 2, key + ' 至少两个点');
+    for (const point of route) {
+      assert.ok(point.x >= 0 && point.x <= 100 && point.y >= 0 && point.y <= 100, key + ' 坐标');
+    }
+  }
+  // 中环线是闭环：末点回到起点，衔接处不会跳变。
+  assert.deepEqual(npc.ROUTES.campus[0], npc.ROUTES.campus[npc.ROUTES.campus.length - 1]);
 });
 
 test('首次出现 2.5～6 秒内，生成间隔 12～30 秒，场上最多三人，寿命 40～70 秒', () => {
@@ -134,14 +170,14 @@ test('班车沿右侧道路单程行驶，到站停留片刻后离场，寿命�
   const { system, spawnedAt, npc: driver } = found;
   assert.equal(driver.mode, 'once');
   assert.deepEqual(driver.route, npc.ROUTES.road);
-  assert.ok(driver.lifetime >= 16000 && driver.lifetime <= 22000, '班车寿命 16～22 秒');
+  assert.ok(driver.lifetime >= 24000 && driver.lifetime <= 30000, '班车寿命 24～30 秒');
   let removedAt = null;
-  for (let t = spawnedAt + 500; t <= spawnedAt + 23000; t += 500) {
+  for (let t = spawnedAt + 500; t <= spawnedAt + 33000; t += 500) {
     const events = system.tick(t);
     if (events.removed.some((item) => item.id === driver.id)) { removedAt = t; break; }
   }
-  assert.ok(removedAt !== null, '班车在 23 秒内离场');
-  assert.ok(removedAt - spawnedAt <= 22000 + 1500 + 500, '离场不晚于寿命加停留');
+  assert.ok(removedAt !== null, '班车在 33 秒内离场');
+  assert.ok(removedAt - spawnedAt <= 30000 + 1500 + 500, '离场不晚于寿命加停留');
 });
 
 test('速度单位回归：学生每秒移动 1.1 个地图百分比，而不是毫秒当秒', () => {
@@ -159,21 +195,22 @@ test('速度单位回归：学生每秒移动 1.1 个地图百分比，而不是
   assert.ok(Math.abs(Math.hypot(current.x - start.x, current.y - start.y) - 2.2) < 1e-6, '两秒位移应为 2.2');
 });
 
-test('速度单位回归：班车每秒走 7 个百分比，约 18 秒驶完全程而非一帧消失', () => {
+test('速度单位回归：班车每秒走 7 个百分比，约 21 秒驶完全程而非一帧消失', () => {
   const system = npc.createSystem({ random: () => 0.95, settings: { firstDelay: [0, 0], gap: [600000, 600000] } });
   const { spawned } = system.tick(0);
   assert.equal(spawned.length, 1);
   assert.equal(spawned[0].identityId, 'driver');
   const id = spawned[0].id;
-  for (let t = 1000; t <= 17000; t += 1000) system.tick(t);
+  for (let t = 1000; t <= 12000; t += 1000) system.tick(t);
   const onRoad = system.active().find((item) => item.id === id);
-  assert.ok(onRoad && onRoad.routeDone === false, '17 秒后班车仍在右侧道路上');
+  assert.ok(onRoad && onRoad.routeDone === false, '12 秒后班车仍在右侧道路上');
   let removedAt = null;
-  for (let t = 18000; t <= 31000; t += 1000) {
+  for (let t = 13000; t <= 30000; t += 1000) {
     const events = system.tick(t);
     if (events.removed.some((item) => item.id === id)) { removedAt = t; break; }
   }
-  assert.ok(removedAt !== null && removedAt >= 18000 + 1500, '驶完全程并停留片刻后离场');
+  assert.ok(removedAt !== null && removedAt >= 13000 + 1500, '驶完全程并停留片刻后离场');
+  assert.ok(removedAt <= 26000, '全程约 21 秒，不会拖到寿命上限');
 });
 
 test('maxActive 可配置且严格生效', () => {
