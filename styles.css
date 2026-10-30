@@ -49,13 +49,6 @@ h1 { margin: 0; font-family: serif; font-size: clamp(25px, 3.5vw, 40px); line-he
 @media (hover: hover) and (pointer: fine) { .map-hotspot:hover::before { border-color:#fff9db; opacity:1; animation-duration:1.15s; } }
 .map-hotspot.is-active::before { border-color:#fff3a7; opacity:1; box-shadow:0 0 0 11px rgba(242,208,75,.34), 0 0 18px rgba(242,208,75,.42); }
 
-/* 路线图开关：叠加显示 NPC 行走的道路拓扑（地标路口与沿路折线边），供验收核对。 */
-.road-layer { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; display: none; }
-.road-layer.is-visible { display: block; }
-.road-layer .road-edge { fill: none; stroke: #e8992e; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
-.road-layer .road-node { fill: #fff9e8; stroke: #17342e; stroke-width: 3; }
-.road-layer .road-node-label { fill: #10231f; font-size: 26px; font-weight: 700; paint-order: stroke; stroke: rgba(255,255,255,.92); stroke-width: 6; }
-
 /* 校园偶遇 NPC：随地图同比例行走的 2D 小人，点击可搭话；离场淡出。 */
 .npc-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .npc-figure { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 3.4%; min-width: 28px; max-width: 44px; padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; transform: translate(-50%, -50%); transition: opacity .6s ease, filter .2s ease; }

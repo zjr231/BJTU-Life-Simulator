@@ -388,45 +388,6 @@ function renderNpcLayer() {
     npcNodes.delete(id);
   }
 }
-// 路线图开关：把 npc.js 的道路拓扑（地标路口 + 沿路折线边）画到地图上，方便对照底图检查 NPC 是否沿路走。
-const ROAD_LABELS = {
-  activity: '学生活动中心', ginkgo: '银杏大道', think: '思源楼', library: '图书馆',
-  hospital: '校医院', gate: '南门', track: '操场', auditorium: '天佑会堂',
-  yifu: '逸夫楼', dorm: '宿舍', hotel: '红果园宾馆'
-};
-let roadVisible = false;
-function renderRoadLayer() {
-  const layer = $('#roadLayer');
-  if (!layer || !npc) return;
-  const W = 1956, H = 1205; // 与 .map-layer 的 aspect-ratio 一致，百分比坐标按原图尺寸换算
-  const parts = [];
-  for (const edge of Object.values(npc.ROAD_EDGES)) {
-    const points = edge.map((p) => (p.x / 100 * W).toFixed(1) + ',' + (p.y / 100 * H).toFixed(1)).join(' ');
-    parts.push('<polyline class="road-edge" points="' + points + '"></polyline>');
-  }
-  for (const [name, node] of Object.entries(npc.ROAD_NODES)) {
-    const x = node.x / 100 * W;
-    const y = node.y / 100 * H;
-    parts.push('<circle class="road-node" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="10"></circle>');
-    parts.push('<text class="road-node-label" x="' + (x + 14).toFixed(1) + '" y="' + (y - 12).toFixed(1) + '">' + h(ROAD_LABELS[name] || name) + '</text>');
-  }
-  layer.innerHTML = parts.join('');
-}
-function setRoadVisible(visible) {
-  const layer = $('#roadLayer');
-  const button = $('#roadToggleButton');
-  roadVisible = visible;
-  if (layer) {
-    if (visible) renderRoadLayer();
-    // SVG 元素不支持 hidden 属性，用 class 控制显隐。
-    layer.classList.toggle('is-visible', visible);
-    layer.setAttribute('data-visible', visible ? '1' : '0');
-  }
-  if (button) {
-    button.textContent = '路线图:' + (visible ? '开' : '关');
-    button.setAttribute('aria-pressed', visible ? 'true' : 'false');
-  }
-}
 function npcTick() {
   if (npcSystem && state) {
     const events = npcSystem.tick(Date.now());
@@ -1145,8 +1106,6 @@ $('#backgroundButton').addEventListener('click', () => { if (state) showBackgrou
 $('#restartButton').addEventListener('click', () => { if (state) askRestart(); });
 $('#historyButton').addEventListener('click', () => { if (state) showDialog('history', '四年成长记录', growthRecord(), [{ id: 'resume', text: '继续安排' }]); });
 $('#exportLogButton').addEventListener('click', () => { if (state) exportLog(); });
-$('#roadToggleButton').addEventListener('click', () => setRoadVisible(!roadVisible));
-if (new URLSearchParams(location.search).get('roads') === '1') setRoadVisible(true);
 const soundButton = $('#soundButton');
 if (audio) {
   soundButton.textContent = '声音:' + (audio.isEnabled() ? '开' : '关');
