@@ -406,6 +406,8 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
   const ids = ui.evaluate('CampusGame.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map((course) => course.id)');
   ui.evaluate('state = CampusGame.selectCourses(state, ' + JSON.stringify(ids) + ', { expectedRevision: state.revision }).state; renderState(); dialog.close()');
   ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'confirmExam');
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
   assert.equal(ui.evaluate('dialogMode'), 'exam');
   assert.match(ui.element('#dialogBody').innerHTML, /id="examForm"/);
   assert.equal((ui.element('#dialogBody').innerHTML.match(/class="exam-question"/g) || []).length, 5);
@@ -414,6 +416,108 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
   assert.equal(ui.evaluate('dialogMode'), 'summary');
   assert.match(ui.element('#dialogBody').innerHTML, /平时分/);
   assert.match(ui.element('#dialogBody').innerHTML, /期末考试/);
+});
+
+test('开考确认显示剩余时间和平时分，打开与取消均不生成试卷或修改进度', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = CampusGame.executeAction(state, "study").state; while (state.pendingEvent) state = CampusGame.submitEventChoice(state, "later").state; renderState()');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'confirmExam');
+  assert.match(ui.element('#dialogBody').innerHTML, /剩余时间 <b>10 点/);
+  assert.match(ui.element('#dialogBody').innerHTML, /当前平时分 <b>20 \/ 100/);
+  assert.match(ui.element('#dialogBody').innerHTML, /不能再安排学习、休息等行动/);
+  assert.match(ui.element('#dialogButtons').innerHTML, /继续安排/);
+  assert.match(ui.element('#dialogButtons').innerHTML, /确认开考/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.equal(ui.storage.data.size, 0);
+  ui.click('#dialogButtons', { dialogAction: 'resume' });
+  assert.equal(ui.element('#termDialog').open, false);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.equal(ui.evaluate('CampusGame.availability(state, "study").ok'), true);
+});
+
+test('确认后才开考，重复点击及重新打开试卷不重复生成或写入操作', () => {
+  const ui = app();
+  ui.start();
+  const revision = ui.evaluate('state.revision');
+  ui.click('#endTermButton');
+  const confirm = { dialogAction: 'beginExam', revision: String(revision) };
+  ui.click('#dialogButtons', confirm);
+  assert.equal(ui.evaluate('state.phase'), 'examPending');
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.equal(ui.evaluate('state.revision'), revision + 1);
+  assert.equal(ui.evaluate('state.history.filter(entry => entry.command.operation === "beginExam").length'), 1);
+  assert.equal(ui.storage.data.size, 0);
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#dialogButtons', confirm);
+  ui.flush();
+  ui.click('#dialogButtons', confirm);
+  ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+});
+
+test('已有存档栏位只在确认开考后自动保存，刷新读档直接恢复原试卷', () => {
+  const ui = app();
+  ui.start();
+  ui.click('#saveButton'); ui.click('#dialogBody', { saveSlot: '2' });
+  const previous = new Map(ui.storage.data);
+  ui.click('#endTermButton');
+  assert.deepEqual(ui.storage.data, previous);
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  const loaded = saves.createSlotService(ui.storage).load(2);
+  assert.equal(loaded.ok, true, loaded.reason);
+  assert.equal(loaded.state.phase, 'examPending');
+  assert.equal(loaded.saveSequence, 2);
+  assert.equal(ui.storage.getItem(saves.getSlotKeys(1).primary), null);
+  assert.equal(ui.storage.getItem(saves.getSlotKeys(3).primary), null);
+  const restored = app(ui.storage);
+  restored.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(restored.evaluate('dialogMode'), 'exam');
+  assert.deepEqual(JSON.parse(restored.evaluate('JSON.stringify(state)')), loaded.state);
+});
+
+test('时间为零时仍需确认开考，确认前不改变状态', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state.time = 0; renderState()');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'confirmExam');
+  assert.match(ui.element('#dialogBody').innerHTML, /剩余时间 <b>0 点/);
+  assert.match(ui.element('#dialogBody').innerHTML, /时间已用完/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.phase'), 'examPending');
+});
+
+test('过期的开考确认不会锁定更新后的学期，重新确认后可以开考', () => {
+  const ui = app();
+  ui.start();
+  ui.click('#endTermButton');
+  const revision = ui.evaluate('state.revision');
+  ui.evaluate('state = CampusGame.executeAction(state, "study").state; while (state.pendingEvent) state = CampusGame.submitEventChoice(state, "later").state');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(revision) });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.match(ui.element('#dialogNotice').textContent, /状态已更新/);
+  ui.click('#dialogButtons', { dialogAction: 'resume' });
+  ui.click('#endTermButton');
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.phase'), 'examPending');
+});
+
+test('待处理校园事件优先展示，不弹出开考确认或生成试卷', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = CampusGame.executeAction(state, "applyClub").state');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'event');
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.equal(ui.evaluate('state.exam'), null);
 });
 
 test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当前进度和目标新档', () => {

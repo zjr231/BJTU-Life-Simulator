@@ -764,10 +764,8 @@ function requestEndTerm() {
   if (!state) return;
   if (state.phase !== 'playing') { resumePhase(); return; }
   if ((state.selectedCourses || []).length) {
-    if (runCommand('beginExam', null, state.revision)) {
-      if (activeSaveSlot !== null) saveCurrent(true);
-      showExam();
-    }
+    const remaining = state.time ? '还有 ' + state.time + ' 点时间可用于学习或其他安排，剩余时间不会结转。' : '本学期时间已用完，可以开始考试。';
+    showDialog('confirmExam', '开始' + game.TERM_NAMES[state.term - 1] + '期末考试？', '<div class="summary-lines"><span>剩余时间 <b>' + state.time + ' 点</b></span><span>当前平时分 <b>' + state.preparation + ' / 100</b></span></div><p>' + remaining + '</p><p>考试共 5 题，每题 20 分。总评 = 平时分 40% + 考试分 60%。</p><p class="dialog-note">确认开考后，本学期不能再安排学习、休息等行动。提交试卷后立即结算。</p>', [{ id: 'resume', text: '继续安排', secondary: true }, { id: 'beginExam', text: '确认开考' }]);
     return;
   }
   const preview = game.previewSettlement(state);
@@ -917,6 +915,12 @@ $('#dialogButtons').addEventListener('click', (event) => {
   else if (id === 'npcLeave' && dialogMode === 'npc') dialog.close();
   else if (id === 'confirmSave' && dialogMode === 'confirmSave' && saveTarget !== null) finishSave(saveTarget);
   else if (id === 'backToSave') showSave();
+  else if (id === 'beginExam' && dialogMode === 'confirmExam') {
+    if (runCommand('beginExam', null, button.dataset.revision)) {
+      if (activeSaveSlot !== null) saveCurrent(true);
+      showExam();
+    }
+  }
   else if (id === 'settle' && dialogMode === 'confirm') { if (runCommand('endTerm', null, button.dataset.revision)) { saveCurrent(true); showSummary(); } }
   else if (id === 'next' && dialogMode === 'summary') { if (runCommand('continueGame', null, button.dataset.revision)) resumePhase(); }
   else if (id === 'restart') askRestart();
