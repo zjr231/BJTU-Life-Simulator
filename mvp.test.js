@@ -253,6 +253,22 @@ test('同一局深造与就业均可达，毕业时可以自主选择，条件�
   assert.equal(game.evaluateEndings(missing).options.find((item) => item.id === 'furtherStudy').available, false);
 });
 
+test('未毕业可选择延毕，三无毕业生作为毕业分支可保存恢复', () => {
+  const failed = route('failed');
+  assert.equal(failed.endingOptions.options.find((item) => item.id === 'notQualified').available, true);
+  assert.equal(failed.endingOptions.options.find((item) => item.id === 'delayed').available, true);
+  const delayed = roundtrip(game.chooseEnding(failed, 'delayed').state);
+  assert.equal(delayed.phase, 'finished');
+  assert.equal(delayed.result.kind, 'graduation');
+  assert.equal(delayed.result.direction, 'delayed');
+
+  const ordinary = route('ordinary');
+  assert.equal(ordinary.endingOptions.options.find((item) => item.id === 'blankResume').available, true);
+  const blank = roundtrip(game.chooseEnding(ordinary, 'blankResume').state);
+  assert.equal(blank.phase, 'finished');
+  assert.equal(blank.result.direction, 'blankResume');
+});
+
 test('保存覆盖行动后、待选事件、总结、方向选择与最终结果阶段', () => {
   const initial = game.createGame();
   roundtrip(game.executeAction(initial, 'study').state);

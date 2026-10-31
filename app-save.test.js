@@ -771,6 +771,7 @@ test('新增校园经历从存档恢复后显示中文名称，成长记录不�
   assert.doesNotMatch(html, /undefined/);
 });
 
+
 test('事件只预览成本，确认后显示具体结果；保存、读档和成长记录保留叙述且不重抽', () => {
   const ui = app();
   ui.start();
@@ -997,3 +998,59 @@ test('界面同步展示联动时间，时间不够禁用高投入，少量投�
   assert.equal(ui.evaluate('state.energy'), 75);
   assert.match(ui.element('#dialogBody').innerHTML, /时间 −1.*精力 −5/);
 });
+
+test('期末考试可取消或确认作弊，确认后直接显示道中终局', () => {
+  const ui = app();
+  ui.start();
+  ui.click('#endTermButton');
+  ui.flush();
+  assert.equal(ui.evaluate('dialogMode'), 'confirmExam');
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  ui.flush();
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.match(ui.element('#dialogBody').innerHTML, /data-cheat-exam/);
+  ui.click('#dialogBody', { cheatExam: '1', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'confirmCheat');
+  ui.click('#dialogButtons', { dialogAction: 'backToExam' });
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  ui.click('#dialogBody', { cheatExam: '1', revision: String(ui.evaluate('state.revision')) });
+  ui.click('#dialogButtons', { dialogAction: 'cheatExam', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.phase'), 'ended');
+  assert.equal(ui.evaluate('state.result.direction'), 'cheatNote');
+  assert.equal(ui.evaluate('dialogMode'), 'ended');
+  assert.match(ui.element('#dialogBody').innerHTML, /小抄第一行/);
+});
+
+test('校园卡追查事件先确认再进入终局，安全归还可继续游戏', () => {
+  const ui = app();
+  ui.start();
+  const card = ui.evaluate('(() => { const base = CampusGame.createGame({ nickname: "card-ui", seed: "card-ui" }); return { ...base, phase: "eventPending", pendingEvent: { id: "card", term: 1, instanceId: "daily:card:1" } }; })()');
+  ui.evaluate('state = ' + JSON.stringify(card) + '; renderState(); resumePhase()');
+  assert.equal(ui.evaluate('dialogMode'), 'event');
+  ui.click('#dialogBody', { eventChoice: 'pocket', revision: String(ui.evaluate('state.revision')), instance: 'daily:card:1' });
+  ui.flush();
+  assert.equal(ui.evaluate('state.phase'), 'playing');
+  assert.equal(ui.evaluate('state.eventFlags.cardPocketed'), true);
+  ui.evaluate('state = CampusGame.continueGame(CampusGame.endTerm(state).state).state; renderState(); resumePhase()');
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'cardTrace');
+  assert.match(ui.element('#dialogBody').innerHTML, /本局结束/);
+  ui.click('#dialogBody', { eventChoice: 'deny', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  ui.flush();
+  assert.equal(ui.evaluate('dialogMode'), 'confirmEnding');
+  ui.click('#dialogButtons', { dialogAction: 'confirmEventEnding', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.phase'), 'ended');
+  assert.equal(ui.evaluate('state.result.direction'), 'cardThief');
+  assert.equal(ui.evaluate('dialogMode'), 'ended');
+
+  const safe = app();
+  safe.start();
+  const safeCard = safe.evaluate('(() => { const base = CampusGame.createGame({ nickname: "card-safe", seed: "card-safe" }); return { ...base, phase: "eventPending", pendingEvent: { id: "card", term: 1, instanceId: "daily:card:1" } }; })()');
+  safe.evaluate('state = ' + JSON.stringify(safeCard) + '; renderState(); resumePhase()');
+  safe.click('#dialogBody', { eventChoice: 'pocket', revision: String(safe.evaluate('state.revision')), instance: 'daily:card:1' });
+  safe.flush();
+  safe.evaluate('state = CampusGame.continueGame(CampusGame.endTerm(state).state).state; renderState(); resumePhase()');
+  safe.click('#dialogBody', { eventChoice: 'return', revision: String(safe.evaluate('state.revision')), instance: safe.evaluate('state.pendingEvent.instanceId') });
+  assert.notEqual(safe.evaluate('state.phase'), 'ended');
+  assert.equal(safe.evaluate('state.eventFlags.cardPocketed'), undefined);
+});
+

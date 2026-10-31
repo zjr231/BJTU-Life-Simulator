@@ -45,9 +45,9 @@ test('选课、投入、连续军训、考试与次学期选课共同运行，�
   assert.deepEqual(replayed.state, state);
 });
 
-test('保留主分支的三种毕业方向与全部专业、NPC、登录及在线对话模块', () => {
+test('保留主分支的毕业方向与全部专业、NPC、登录及在线对话模块', () => {
   const state = game.createGame();
-  assert.deepEqual(game.evaluateEndings(state).options.filter(option => option.id !== 'notQualified').map(option => option.id), ['ordinary', 'furtherStudy', 'employment']);
+  assert.deepEqual(game.evaluateEndings(state).options.filter(option => option.id !== 'notQualified').map(option => option.id), ['ordinary', 'furtherStudy', 'employment', 'blankResume', 'delayed']);
   assert.equal(game.BACKGROUNDS.reduce((sum, background) => sum + background.majors.length, 0), 12);
   assert.equal(Object.keys(game.SUBJECTS).length, 21);
   assert.ok(require('./sms.js'));

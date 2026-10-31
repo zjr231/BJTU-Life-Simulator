@@ -1,0 +1,37 @@
+name: Feishu commit notification
+
+on:
+  push:
+    branches:
+      - main
+      - lin
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    if: github.event.head_commit != null
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Feishu message
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          PUSHER: ${{ github.actor }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          COMPARE_URL: ${{ github.event.compare }}
+        run: |
+          if [ -z "$FEISHU_WEBHOOK" ]; then
+            echo "::error::FEISHU_WEBHOOK 未配置"
+            exit 1
+          fi
+          TEXT=$(printf '【GitHub 提交通知】\n仓库：%s\n分支：%s\n提交：%s\n提交人：%s\n说明：%s\n链接：%s' \
+            "$REPOSITORY" "$BRANCH" "${COMMIT_SHA:0:8}" "$PUSHER" "$COMMIT_MESSAGE" "${COMMIT_URL:-$COMPARE_URL}")
+          PAYLOAD=$(jq -n --arg text "$TEXT" '{msg_type:"text",content:{text:$text}}')
+          curl --fail-with-body -sS -X POST \
+            -H 'Content-Type: application/json' \
+            -d "$PAYLOAD" "$FEISHU_WEBHOOK"

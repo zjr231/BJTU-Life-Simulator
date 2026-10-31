@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.5.4', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.5.5', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
   // Fitness tiers scale the costs/rewards of non-health actions and events.
   const FITNESS_TIERS = [
     { id: 'sick', label: '生病', min: 0, max: 24, reward: 0, cost: 0, ill: true },
@@ -301,7 +301,12 @@
     card: { priority: 63, title: '地上的校园卡', description: '路上躺着一张校园卡，照片上的面孔有点眼熟，可能是隔壁班的。卡里余额还不少。', trigger: '地上躺着一张校园卡', choices: [
       { id: 'return', fitnessCost: 0, title: '交到失物招领', description: '登记的时候，失主在群里正好喊了一嗓子：卡丢了，急。', time: 1, social: 3, mood: 5 },
       { id: 'later', fitnessCost: 0, title: '放回原处', description: '你把它放回原地。' },
-      { id: 'pocket', fitnessCost: 0, title: '装进口袋', description: '揣进兜里。晚上睡觉前，你把卡塞到了枕头下面。', income: 50, mood: -8 }
+      { id: 'pocket', fitnessCost: 0, title: '装进口袋', description: '揣进兜里。晚上睡觉前，你把卡塞到了枕头下面。', income: 50, mood: -8, flag: 'cardPocketed' }
+    ] },
+    cardTrace: { priority: 15, title: '校园卡消费记录', description: '保卫处贴出一张消费记录：丢卡当天，有人在超市刷了五十元。时间、地点和监控都对得上，失主正在等一个解释。', trigger: '保卫处贴出了消费记录', choices: [
+      { id: 'return', fitnessCost: 0, title: '主动归还并说明', description: '你把卡交回保卫处，补上了那五十元，也把这件事写进了检讨。', mood: -4, social: 2, clearFlag: 'cardPocketed' },
+      { id: 'deny', fitnessCost: 0, title: '死不承认', description: '你说卡是捡的，钱不是你花的。保卫处把监控截图推到你面前。', ending: 'cardThief', reason: '你选择死不承认，保卫处调出了完整的消费记录。' },
+      { id: 'run', fitnessCost: 0, title: '拔腿就跑', description: '你转身就跑，跑过银杏大道、南门和三个路口。监控拍得很清楚。', ending: 'cardThief', reason: '你选择拔腿就跑，监控把你跑过的每一个路口都拍了下来。' }
     ] },
     wall: { priority: 64, title: '表白墙点名', description: '表白墙上有人发了你：今天在校园里遇到的穿灰卫衣的同学。室友把截图甩进群里，连发三个问号。', trigger: '室友把截图甩进了群里', choices: [
       { id: 'reply', fitnessCost: 0, title: '在群里否认', description: '群里闹了一晚上，最后也没人猜出是谁发的。', time: 1, social: 4, mood: 4 },
@@ -586,6 +591,10 @@
   Object.assign(EVENTS.military2.choices.find(choice => choice.id === 'later'), { mood: 6, social: 3, experience: 'military' });
   EVENTS.military2.choices.unshift({ id: 'perform', title: '完成军训汇演', description: '跟随方阵完成汇演，为这段共同训练留下记录。', time: 0, energy: 0, fitnessCost: 0, mood: 6, social: 3, experience: 'military' });
   const ENDINGS = { graduationAverage: 60, passedTerms: 6, furtherStudyAverage: 80, furtherStudyPreparation: 60, jobPreparation: 60 };
+  const TERMINAL_ENDINGS = {
+    cheatNote: { title: '小抄的第一行' },
+    cardThief: { title: '校园卡大盗' }
+  };
   const RANDOM_POOL = ['campusDiscussion', 'cat', 'canteen', 'card', 'wall', 'seat', 'snow', 'parcel', 'night', 'injury', 'flu', 'insomnia', 'lecture', 'drama', 'alumniStory', 'frontDesk', 'ginkgo', 'hawthorn', 'alumniFair', 'rollCall', 'jobFair', 'medicalInsurance', 'labNight', 'danceParty', 'memorial129'];
   // Elapsed time is an estimate of semester progress, not a week/day calendar.
   const CAMPUS_SCHEDULE = {
@@ -655,7 +664,7 @@
     qualityEffects: { 0: {}, 1: { social: 1, mood: 2 }, 2: { social: 2, mood: 4 } },
     academicPrep: { 1: 3, 2: 5 }
   };
-  const api = { RULES, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT };
+  const api = { RULES, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

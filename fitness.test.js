@@ -56,7 +56,7 @@ test('每个事件选项都显式声明体能消耗，按有效精力分档，�
       assert.equal(choice.fitnessCost, band(energy), id + ':' + choice.id);
     }
   }
-  assert.equal(total, 110);
+  assert.equal(total, 113);
   assert.equal(game.EVENTS.military1.choices.find(choice => choice.id === 'join').fitnessCost, 4);
   assert.equal(game.EVENTS.night.choices.find(choice => choice.id === 'join').fitnessCost, 1);
   assert.equal(game.EVENTS.military2.choices.every(choice => choice.fitnessCost === 0), true);

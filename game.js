@@ -3,7 +3,7 @@
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
   const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
-  const { RULES, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
+  const { RULES, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
   const { COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
@@ -184,6 +184,17 @@
       if (!next.eventFlags[instance.instanceId] && next.pendingEvent?.instanceId !== instance.instanceId && !next.eventQueue.some((item) => item.instanceId === instance.instanceId)) next.eventQueue.push(instance);
     };
     const did = (event, choice, termsAgo) => next.eventHistory.some((entry) => entry.event === event && (choice === undefined || entry.choice === choice) && (termsAgo === undefined || entry.term === next.term - termsAgo));
+    const lastEventIndex = (event, choice) => {
+      for (let index = next.eventHistory.length - 1; index >= 0; index--) {
+        const entry = next.eventHistory[index];
+        if (entry.event === event && (choice === undefined || entry.choice === choice)) return index;
+      }
+      return -1;
+    };
+    const lastPocket = lastEventIndex('card', 'pocket');
+    const lastTrace = lastEventIndex('cardTrace');
+    const tracePending = next.pendingEvent?.id === 'cardTrace' || next.eventQueue.some((item) => item.id === 'cardTrace');
+    if (lastPocket > lastTrace && !tracePending && (triggerAction === 'newTerm' || next.term === 8)) enqueue('cardTrace');
     const isAction = own(ACTIONS, triggerAction);
     const termActions = next.history.filter((entry) => entry.command.operation === 'executeAction' && entry.term === next.term).length + (isAction ? 1 : 0);
     const elapsed = RULES.time - next.time;
@@ -406,6 +417,10 @@
       const majorRoll = random.draw(pickRoll.rng);
       next = { ...next, rng: majorRoll.rng, background: { id: picked.id, college: picked.college, major: picked.majors[Math.min(picked.majors.length - 1, Math.floor(majorRoll.number * picked.majors.length))] } };
     }
+    if (effect.ending) {
+      const terminal = finishTerminal(next, effect.ending, effect.reason || choice.title);
+      return commit(state, terminal, { operation: 'submitEventChoice', id: choiceId, eventInstanceId: pending.instanceId }, entry, command.commandId);
+    }
     next = attachEvents(next, 'eventChoice');
     return commit(state, next, { operation: 'submitEventChoice', id: choiceId, eventInstanceId: pending.instanceId, ...(investment ? { investment: investment.amount } : {}) }, entry, command.commandId);
   }
@@ -485,6 +500,26 @@
     const next = { ...state, phase: 'summary', money: summary.moneyAfter, chains: settlementChains(state).chains, courses: [...state.courses, summary], summary, exam: null };
     return commit(state, next, { operation: 'submitExam', id: [...answers] }, { action: 'submitExam', title: '提交期末试卷', examScore, correct }, command.commandId);
   }
+  function finishTerminal(state, id, reason) {
+    const ending = TERMINAL_ENDINGS[id];
+    if (!ending) throw new Error('未知终局');
+    const flags = { ...state.eventFlags };
+    delete flags.cardPocketed;
+    const result = {
+      kind: 'terminal', direction: id, title: ending.title, term: state.term, reason,
+      requirements: [], average: averageGrade(state), passed: state.courses.filter((item) => item.passed).length,
+      experiences: clone(state.experiences), courses: clone(state.courses)
+    };
+    return { ...state, phase: 'ended', result, exam: null, pendingEvent: null, eventQueue: [], summary: null, endingOptions: null, selectedCourses: [], eventFlags: flags };
+  }
+  function cheatExam(state, options = {}) {
+    const command = commandCheck(state, options, 'cheatExam');
+    if (!command.ok) return command;
+    if (state.phase !== 'examPending' || !state.exam) return { ok: false, reason: '当前没有可作弊的试卷', state };
+    const reason = '第 ' + state.term + ' 学期期末考试作弊，被监考老师当场发现。';
+    const next = finishTerminal(state, 'cheatNote', reason);
+    return commit(state, next, { operation: 'cheatExam' }, { action: 'cheatExam', title: '小抄的第一行' }, command.commandId);
+  }
   function evaluateEndings(state) {
     const average = averageGrade(state);
     const passed = state.courses.filter((item) => item.passed).length;
@@ -504,9 +539,16 @@
       make('employment', '进入就业', [
         { label: '完成实习经历', met: state.chains.internship.status === 'completed', value: state.chains.internship.status },
         { label: '求职准备至少 ' + ENDINGS.jobPreparation, met: state.jobPreparation >= ENDINGS.jobPreparation, value: state.jobPreparation }
+      ]),
+      make('blankResume', '三无毕业生', [
+        { label: '未完成校园项目、社团或实习', met: !['project', 'club', 'internship'].some((id) => state.chains[id].status === 'completed'), value: 'checked' },
+        { label: '求职准备低于 20', met: state.jobPreparation < 20, value: state.jobPreparation }
       ])
     ];
-    if (!graduated) options.push({ id: 'notQualified', title: '暂未达到毕业条件', available: state.courses.length === 8, requirements: base });
+    if (!graduated) {
+      options.push({ id: 'notQualified', title: '暂未达到毕业条件', available: state.courses.length === 8, requirements: base });
+      options.push({ id: 'delayed', title: '延毕练习生', available: state.courses.length === 8, requirements: base });
+    }
     return { average, passed, graduated, options };
   }
   function continueGame(state, options = {}) {
@@ -524,7 +566,7 @@
     if (state.phase !== 'endingChoice') return { ok: false, reason: '当前不能选择毕业方向', state };
     const ending = state.endingOptions.options.find((item) => item.id === id && item.available);
     if (!ending) return { ok: false, reason: '这个方向的条件还差一点', state };
-    const result = { direction: ending.id, title: ending.title, requirements: clone(ending.requirements), average: state.endingOptions.average, passed: state.endingOptions.passed, experiences: clone(state.experiences), courses: clone(state.courses) };
+    const result = { kind: 'graduation', direction: ending.id, title: ending.title, term: 8, reason: '', requirements: clone(ending.requirements), average: state.endingOptions.average, passed: state.endingOptions.passed, experiences: clone(state.experiences), courses: clone(state.courses) };
     return commit(state, { ...state, phase: 'finished', result }, { operation: 'chooseEnding', id }, { action: 'chooseEnding', title: ending.title }, command.commandId);
   }
   // NPC 聊天预检（只读）：界面发消息前 fail-fast 用，与命令内的检查同一套规则。
@@ -578,7 +620,7 @@
     let state = createGame({ nickname, seed });
     for (const [index, command] of commands.entries()) {
       const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment };
-      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args) };
+      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), cheatExam: () => cheatExam(state, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args) };
       if (!own(handlers, command.operation)) return { ok: false, reason: '第 ' + (index + 1) + ' 步操作未知', state };
       const result = handlers[command.operation]();
       if (!result.ok) return { ...result, reason: '第 ' + (index + 1) + ' 步：' + result.reason };
@@ -586,7 +628,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
+  const api = { RULES, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
