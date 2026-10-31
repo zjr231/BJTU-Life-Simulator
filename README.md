@@ -134,5 +134,6 @@ M4 首次主线集成的 76 项测试、冲突处理和接口对接记录见 [M4
 | scripts/deepseek-relay.test.js | 中转的参数校验、上游错误、超时与两种云平台入口签名回归 |
 | scripts/check-release.js | 发布文件、大小写、脚本顺序及可选线上资源一致性检查 |
 | .github/workflows/m4-checks.yml | 提交与 PR 的自动测试和静态资源检查 |
+| .github/workflows/feishu-commit-notify.yml | main/lin 推送后通过 FEISHU_WEBHOOK Secret 发送飞书群提交通知 |
 
 玩法参考《中国式人生》《人生重开模拟器》，地图复用项目既有素材。音效与背景音乐由 Web Audio 在浏览器内实时合成，未使用任何外部音频素材或服务；既有图片素材来源和授权仍需团队在发布前整理。
