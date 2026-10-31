@@ -7,6 +7,7 @@ function actionableState(id) {
   const state = game.createGame();
   const action = game.ACTIONS[id];
   state.term = 5;
+  if (action.sickOnly) state.fitness = 24;
   state.preparation = action.minPreparation || 0;
   if (action.minAverage) state.courses = [{ grade: 80 }];
   if (action.kind === 'work') state.chains[action.chain] = { status: 'active', progress: 0, startedTerm: 4, deadline: 6, nextEligibleTerm: 1, reviewAfter: 4 };
@@ -47,6 +48,7 @@ test('每个行动的资源边界：刚好满足可执行，任一资源不足�
     assert.equal(game.executeAction(state, id).ok, true, id);
     for (const [key, cost] of [['time', action.time], ['energy', action.energy], ['money', action.money]]) {
       if (!cost) continue;
+      if (key === 'money' && action.emergencyMoney) continue;
       const insufficient = { ...state, [key]: cost - 1 };
       const before = structuredClone(insufficient);
       const result = game.executeAction(insufficient, id);
@@ -55,6 +57,11 @@ test('每个行动的资源边界：刚好满足可执行，任一资源不足�
       assert.deepEqual(insufficient, before);
     }
   }
+  const broke = { ...actionableState('treatment'), money: 0, time: 1 };
+  const emergency = game.executeAction(broke, 'treatment');
+  assert.equal(emergency.ok, true);
+  assert.equal(emergency.changes.money, 0);
+  assert.equal(emergency.state.fitness, 25);
 });
 test('收益上限和已满状态，休息不能增加学期时间', () => {
   const rest = game.executeAction({ ...game.createGame(), energy: 95 }, 'rest');
@@ -348,6 +355,7 @@ test('转专业结果按平均成绩判定：达标换学院背景并留经历�
   const play = (studiesPerTerm, checkChoice) => {
     let state = game.createGame();
     for (let term = 1; term <= 3; term++) {
+      state = { ...state, fitness: 60 };
       const actions = term === 3 ? ['rest'] : studiesPerTerm === 4 ? ['study', 'study', 'study', 'tutoring'] : Array(studiesPerTerm).fill('study');
       for (const id of actions) {
         const action = game.executeAction(state, id, id === 'tutoring' ? { investment: 240 } : {});

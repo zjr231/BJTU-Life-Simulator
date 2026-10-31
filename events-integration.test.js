@@ -80,6 +80,7 @@ test('固定通知与竞赛在规定学期出现，八学期后可正常毕业',
   const choices = { contest1: 'join', contest2: 'compete' };
   let state = game.createGame({ seed: 'fixed-events' });
   for (let term = 1; term <= 8; term++) {
+    state = { ...state, fitness: 60 };
     assert.equal(state.term, term);
     if (term === 4) {
       // 新投入按实际成本安排：辅导保证本学期达标，勤工攒观演预算，散步维持下一学期心情。
@@ -139,6 +140,7 @@ test('25 种随机事件匹配场景和季节，每学期只抽取一次', () =>
           // 避免休息同时恢复体能后短跑达标、心情直接顶满导致后续行动被判“收益已经到头”。
           if (late) state = { ...state, mood: 30 };
           if (late) for (let i = 0; i < 9; i++) state = act(state, 'rest', { sportsMeet: 'sprint' });
+          state = { ...state, fitness: 50 };
           const calls = state.rng.calls;
           const first = game.executeAction(state, action);
           assert.equal(first.ok, true, action + ': ' + first.reason);
@@ -170,6 +172,7 @@ test('25 种随机事件匹配场景和季节，每学期只抽取一次', () =>
       } else {
         // 项目申请要求本学期准备度 40，准备度学期末清零：第 2 学期先学习再申请，第 3 学期开学投入。
         state = nextTerm(study(study(state)));
+        state = { ...state, fitness: 60 };
         while (state.preparation < 40) state = study(state);
         state = act(state, 'applyProject', { projectOffer: 'accept' });
         state = nextTerm(state);

@@ -76,6 +76,7 @@ test('转专业后仍可读取原学院自习优惠的历史投入记录', () =>
   let state = game.createGame({ nickname: '转专业验收', seed: 5 });
   assert.equal(state.background.id, 'information');
   for (let term = 1; term <= 3; term++) {
+    state = { ...state, fitness: 60 };
     const plan = term === 1 ? [['selfStudy'], ['study'], ['study'], ['tutoring', 240]]
       : term === 2 ? [['study'], ['study'], ['study'], ['tutoring', 240]] : [['rest']];
     for (const [id, investment] of plan) {

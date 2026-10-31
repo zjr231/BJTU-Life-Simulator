@@ -774,7 +774,7 @@ test('新增校园经历从存档恢复后显示中文名称，成长记录不�
 test('事件只预览成本，确认后显示具体结果；保存、读档和成长记录保留叙述且不重抽', () => {
   const ui = app();
   ui.start();
-  ui.evaluate("state = game.executeAction(game.executeAction(state, 'study').state, 'study').state; showEvent()");
+  ui.evaluate("state = { ...game.executeAction(game.executeAction(state, 'study').state, 'study').state, fitness: 50 }; showEvent()");
   assert.match(ui.element('#dialogBody').innerHTML, /整个军训的安排/);
   const before = ui.evaluate('JSON.stringify(state)');
   ui.click('#dialogBody', { investmentPreset: 'join', amount: '26' });
@@ -810,7 +810,7 @@ test('事件只预览成本，确认后显示具体结果；保存、读档和�
 
 test('档位按钮拒绝任意数字，资源不足可改选有效档位', () => {
   const ui = app(); ui.start();
-  ui.evaluate("state = game.executeAction(game.executeAction(state, 'study').state, 'study').state; showEvent()");
+  ui.evaluate("state = { ...game.executeAction(game.executeAction(state, 'study').state, 'study').state, fitness: 50 }; showEvent()");
   assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /type="range"|type="number"/);
   const original = ui.evaluate('JSON.stringify(state)');
   for (const amount of ['4', '11', '24', '3.5']) {
@@ -876,7 +876,7 @@ test('行动卡展示体能成本，体能不足时禁用并提示', () => {
   ui.evaluate('state = { ...state, fitness: 1 }');
   ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '15' });
   assert.equal(ui.element('#action-choice-study').disabled, true);
-  assert.match(ui.element('#investment-reason-action-study').textContent, /体能不够：需要 3，现在剩 1/);
+  assert.match(ui.element('#investment-reason-action-study').textContent, /身体不适，先去校医院就诊/);
 });
 
 test('锻炼结果区分体能消耗与扣除消耗后的净变化', () => {
@@ -903,6 +903,47 @@ test('锻炼结果区分体能消耗与扣除消耗后的净变化', () => {
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');
   assert.match(ui.element('#dialogBody').innerHTML, /另消耗 <b>2 点体能<\/b>/);
   assert.match(ui.element('#dialogBody').innerHTML, /体能 \+\d+ 是扣除本次 2 点消耗后的净变化/);
+});
+
+test('状态卡显示体能挡位与生病警告', () => {
+  const ui = app(); ui.start();
+  assert.match(ui.element('#mapStats').innerHTML, /一般（收益 ×1.00 \/ 消耗 ×1.00）/);
+  assert.equal(ui.element('#fitnessWarning').hidden, true);
+  ui.evaluate('state = { ...state, fitness: 24 }; renderState()');
+  assert.match(ui.element('#mapStats').innerHTML, /生病 · 先去校医院/);
+  assert.match(ui.element('#fitnessWarning').textContent, /先去校医院就诊/);
+});
+
+test('生病时医院只开放就诊，其他医院行动锁定', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('openPlace("hospital")');
+  assert.match(ui.element('#actionList').innerHTML, /id="action-choice-treatment"[^>]*disabled/);
+  ui.evaluate('state = { ...state, fitness: 24 }; openPlace("hospital")');
+  const html = ui.element('#actionList').innerHTML;
+  assert.doesNotMatch(html, /id="action-choice-treatment"[^>]*disabled/);
+  assert.match(html, /id="action-choice-checkup"[^>]*disabled/);
+  assert.match(html, /身体不适，先去校医院就诊/);
+});
+
+test('生病时事件对话框只保留先去校医院', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('state = { ...state, fitness: 10, phase: "eventPending", pendingEvent: { id: "fitnessTest", term: 1, instanceId: "daily:fitnessTest:1" } }; showEvent()');
+  const body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /data-event-choice="sickLeave"/);
+  assert.doesNotMatch(body, /data-event-choice="participate"|data-event-choice="later"/);
+  ui.click('#dialogBody', { eventChoice: 'sickLeave', revision: String(ui.evaluate('state.revision')), instance: 'daily:fitnessTest:1' });
+  assert.equal(ui.evaluate('state.pendingEvent'), null);
+});
+
+test('虚弱挡位的投入结果页显示实际消耗', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('state = { ...state, fitness: 44 }; openPlace("think")');
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '15' });
+  assert.match(ui.element('#investment-cost-action-study').textContent, /精力 −19/);
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.match(ui.element('#dialogBody').innerHTML, /本次投入 <b>19 点精力<\/b>/);
+  assert.equal(ui.evaluate('state.history.at(-1).investment.amount'), 15);
 });
 
 test('常规课程可调成本，提交后揭晓并保存结果；下一行动的校园事件在回顾之后展示', () => {

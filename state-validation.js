@@ -93,7 +93,8 @@
         const command = entry.command;
         if (!['executeAction', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');
-        if (command.operation === 'submitEventChoice' && (!own(EVENTS, entry.event) || !EVENTS[entry.event].choices.some((choice) => choice.id === command.id) || command.eventInstanceId !== entry.instanceId)) return fail('历史事件');
+        const syntheticExit = command.id === 'sickLeave' && entry.choice === 'sickLeave';
+        if (command.operation === 'submitEventChoice' && (!own(EVENTS, entry.event) || (!syntheticExit && !EVENTS[entry.event].choices.some((choice) => choice.id === command.id)) || command.eventInstanceId !== entry.instanceId)) return fail('历史事件');
         if (command.operation === 'selectCourses' && (!Array.isArray(command.id) || command.id.length !== 3 || new Set(command.id).size !== 3 || !command.id.every((id) => COURSES.some((course) => course.id === id)))) return fail('历史选课');
         if (command.operation === 'updateExamAnswers' && (!Array.isArray(command.id) || command.id.length !== 5 || !Array.from(command.id).every((answer) => answer === null || integer(answer, 0, 3)))) return fail('历史答题草稿');
         if (command.operation === 'submitExam' && (!Array.isArray(command.id) || command.id.length !== 5 || !command.id.every((answer) => integer(answer, 0, 3)))) return fail('历史考试答案');
@@ -123,7 +124,8 @@
       if (instances.length > Object.keys(EVENTS).length || new Set(instances.map((item) => item.instanceId)).size !== instances.length) return fail('重复事件实例');
       const seen = new Set();
       for (const entry of state.eventHistory) {
-        if (!object(entry) || !own(EVENTS, entry.event) || !integer(entry.term, 1, state.term) || entry.instanceId !== (EVENTS[entry.event].chain || 'daily') + ':' + entry.event + ':' + entry.term || !EVENTS[entry.event].choices.some((choice) => choice.id === entry.choice) || state.eventFlags[entry.instanceId] !== true || seen.has(entry.instanceId)) return fail('事件历史');
+        const syntheticExit = entry.choice === 'sickLeave';
+        if (!object(entry) || !own(EVENTS, entry.event) || !integer(entry.term, 1, state.term) || entry.instanceId !== (EVENTS[entry.event].chain || 'daily') + ':' + entry.event + ':' + entry.term || (!syntheticExit && !EVENTS[entry.event].choices.some((choice) => choice.id === entry.choice)) || state.eventFlags[entry.instanceId] !== true || seen.has(entry.instanceId)) return fail('事件历史');
         if (!validInvestment(entry) || (entry.investment && !state.history.some(log => log.instanceId === entry.instanceId && same(log.investment, entry.investment) && same(log.changes, entry.changes)))) return fail('事件投入记录');
         seen.add(entry.instanceId);
       }

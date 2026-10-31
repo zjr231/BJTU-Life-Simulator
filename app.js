@@ -16,7 +16,7 @@ const mathText = (value) => {
 const hotspots = [...document.querySelectorAll('.map-hotspot')];
 const audio = typeof CampusAudio !== 'undefined' ? CampusAudio : null;
 const PLACE_SOUNDS = { think: 'study', library: 'study', yifu: 'study', dorm: 'relax', ginkgo: 'relax', track: 'sport', activity: 'opportunity', gate: 'opportunity', hospital: 'info', auditorium: 'info', hotel: 'info' };
-const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport' };
+const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport', treatment: 'success' };
 const dialog = $('#termDialog');
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
@@ -90,6 +90,7 @@ const ACTION_FLAVOR = {
   internshipWork: '打卡下班，通勤路上天还没黑透。',
   checkup: '体检单打印出来，各项指标正常。你把单子折好，塞进口袋。',
   sickVisit: '药片就着温水吞下去。校医说，三天内别熬夜。',
+  treatment: '校医把药递过来，叮嘱你这两天别再逞强。',
   alumniVolunteer: '散场时，一位老校友塞给你一瓶水：辛苦了，小校友。',
   show: '谢幕的时候，你跟着人群鼓掌，掌心拍得发红。'
 };
@@ -244,9 +245,13 @@ function npcFigureSvg(figure) {
 }
 function statsMarkup() {
   const latest = state.courses.at(-1);
+  const tier = game.fitnessTier(state.fitness);
+  const fitnessNote = tier.ill
+    ? '/ 100 · 生病 · 先去校医院'
+    : '/ 100 · ' + tier.label + '（收益 ×' + tier.reward.toFixed(2) + ' / 消耗 ×' + tier.cost.toFixed(2) + '）';
   const items = [
     ['成绩', latest ? latest.grade : '待结算', latest ? latest.name + ' · 最近成绩' : '等待首次期末', 'grade'],
-    ['社交', state.social, '/ 100 · 慢慢攒', 'social'], ['体能', state.fitness, '/ 100 · 行动消耗 · 体测', 'fitness'],
+    ['社交', state.social, '/ 100 · 慢慢攒', 'social'], ['体能', state.fitness, fitnessNote, tier.ill ? 'fitness is-ill' : 'fitness'],
     ['心情', state.mood, '/ 100 · 会影响事件', state.mood < 30 ? 'mood is-low' : 'mood'],
     ['钱包', state.money, '元 · 可用资金', 'money']
   ];
@@ -354,6 +359,11 @@ function renderState() {
   $('#timeLabel').textContent = '时间 ' + state.time + ' / 12';
   $('#energyLabel').textContent = '精力 ' + state.energy + ' / 100';
   $('#mapStats').innerHTML = statsMarkup();
+  const fitnessWarning = $('#fitnessWarning');
+  if (fitnessWarning) {
+    fitnessWarning.hidden = !game.isSick(state);
+    fitnessWarning.textContent = game.isSick(state) ? '身体已经撑不住：先去校医院就诊，否则无法安排其他行动。' : '';
+  }
   $('#preparationValue').textContent = state.preparation + ' / 100';
   $('#preparationMeter').value = state.preparation;
   $('#placeStats').innerHTML = '<div class="place-resources"><span>时间 <b>' + state.time + ' / 12</b></span><span>精力 <b>' + state.energy + ' / 100</b></span><span>学习进度 <b>' + state.preparation + ' / 100</b></span></div><div class="place-attributes">' + statsMarkup() + '</div>';
@@ -382,7 +392,7 @@ function renderActions() {
     const amount = actionDraft(id);
     const preview = profile && game.previewActionInvestment(state, id, amount);
     const check = game.availability(state, id, amount);
-    return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div><p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : action)) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>确认' + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
+    return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div><p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>确认' + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
   }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
 }
 // 地点插画：按建筑名取 assets/places 下对应的矢量图；锚点与地图热点坐标一致。
@@ -639,6 +649,7 @@ async function sendNpcChat() {
   const input = $('#npcChatInput');
   const text = String(input?.value || '').trim();
   if (!text) { input?.focus(); return; }
+  if (state && game.isSick(state)) { showToast(game.ILLNESS_REASON); audio?.play('deny'); input?.focus(); return; }
   // playing 阶段聊天要扣资源：先按规则模块预检，不通过就不发这条消息（不写日志、不扣费、输入保留）。
   if (state && state.phase === 'playing') {
     const precheck = game.npcChatAvailability(state, talking.identityId);
@@ -916,7 +927,7 @@ function showEnrollment() {
   showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p><p class="dialog-note">背景只影响一项行动加成，不会锁死你的毕业路线。看完玩法说明后先完成本学期选课。</p>', [{ id: 'resume', text: '看看怎么安排' }]);
 }
 function showTutorial() {
-  showDialog('tutorial', '八学期怎么安排', '<ol><li>每学期开学先选 3 门课程，再去地图上安排行动。选课决定期末考试覆盖的学科；数学、物理、计算机、交通、土木、经管等定量课程会按主题随机生成计算题。</li><li>点击地图上的地点，先看活动安排和成本，再决定做不做。逛逛、返回都不花钱。</li><li>日常行动和部分事件可选固定投入档位；确认前查看时间及资源成本，完成后揭晓实际收益，并写入成长记录。军训成本包含训练和汇演，汇演免费连续完成。</li><li>学习和自学都攒同一个学习进度，它是总评里的平时分（40%）。</li><li>期末参加 5 题考试，覆盖所选课程，每题 20 分；总评 = 平时分 × 40% + 考试 × 60%，60 分达标。</li><li>每学期 12 点时间。消耗精力的行动也会消耗体能；休息能回精力与体能，散步、锻炼也能回体能，但都回不了时间。长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目的成果在之后的学期确认，社团和实习在投入完成后即可收尾。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
+  showDialog('tutorial', '八学期怎么安排', '<ol><li>每学期开学先选 3 门课程，再去地图上安排行动。选课决定期末考试覆盖的学科；数学、物理、计算机、交通、土木、经管等定量课程会按主题随机生成计算题。</li><li>点击地图上的地点，先看活动安排和成本，再决定做不做。逛逛、返回都不花钱。</li><li>日常行动和部分事件可选固定投入档位；确认前查看时间及资源成本，完成后揭晓实际收益，并写入成长记录。军训成本包含训练和汇演，汇演免费连续完成。</li><li>学习和自学都攒同一个学习进度，它是总评里的平时分（40%）。</li><li>期末参加 5 题考试，覆盖所选课程，每题 20 分；总评 = 平时分 × 40% + 考试 × 60%，60 分达标。</li><li>每学期 12 点时间。消耗精力的行动也会消耗体能；休息能回精力与体能，散步、锻炼也能回体能，但都回不了时间。体能分五档：虚弱、一般、良好、优秀会缩放行动的收益与消耗；低于 25 会生病，只能先去校医院。长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目的成果在之后的学期确认，社团和实习在投入完成后即可收尾。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
 }
 function showBackground() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
@@ -984,25 +995,34 @@ function showEvent() {
   audio?.play('event');
   const pending = state.pendingEvent;
   const event = game.EVENTS[pending.id];
-  const choices = event.choices.filter(choice => !choice.legacyHidden).map((choice) => {
-    const profile = game.getEventInvestment(state, choice.id);
-    const amount = eventDraft(choice.id, true);
-    const preview = profile && game.previewEventInvestment(state, choice.id, amount);
-    const check = game.eventAvailability(state, choice.id, pending.instanceId, amount);
-    return '<article class="event-choice' + (profile ? ' has-investment' : '') + '"><h3>' + h(choice.title) + '</h3><p>' + h(profile ? profile.description : choice.description) + '</p>' + (profile ? investmentControls(choice, profile, preview) : '') + '<div class="action-cost" id="investment-cost-' + choice.id + '">' + h(costs(preview?.ok ? preview.effect : choice)) + '</div>' + '<button type="button" id="event-choice-' + choice.id + '" data-event-choice="' + choice.id + '" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '"' + (!check.ok || uiLocked ? ' disabled' : '') + '>' + (profile ? '确认投入，' : '选择：') + h(choice.title) + '</button><div class="action-reason" id="investment-reason-' + choice.id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
-  }).join('');
-  showDialog('event', event.title, '<p>' + h(event.description) + '</p><p class="dialog-note">' + h(event.trigger) + '。剩余时间 ' + state.time + ' · 精力 ' + state.energy + ' · 钱包 ' + state.money + ' 元。确认才扣费，切换档位不会结算。</p><div class="event-choice-list">' + choices + '</div>');
+  const sick = game.isSick(state);
+  const choices = sick
+    ? '<article class="event-choice"><h3>先去校医院</h3><p>烧还没退，现在不是处理这件事的时候。</p><div class="action-cost">不消耗资源 · 事件先搁置</div><button type="button" id="event-choice-sickLeave" data-event-choice="sickLeave" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '">选择：先去校医院</button><div class="action-reason"></div></article>'
+    : event.choices.filter(choice => !choice.legacyHidden).map((choice) => {
+      const profile = game.getEventInvestment(state, choice.id);
+      const amount = eventDraft(choice.id, true);
+      const preview = profile && game.previewEventInvestment(state, choice.id, amount);
+      const check = game.eventAvailability(state, choice.id, pending.instanceId, amount);
+      return '<article class="event-choice' + (profile ? ' has-investment' : '') + '"><h3>' + h(choice.title) + '</h3><p>' + h(profile ? profile.description : choice.description) + '</p>' + (profile ? investmentControls(choice, profile, preview) : '') + '<div class="action-cost" id="investment-cost-' + choice.id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, choice, null))) + '</div>' + '<button type="button" id="event-choice-' + choice.id + '" data-event-choice="' + choice.id + '" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '"' + (!check.ok || uiLocked ? ' disabled' : '') + '>' + (profile ? '确认投入，' : '选择：') + h(choice.title) + '</button><div class="action-reason" id="investment-reason-' + choice.id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
+    }).join('');
+  const note = sick
+    ? '身体不适，先处理身体。待处理事件可以先去校医院，之后再回来处理。'
+    : h(event.trigger) + '。剩余时间 ' + state.time + ' · 精力 ' + state.energy + ' · 钱包 ' + state.money + ' 元。确认才扣费，切换档位不会结算。';
+  showDialog('event', event.title, '<p>' + h(event.description) + '</p><p class="dialog-note">' + note + '</p><div class="event-choice-list">' + choices + '</div>');
 }
 const INVESTMENT_OUTCOMES = { setback: '发挥失常', limited: '收获有限', steady: '有所收获', good: '状态出色', surprise: '意外收获' };
 function showEventResult(entry) {
   const result = entry.investment;
   const profile = entry.event ? game.EVENT_INVESTMENTS[entry.event + ':' + entry.choice] || game.LEGACY_INVESTMENTS.events[entry.event + ':' + entry.choice] : game.getActionInvestment(state, entry.action) || game.LEGACY_INVESTMENTS.actions[entry.action];
-  const fitnessCost = entry.event
+  const rawFitnessCost = entry.event
     ? ((game.EVENTS[entry.event] && game.EVENTS[entry.event].choices.find(item => item.id === entry.choice)) || {}).fitnessCost || 0
     : (game.ACTIONS[entry.action] || {}).fitnessCost || 0;
+  const fitnessCost = entry.fitnessCost === undefined ? rawFitnessCost : entry.fitnessCost;
+  const spent = Number.isSafeInteger(result.spent) ? result.spent : result.amount;
+  const scaled = result.spent !== undefined && result.spent !== result.amount;
   const capped = Object.keys(profile.rewards).some(key => state[key === 'recovery' ? 'energy' : key] === 100);
   const title = entry.event ? game.EVENTS[entry.event].title : game.ACTIONS[entry.action].title;
-  showDialog('eventResult', title + ' · 结果', '<div class="investment-result"><span class="outcome-badge outcome-' + result.outcome + '">' + INVESTMENT_OUTCOMES[result.outcome] + '</span><p class="investment-spent">本次投入 <b>' + result.amount + ' ' + investmentUnit(result.resource) + '</b>' + (fitnessCost ? '，另消耗 <b>' + fitnessCost + ' 点体能</b>' : '') + '</p><p class="investment-story">' + h(result.description) + '</p><div class="investment-actual"><span>实际变化</span><b>' + h(changeText(entry.changes)) + '</b></div>' + (fitnessCost && entry.changes.fitness > 0 ? '<p class="dialog-note">体能 +' + entry.changes.fitness + ' 是扣除本次 ' + fitnessCost + ' 点消耗后的净变化。</p>' : '') + (capped ? '<p>部分属性已达上限，实际增加量以当前状态为准。</p>' : '') + '<p class="dialog-note">这次结果已经记入成长记录，继续或保存都不会重新结算。</p></div>', [{ id: 'eventContinue', text: state.pendingEvent?.id === 'military2' ? '继续军训汇演' : state.pendingEvent ? '处理下一个事件' : '继续安排' }]);
+  showDialog('eventResult', title + ' · 结果', '<div class="investment-result"><span class="outcome-badge outcome-' + result.outcome + '">' + INVESTMENT_OUTCOMES[result.outcome] + '</span><p class="investment-spent">本次投入 <b>' + spent + ' ' + investmentUnit(result.resource) + '</b>' + (fitnessCost ? '，另消耗 <b>' + fitnessCost + ' 点体能</b>' : '') + '</p>' + (scaled ? '<p class="dialog-note">受体能挡位影响，实际投入以本次结算为准。</p>' : '') + '<p class="investment-story">' + h(result.description) + '</p><div class="investment-actual"><span>实际变化</span><b>' + h(changeText(entry.changes)) + '</b></div>' + (fitnessCost && entry.changes.fitness > 0 ? '<p class="dialog-note">体能 +' + entry.changes.fitness + ' 是扣除本次 ' + fitnessCost + ' 点消耗后的净变化。</p>' : '') + (capped ? '<p>部分属性已达上限，实际增加量以当前状态为准。</p>' : '') + '<p class="dialog-note">这次结果已经记入成长记录，继续或保存都不会重新结算。</p></div>', [{ id: 'eventContinue', text: state.pendingEvent?.id === 'military2' ? '继续军训汇演' : state.pendingEvent ? '处理下一个事件' : '继续安排' }]);
 }
 function needsCourseSelection() {
   return !!state && state.phase === 'playing' && !(state.selectedCourses || []).length && !state.history.some((entry) => entry.term === state.term && entry.command.operation === 'executeAction');

@@ -219,6 +219,9 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .attribute small { font-size: 10px; color: #647368; line-height: 1.5; }
 .attribute.is-low { background: #f5dcc9; }
 .attribute.is-low b { color: #a2522d; }
+.attribute.is-ill { background: #f3d2cf; }
+.attribute.is-ill b { color: #9d2f2f; }
+.fitness-warning { margin: 2px 0 12px; padding: 10px 12px; border-radius: 5px; background: #f3d2cf; color: #8f2929; font-size: 12px; line-height: 1.6; }
 .preparation-row { display: flex; gap: 16px; align-items: center; border-top: 1px solid var(--line); padding: 12px 0; font-size: 11px; }
 .preparation-row label { white-space: nowrap; }
 .preparation-row b { margin-left: 8px; }

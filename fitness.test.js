@@ -80,37 +80,50 @@ test('执行行动按声明扣除体能；锻炼、体检、休息、散步的�
   }
 });
 
-test('体能不足时拒绝行动：不扣费、不写历史、不推进随机数', () => {
+test('生病时拒绝行动，只能去校医院就诊', () => {
   const state = { ...actionableState('study'), fitness: 2 };
   const before = structuredClone(state);
   const result = game.executeAction(state, 'study');
   assert.equal(result.ok, false);
-  assert.equal(result.reason, '体能不够：需要 3，现在剩 2');
+  assert.equal(result.reason, game.ILLNESS_REASON);
   assert.strictEqual(result.state, state);
   assert.deepEqual(state, before);
   assert.equal(state.rng.calls, before.rng.calls);
+  const treatment = game.executeAction({ ...state, time: 5, money: 100 }, 'treatment');
+  assert.equal(treatment.ok, true, treatment.reason);
+  assert.equal(treatment.state.fitness, 25);
 });
 
-test('体能不足时拒绝事件选项，同一事件的零消耗出口仍可继续', () => {
+test('生病时事件选项全部锁定，可以先回校医院搁置事件', () => {
   const state = { ...pending('fitnessTest'), fitness: 1 };
   const before = structuredClone(state);
-  const rejected = game.submitEventChoice(state, 'participate');
-  assert.equal(rejected.ok, false);
-  assert.equal(rejected.reason, '体能不够：需要 2，现在剩 1');
-  assert.strictEqual(rejected.state, state);
+  for (const choice of ['participate', 'later']) {
+    const rejected = game.submitEventChoice(state, choice);
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.reason, game.ILLNESS_REASON);
+    assert.strictEqual(rejected.state, state);
+  }
   assert.deepEqual(state, before);
-  const later = game.submitEventChoice(state, 'later');
-  assert.equal(later.ok, true, later.reason);
-  assert.equal(later.state.fitness, 1);
-  assert.equal(later.state.pendingEvent, null);
+  const sickLeave = game.submitEventChoice(state, 'sickLeave');
+  assert.equal(sickLeave.ok, true, sickLeave.reason);
+  assert.equal(sickLeave.state.fitness, 1);
+  assert.equal(sickLeave.state.pendingEvent, null);
+  assert.equal(sickLeave.state.eventFlags['daily:fitnessTest:1'], true);
+  assert.equal(sickLeave.state.eventHistory.at(-1).choice, 'sickLeave');
+  assert.equal(Object.values(sickLeave.changes).every(value => value === 0), true);
+  assert.equal(game.validateState(sickLeave.state).ok, true);
 });
 
-test('NPC 聊天不消耗体能，体能 0 时仍可正常对话', () => {
-  const state = { ...game.createGame(), fitness: 0 };
+test('生病时 NPC 聊天被拦截；非生病时聊天不消耗体能', () => {
+  const sick = { ...game.createGame(), fitness: 0 };
+  const blocked = game.chatWithNpc(sick, { identityId: 'senior', quality: 2 });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.reason, game.ILLNESS_REASON);
+  const state = { ...game.createGame(), fitness: 25 };
   const result = game.chatWithNpc(state, { identityId: 'senior', quality: 2 });
   assert.equal(result.ok, true, result.reason);
   assert.equal(result.changes.fitness, 0);
-  assert.equal(result.state.fitness, 0);
+  assert.equal(result.state.fitness, 25);
   assert.equal(Object.hasOwn(game.NPC_CHAT, 'fitnessCost'), false);
   assert.equal(game.previewChanges(state, { energy: 1 }).fitness, 0);
 });

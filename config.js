@@ -1,6 +1,14 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.5.3', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.5.4', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
+  // Fitness tiers scale the costs/rewards of non-health actions and events.
+  const FITNESS_TIERS = [
+    { id: 'sick', label: '生病', min: 0, max: 24, reward: 0, cost: 0, ill: true },
+    { id: 'weak', label: '虚弱', min: 25, max: 44, reward: 0.75, cost: 1.25 },
+    { id: 'normal', label: '一般', min: 45, max: 64, reward: 1, cost: 1 },
+    { id: 'good', label: '良好', min: 65, max: 84, reward: 1.15, cost: 0.85 },
+    { id: 'excellent', label: '优秀', min: 85, max: 100, reward: 1.3, cost: 0.75 }
+  ];
   const TERM_NAMES = ['大一上', '大一下', '大二上', '大二下', '大三上', '大三下', '大四上', '大四下'];
   // Majors follow BJTU's public programme names; term order and course load stay game-simplified.
   const BACKGROUNDS = [
@@ -12,7 +20,7 @@
     activity: { title: '学生活动中心', kicker: '社团与活动', description: '大厅里永远有人。招新季的海报从门口贴到宿舍楼下，吉他社在角落试音，辩论队的学长拉着新生对练。想认识谁，从这里开始。' },
     think: { title: '思源楼', kicker: '课程与学习', description: '上课铃响前五分钟，走廊里的脚步最急。有人抱着水杯去占座，有人在后排补作业，讲台边总围着问问题的同学。' },
     library: { title: '图书馆', kicker: '自学与深造', description: '刷卡进闸，挑一个靠窗的位子。翻书声很轻，笔尖划过纸页沙沙响。期末前一个月，这里一座难求。' },
-    hospital: { title: '校医院', kicker: '身体状态', description: '挂号窗口半开，空气里有消毒水味。校医把听诊器夹在耳朵上，头也不抬地问：哪儿不舒服。' },
+    hospital: { title: '校医院', kicker: '身体状态', description: '挂号窗口半开，空气里有消毒水味。校医把听诊器夹在耳朵上，头也不抬地问：哪儿不舒服。身体亮红灯时，先来这里。' },
     gate: { title: '南门', kicker: '校内机会', description: '布告栏总贴着新的单子：招聘、兼职、讲座。风一吹哗哗响，总有人停下来抄上面的电话。' },
     track: { title: '操场', kicker: '运动与体测', description: '塑胶跑道在傍晚最热闹，跑步的、压腿的、散步的各占一条道。跑道边还有一间小健身房，球场上总有人在等人凑局。体测前一个月，人会翻倍。' },
     auditorium: { title: '天佑会堂', kicker: '讲座与演出', description: '门口的海报架空着大半。有演出的时候，散场的人会从这扇门涌出来，一路聊回宿舍。' },
@@ -43,6 +51,7 @@
     internshipWork: { place: 'gate', title: '实习投入', description: '打卡，整理材料，跑腿送文件。下班走出大楼，天刚擦黑。', time: 2, energy: 15, fitnessCost: 3, money: 0, income: 100, chain: 'internship', kind: 'work', limit: 2 },
     checkup: { place: 'hospital', title: '体检', description: '挂号、量血压、抽血。医生看着单子说：各项指标正常。', time: 1, energy: 5, fitnessCost: 1, money: 50, fitness: 3, mood: 2, limit: 1 },
     sickVisit: { place: 'hospital', title: '看病开药', description: '在候诊区等了半小时。校医开了药，叮嘱按时吃、别熬夜。', time: 1, energy: 3, fitnessCost: 1, money: 60, mood: 8, limit: 2 },
+    treatment: { place: 'hospital', title: '校医院就诊', description: '身体已经亮红灯。先挂个号，把状态稳下来。', time: 1, energy: 0, fitnessCost: 0, money: 20, fitnessFloor: 25, sickOnly: true, emergencyMoney: true, hint: '生病时只能先来校医院；诊费 20 元，钱包不够时按现有余额支付。' },
     alumniVolunteer: { place: 'hotel', title: '校友接待志愿', description: '给返校校友签到、指路、搬资料。听他们聊起当年的北交，好像比现在还要热闹。', time: 2, energy: 10, fitnessCost: 2, money: 0, social: 5, mood: 3, limit: 2 },
     show: { place: 'auditorium', title: '看演出', description: '会堂今晚有演出。灯暗下来的时候，你才想起上次看戏还是高中。', time: 1, energy: 2, fitnessCost: 1, money: 40, mood: 8, social: 2, limit: 3 }
   };
@@ -646,7 +655,7 @@
     qualityEffects: { 0: {}, 1: { social: 1, mood: 2 }, 2: { social: 2, mood: 4 } },
     academicPrep: { 1: 3, 2: 5 }
   };
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT };
+  const api = { RULES, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

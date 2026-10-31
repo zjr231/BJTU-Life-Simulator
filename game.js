@@ -3,13 +3,33 @@
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
   const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
-  const { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
+  const { RULES, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
   const { COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const clamp = (value, max) => Math.max(0, Math.min(max, value));
   const selectedCoursesOf = (state) => Array.isArray(state.selectedCourses) ? state.selectedCourses : [];
+  // Health actions are exempt from fitness-tier scaling; sickness is derived from fitness.
+  const HEALTH_ACTIONS = new Set(['exercise', 'gym', 'teamSport', 'soloSport', 'walk', 'rest', 'checkup', 'sickVisit', 'treatment']);
+  const ILLNESS_REASON = '身体不适，先去校医院就诊';
+  const SICK_LEAVE_ID = 'sickLeave';
+  const REWARD_KEYS = ['preparation', 'social', 'mood', 'fitness', 'furtherStudy', 'jobPreparation'];
+  const COST_KEYS = ['energy', 'fitnessCost'];
+  function fitnessTier(stateOrValue) {
+    const value = typeof stateOrValue === 'number' ? stateOrValue : stateOrValue.fitness;
+    return FITNESS_TIERS.find(tier => value >= tier.min && value <= tier.max) || FITNESS_TIERS[0];
+  }
+  function isSick(state) { return fitnessTier(state).id === 'sick'; }
+  function fitnessAdjustedEffect(state, effect, actionId = null) {
+    const adjusted = { ...effect };
+    if (adjusted.emergencyMoney) adjusted.money = Math.min(adjusted.money || 0, state.money);
+    const tier = fitnessTier(state);
+    if (tier.id === 'sick' || (actionId && HEALTH_ACTIONS.has(actionId))) return adjusted;
+    for (const key of REWARD_KEYS) if ((adjusted[key] || 0) > 0) adjusted[key] = Math.round(adjusted[key] * tier.reward);
+    for (const key of COST_KEYS) if ((adjusted[key] || 0) > 0) adjusted[key] = Math.round(adjusted[key] * tier.cost);
+    return adjusted;
+  }
   function validateNickname(value) {
     // 按主流游戏昵称规则：2～12 个字符，只能使用汉字、字母、数字与 · - _，不能全是数字或符号。
     if (typeof value !== 'string' || !value.trim()) return { ok: false, reason: '先填一个昵称吧' };
@@ -53,10 +73,12 @@
   }
   function averageGrade(state) { return state.courses.length ? state.courses.reduce((sum, item) => sum + item.grade, 0) / state.courses.length : 0; }
   function previewChanges(state, effect) {
+    const fitnessBase = state.fitness + (effect.fitness || 0) - (effect.fitnessCost || 0);
+    const fitnessTarget = effect.fitnessFloor === undefined ? fitnessBase : Math.max(fitnessBase, effect.fitnessFloor);
     return {
       time: effect.time ? -effect.time : 0, energy: clamp(state.energy - (effect.energy || 0) + (effect.recovery || 0), 100) - state.energy,
       money: (effect.income || 0) - (effect.money || 0), preparation: clamp(state.preparation + (effect.preparation || 0), 100) - state.preparation,
-      social: clamp(state.social + (effect.social || 0), 100) - state.social, fitness: clamp(state.fitness + (effect.fitness || 0) - (effect.fitnessCost || 0), 100) - state.fitness,
+      social: clamp(state.social + (effect.social || 0), 100) - state.social, fitness: clamp(fitnessTarget, 100) - state.fitness,
       mood: clamp(state.mood + (effect.mood || 0), 100) - state.mood,
       furtherStudy: clamp(state.furtherStudy + (effect.furtherStudy || 0), 100) - state.furtherStudy,
       jobPreparation: clamp(state.jobPreparation + (effect.jobPreparation || 0), 100) - state.jobPreparation
@@ -91,7 +113,7 @@
     const check = investmentCheck(profile, amount);
     if (!check.ok) return check;
     const curve = investmentCurve(profile, amount);
-    const effect = investmentEffect(getAction(state, id), profile, amount, curve.mean, curve.q);
+    const effect = fitnessAdjustedEffect(state, investmentEffect(getAction(state, id), profile, amount, curve.mean, curve.q), id);
     return { ok: true, amount, effect, level: investmentLevel(profile, amount) };
   }
   function availability(state, id, requestedAmount) {
@@ -99,11 +121,14 @@
     if (activeMilitary(state)) return { ok: false, reason: '请先完成军训汇演，再安排其他行动' };
     if (state.phase === 'eventPending') return { ok: false, reason: '请先处理当前事件' };
     if (state.phase !== 'playing') return { ok: false, reason: '现在这个阶段还不能行动' };
+    const baseAction = getAction(state, id);
+    if (isSick(state) && id !== 'treatment') return { ok: false, reason: ILLNESS_REASON };
+    if (baseAction.sickOnly && !isSick(state)) return { ok: false, reason: '现在身体没有不适，不需要就诊' };
     const profile = getActionInvestment(state, id);
     if (!profile && requestedAmount !== undefined) return { ok: false, reason: '这个行动不需要设置投入' };
     const preview = profile && previewActionInvestment(state, id, requestedAmount);
     if (preview && !preview.ok) return preview;
-    const action = preview ? preview.effect : getAction(state, id);
+    const action = preview ? preview.effect : fitnessAdjustedEffect(state, baseAction, id);
     if (action.minTerm && state.term < action.minTerm) return { ok: false, reason: '第 ' + action.minTerm + ' 学期开始开放' };
     if (action.maxTerm && state.term > action.maxTerm) return { ok: false, reason: '这一轮的申请时间已经过了' };
     if (action.autumnOnly && state.term % 2 === 0) return { ok: false, reason: '社团招新在秋季学期开放' };
@@ -235,14 +260,16 @@
       const drawn = random.draw(state.rng);
       rng = drawn.rng;
       const factor = curve.factor(drawn.number);
-      action = investmentEffect(action, profile, preview.amount, factor, curve.q);
-      investment = describeInvestment(profile, preview, factor, curve.mean);
+      action = fitnessAdjustedEffect(state, investmentEffect(action, profile, preview.amount, factor, curve.q), id);
+      investment = describeInvestment(profile, preview, factor, curve.mean, action);
+    } else {
+      action = fitnessAdjustedEffect(state, action, id);
     }
     const changes = previewChanges(state, action);
     let next = { ...applyChanges(state, changes), rng, counts: { ...state.counts, [id]: (state.counts[id] || 0) + 1 } };
     if (action.kind === 'work') next.chains = { ...state.chains, [action.chain]: { ...state.chains[action.chain], progress: state.chains[action.chain].progress + 1 } };
     next = attachEvents(next, id);
-    return commit(state, next, { operation: 'executeAction', id, ...(investment ? { investment: investment.amount } : {}) }, { action: id, title: action.title, changes, ...(investment ? { investment } : {}) }, command.commandId);
+    return commit(state, next, { operation: 'executeAction', id, ...(investment ? { investment: investment.amount } : {}) }, { action: id, title: action.title, changes, fitnessCost: action.fitnessCost || 0, ...(investment ? { investment } : {}) }, command.commandId);
   }
   function getEventInvestment(state, choiceId) {
     return state.pendingEvent ? EVENT_INVESTMENTS[state.pendingEvent.id + ':' + choiceId] || null : null;
@@ -275,32 +302,35 @@
     if (!check.ok) return check;
     const choice = EVENTS[state.pendingEvent.id].choices.find(item => item.id === choiceId);
     const curve = investmentCurve(profile, amount);
-    const effect = investmentEffect(choice, profile, amount, curve.mean, curve.q);
+    const effect = fitnessAdjustedEffect(state, investmentEffect(choice, profile, amount, curve.mean, curve.q), null);
     return { ok: true, amount, effect, average: previewChanges(state, effect),
-      low: previewChanges(state, investmentEffect(choice, profile, amount, curve.factor(0.1), curve.q)),
-      high: previewChanges(state, investmentEffect(choice, profile, amount, curve.factor(0.9), curve.q)),
+      low: previewChanges(state, fitnessAdjustedEffect(state, investmentEffect(choice, profile, amount, curve.factor(0.1), curve.q), null)),
+      high: previewChanges(state, fitnessAdjustedEffect(state, investmentEffect(choice, profile, amount, curve.factor(0.9), curve.q), null)),
       level: investmentLevel(profile, amount) };
   }
-  function describeInvestment(profile, preview, factor, mean) {
+  function describeInvestment(profile, preview, factor, mean, adjustedEffect) {
     const ratio = factor / mean;
     const outcome = ratio < 0.55 ? 'setback' : preview.level === 'light'
       ? (ratio >= 1.2 ? 'surprise' : 'limited') : ratio >= 1.2 ? 'good' : 'steady';
-    return { amount: preview.amount, resource: profile.resource, tier: preview.level, level: preview.level, outcome,
+    const spent = adjustedEffect && adjustedEffect[profile.resource] !== undefined ? adjustedEffect[profile.resource] : preview.amount;
+    return { amount: preview.amount, spent, resource: profile.resource, fitnessCost: adjustedEffect ? (adjustedEffect.fitnessCost || 0) : 0, tier: preview.level, level: preview.level, outcome,
       description: profile.plans[{ light: 0, steady: 1, deep: 2 }[preview.level]] + profile.outcomes[outcome] };
   }
   function eventAvailability(state, choiceId, instanceId, requestedAmount) {
     if (state.phase !== 'eventPending' || !state.pendingEvent) return { ok: false, reason: '当前没有待处理事件' };
     if (activeMilitary(state) && state.pendingEvent.id !== 'military2') return { ok: false, reason: '请先完成军训汇演' };
     if (instanceId !== undefined && instanceId !== state.pendingEvent.instanceId) return { ok: false, reason: '事件已更新，请重新选择' };
+    if (choiceId === SICK_LEAVE_ID) return isSick(state) ? { ok: true, reason: '' } : { ok: false, reason: '现在不需要去校医院' };
     const event = EVENTS[state.pendingEvent.id];
     const choice = event && event.choices.find((item) => item.id === choiceId);
     if (!choice) return { ok: false, reason: '未知事件选项' };
+    if (isSick(state)) return { ok: false, reason: ILLNESS_REASON };
     if (choice.chainEffect === 'postpone' && state.term === 8) return { ok: false, reason: '最后一个学期了，把经历确认了吧' };
     const profile = getEventInvestment(state, choiceId);
     if (!profile && requestedAmount !== undefined) return { ok: false, reason: '这个选项不需要设置投入' };
     const preview = profile && previewEventInvestment(state, choiceId, requestedAmount);
     if (preview && !preview.ok) return preview;
-    return resourceCheck(state, preview ? preview.effect : choice);
+    return resourceCheck(state, preview ? preview.effect : fitnessAdjustedEffect(state, choice, null));
   }
   function resolveOutcome(state, choice) {
     if (!choice.outcomeBy) return null;
@@ -313,12 +343,20 @@
     const check = eventAvailability(state, choiceId, options.eventInstanceId, options.investment);
     if (!check.ok) return { ...check, state };
     const pending = state.pendingEvent;
+    if (choiceId === SICK_LEAVE_ID) {
+      const changes = previewChanges(state, {});
+      const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: SICK_LEAVE_ID, title: '先去校医院', outcome: null, changes };
+      let next = { ...applyChanges(state, changes), pendingEvent: null, phase: 'playing', eventFlags: { ...state.eventFlags, [pending.instanceId]: true }, eventHistory: [...state.eventHistory, entry] };
+      next = attachEvents(next, 'eventChoice');
+      return commit(state, next, { operation: 'submitEventChoice', id: SICK_LEAVE_ID, eventInstanceId: pending.instanceId }, entry, command.commandId);
+    }
     const event = EVENTS[pending.id];
     const choice = event.choices.find((item) => item.id === choiceId);
     const profile = getEventInvestment(state, choiceId);
     let effect = choice;
     let rng = state.rng;
     let investment;
+    let investmentPreview, investmentFactor, investmentCurveData;
     if (profile) {
       const preview = previewEventInvestment(state, choiceId, options.investment);
       const curve = investmentCurve(profile, preview.amount);
@@ -326,7 +364,9 @@
       rng = drawn.rng;
       const factor = curve.factor(drawn.number);
       effect = investmentEffect(choice, profile, preview.amount, factor, curve.q);
-      investment = describeInvestment(profile, preview, factor, curve.mean);
+      investmentPreview = preview;
+      investmentFactor = factor;
+      investmentCurveData = curve;
     }
     const outcome = resolveOutcome(state, choice) || {};
     const baseEffect = effect;
@@ -334,8 +374,10 @@
     for (const key of ['time', 'energy', 'recovery', 'money', 'income', 'preparation', 'social', 'fitness', 'mood', 'furtherStudy', 'jobPreparation']) {
       effect[key] = (baseEffect[key] || 0) + (outcome[key] || 0);
     }
+    effect = fitnessAdjustedEffect(state, effect, null);
+    if (profile) investment = describeInvestment(profile, investmentPreview, investmentFactor, investmentCurveData.mean, effect);
     const changes = previewChanges(state, effect);
-    const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, outcome: outcome.title || null, changes, ...(investment ? { investment } : {}) };
+    const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, outcome: outcome.title || null, changes, fitnessCost: effect.fitnessCost || 0, ...(investment ? { investment } : {}) };
     let next = { ...applyChanges(state, changes), rng, pendingEvent: null, phase: 'playing', eventFlags: { ...state.eventFlags, [pending.instanceId]: true }, eventHistory: [...state.eventHistory, entry] };
     if (event.chain) {
       const chain = { ...state.chains[event.chain] };
@@ -489,6 +531,7 @@
   // 返回本次将消耗的精力/时间，以及该身份本学期是否还有收益与学业指点名额。
   function npcChatAvailability(state, identityId) {
     if (!own(NPC_CHAT.identities, identityId)) return { ok: false, reason: '这位路人不认识，聊不上', state };
+    if (isSick(state)) return { ok: false, reason: ILLNESS_REASON, state };
     if (state.phase !== 'playing') return { ok: false, reason: '现在这个阶段只能闲聊，不消耗资源', state };
     const energy = NPC_CHAT.energyPerMessage;
     if (state.energy < energy) return { ok: false, reason: '精力不够：需要 ' + energy + '，现在剩 ' + state.energy, state };
@@ -543,7 +586,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
+  const api = { RULES, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -8,6 +8,7 @@ function militaryOffer(seed = 1) {
   let state = game.createGame({ seed });
   state = game.executeAction(state, 'study').state;
   state = game.executeAction(state, 'study').state;
+  state = { ...state, fitness: 50 };
   assert.equal(state.pendingEvent.id, 'military1');
   return state;
 }

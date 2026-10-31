@@ -40,31 +40,35 @@ function route(kind) {
   let state = game.createGame({ nickname: '路线测试', seed: 'routes' });
   const perform = (id, investment) => {
     state = resolve(state);
+    if (game.isSick(state)) state = act(state, 'treatment');
     const preview = game.previewActionInvestment(state, id, investment);
     const cost = preview?.effect || game.getAction(state, id);
     const needFitness = cost.fitnessCost || 0;
     // 行动同时消耗精力与体能；不够时先用锻炼/休息补足，避免路线脚本因体能不足中断。
-    while (state.time > cost.time && (state.energy < cost.energy || state.fitness < needFitness)) {
-      if (state.fitness < needFitness && state.energy >= 10 && game.availability(state, 'exercise').ok) state = act(state, 'exercise');
+    // 保持体能不低于 25，避免生病锁死；虚弱挡位会放大精力成本，因此同时补足精力。
+    while (state.time > cost.time && (state.energy < cost.energy || state.fitness < 30 || state.fitness < needFitness)) {
+      if (state.fitness < 30 && state.energy >= 10 && game.availability(state, 'exercise').ok) state = act(state, 'exercise');
       else if (game.availability(state, 'rest', 1).ok) state = act(state, 'rest', 1);
-      else if (state.fitness < needFitness && game.availability(state, 'walk', 1).ok) state = act(state, 'walk', 1);
+      else if (state.fitness < 30 && game.availability(state, 'walk', 1).ok) state = act(state, 'walk', 1);
       else break;
     }
     state = act(state, id, investment);
   };
   for (let term = 1; term <= 8; term++) {
+    state = resolve(state);
+    if (game.isSick(state)) state = act(state, 'treatment');
     if (kind === 'both') state = game.selectCourses(state, game.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map(course => course.id)).state;
+    if (kind !== 'failed' && state.money >= 50) perform('gym');
     // 体能恢复会占用额外时间，重投入路线相应下调本学期学习进度目标。
-    const target = kind === 'both' ? 55 : kind === 'failed' ? 0 : kind === 'turn' ? 55 : ['ordinary', 'employment'].includes(kind) ? 45 : 75;
-    while (state.preparation < target && (state.counts.study || 0) < 4) perform('study', 15);
-    if (['deep', 'both', 'turn'].includes(kind)) {
-      if (term === 2) { perform('applyProject'); perform('projectWork', 15); }
-      if (term === 3) perform('projectWork', 15);
-    }
+    const target = kind === 'both' ? 45 : kind === 'failed' ? 0 : kind === 'turn' ? 45 : ['ordinary', 'employment'].includes(kind) ? 45 : 60;
+    // 事件链投入先做，避免学习消耗完时间后无法完成。
+    if (term === 3 && ['deep', 'both', 'turn'].includes(kind)) { perform('projectWork', 15); perform('projectWork', 15); }
     if (['employment', 'both', 'turn'].includes(kind)) {
       if (term === 5) { perform('applyInternship'); perform('internshipWork', 15); }
       if (term === 6) perform('internshipWork', 15);
     }
+    while (state.preparation < target && (state.counts.study || 0) < 4) perform('study', 15);
+    if (['deep', 'both', 'turn'].includes(kind) && term === 2) perform('applyProject');
     if (term >= 5) {
       const goals = kind === 'both' ? ['furtherStudy', 'jobPreparation'] : kind === 'deep' ? ['furtherStudy'] : ['employment', 'turn'].includes(kind) ? ['jobPreparation'] : [];
       for (const id of goals.sort((a, b) => state[a] - state[b])) {
@@ -186,6 +190,7 @@ test('社团投入完成当学期收尾并记录经历；项目成果在之后�
   assert.equal(game.executeAction(state, 'clubWork').ok, false);
   // 项目：第二学期完成两次投入，成果确认到下一学期才出现
   state = nextTerm(roundtrip(state));
+  state = { ...state, fitness: 60 };
   while (state.preparation < 40) state = act(state, 'study');
   state = act(state, 'applyProject');
   state = act(state, 'projectWork');
