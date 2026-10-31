@@ -135,11 +135,13 @@ test('25 种随机事件匹配场景和季节，每学期只抽取一次', () =>
         for (const [action, allowed] of Object.entries(scenes)) {
           let state = game.createGame({ seed: 'pool-' + seed });
           if (season === 'spring') state = nextTerm(state);
-          // 春季运动会“观众席”会把心情顶满，散步等行动会被拒；改报短跑（此时体测未达标，结果必为失利，净收益低）。
+          // 春季运动会“观众席”会把心情顶满，散步等行动会被拒；改报短跑，并降低起始心情，
+          // 避免休息同时恢复体能后短跑达标、心情直接顶满导致后续行动被判“收益已经到头”。
+          if (late) state = { ...state, mood: 30 };
           if (late) for (let i = 0; i < 9; i++) state = act(state, 'rest', { sportsMeet: 'sprint' });
           const calls = state.rng.calls;
           const first = game.executeAction(state, action);
-          assert.equal(first.ok, true, action);
+          assert.equal(first.ok, true, action + ': ' + first.reason);
           assert.equal(first.state.rng.calls, calls + (action === "show" ? 1 : 2));
           assert.deepEqual(first.state.eventQueue, []);
           if (first.state.pendingEvent) {

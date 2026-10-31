@@ -160,6 +160,7 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .action-card button { cursor: pointer; background: #193d31; color: #fff6df; border: 0; padding: 11px 16px; border-radius: 4px; font-weight: 700; font-size: 13px; }
 .action-card button:disabled { background: #d6d9d1; color: #626a62; cursor: not-allowed; }
 .action-reason { margin-top: 10px; font-size: 12px; color: #986039; }
+.action-hint { margin: 4px 0 0; font-size: 12px; color: #286646; }
 .action-feedback { font-size: 13px; line-height: 1.8; color: #fff5cf; min-height: 24px; padding: 12px 0; }
 .place-stamp { z-index: 0; pointer-events: none; }
 .term-dialog { border: 1px solid #ddcfb5; border-radius: 12px; background: var(--paper); color: var(--ink); width: min(620px, calc(100vw - 32px)); max-height: 88vh; max-height: min(88svh, calc(100svh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px)); padding: 28px; box-shadow: var(--shadow); }

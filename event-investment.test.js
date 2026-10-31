@@ -38,8 +38,11 @@ test('全部 11 个投入选项的预览不扣资源、不消耗随机数，结�
       const q = amount / (amount + profile.h);
       const a = 1 + 2 * q;
       const factor = (1 - profile.s) * a / (a + 1) + profile.s * random.draw(state.rng).number ** (1 / a);
+      const choiceCost = game.EVENTS[event].choices.find(item => item.id === choice).fitnessCost || 0;
       for (const [attribute, ceiling] of Object.entries(profile.rewards)) {
-        assert.equal(result.changes[attribute], Math.min(100 - state[attribute], Math.round(ceiling * q * factor)), key + ': ' + attribute);
+        const cost = attribute === 'fitness' ? choiceCost : 0;
+        const expected = Math.max(0, Math.min(100, state[attribute] + Math.round(ceiling * q * factor) - cost)) - state[attribute];
+        assert.equal(result.changes[attribute], expected, key + ': ' + attribute);
       }
       assert.equal(result.entry.investment.amount, amount);
       assert.equal(result.entry.command.investment, amount);

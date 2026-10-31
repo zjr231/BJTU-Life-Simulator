@@ -42,12 +42,20 @@ function route(kind) {
     state = resolve(state);
     const preview = game.previewActionInvestment(state, id, investment);
     const cost = preview?.effect || game.getAction(state, id);
-    while (state.energy < cost.energy && state.time > cost.time) state = act(state, 'rest', 1);
+    const needFitness = cost.fitnessCost || 0;
+    // 行动同时消耗精力与体能；不够时先用锻炼/休息补足，避免路线脚本因体能不足中断。
+    while (state.time > cost.time && (state.energy < cost.energy || state.fitness < needFitness)) {
+      if (state.fitness < needFitness && state.energy >= 10 && game.availability(state, 'exercise').ok) state = act(state, 'exercise');
+      else if (game.availability(state, 'rest', 1).ok) state = act(state, 'rest', 1);
+      else if (state.fitness < needFitness && game.availability(state, 'walk', 1).ok) state = act(state, 'walk', 1);
+      else break;
+    }
     state = act(state, id, investment);
   };
   for (let term = 1; term <= 8; term++) {
     if (kind === 'both') state = game.selectCourses(state, game.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map(course => course.id)).state;
-    const target = kind === 'both' ? 55 : kind === 'failed' ? 0 : ['ordinary', 'employment'].includes(kind) ? 45 : 75;
+    // 体能恢复会占用额外时间，重投入路线相应下调本学期学习进度目标。
+    const target = kind === 'both' ? 55 : kind === 'failed' ? 0 : kind === 'turn' ? 55 : ['ordinary', 'employment'].includes(kind) ? 45 : 75;
     while (state.preparation < target && (state.counts.study || 0) < 4) perform('study', 15);
     if (['deep', 'both', 'turn'].includes(kind)) {
       if (term === 2) { perform('applyProject'); perform('projectWork', 15); }
@@ -60,8 +68,10 @@ function route(kind) {
     if (term >= 5) {
       const goals = kind === 'both' ? ['furtherStudy', 'jobPreparation'] : kind === 'deep' ? ['furtherStudy'] : ['employment', 'turn'].includes(kind) ? ['jobPreparation'] : [];
       for (const id of goals.sort((a, b) => state[a] - state[b])) {
-        while (state[id] < 60 && (state.counts[id] || 0) < 2 && state.time >= (state.energy < 8 ? 2 : 1)) {
-          const investment = kind === 'both' && state[id] < 45 && state.time >= (state.energy < 20 ? 3 : 2) ? 20 : 8;
+        const needFitness = () => game.getAction(state, id).fitnessCost || 0;
+        // 体能不足时先恢复再行动，因此需要额外留出 1 点时间。
+        while (state[id] < 60 && (state.counts[id] || 0) < 2 && state.time >= (state.energy < 8 || state.fitness < needFitness() ? 2 : 1)) {
+          const investment = kind === 'both' && state[id] < 45 && state.time >= (state.energy < 20 || state.fitness < needFitness() ? 3 : 2) ? 20 : 8;
           perform(id, investment);
         }
       }

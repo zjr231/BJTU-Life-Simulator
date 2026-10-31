@@ -56,7 +56,7 @@
     return {
       time: effect.time ? -effect.time : 0, energy: clamp(state.energy - (effect.energy || 0) + (effect.recovery || 0), 100) - state.energy,
       money: (effect.income || 0) - (effect.money || 0), preparation: clamp(state.preparation + (effect.preparation || 0), 100) - state.preparation,
-      social: clamp(state.social + (effect.social || 0), 100) - state.social, fitness: clamp(state.fitness + (effect.fitness || 0), 100) - state.fitness,
+      social: clamp(state.social + (effect.social || 0), 100) - state.social, fitness: clamp(state.fitness + (effect.fitness || 0) - (effect.fitnessCost || 0), 100) - state.fitness,
       mood: clamp(state.mood + (effect.mood || 0), 100) - state.mood,
       furtherStudy: clamp(state.furtherStudy + (effect.furtherStudy || 0), 100) - state.furtherStudy,
       jobPreparation: clamp(state.jobPreparation + (effect.jobPreparation || 0), 100) - state.jobPreparation
@@ -66,6 +66,7 @@
     for (const [key, label] of [['time', '时间'], ['energy', '精力'], ['money', '钱包']]) {
       if (state[key] < (effect[key] || 0)) return { ok: false, reason: label + '不够：需要 ' + effect[key] + '，现在剩 ' + state[key] };
     }
+    if ((effect.fitnessCost || 0) > state.fitness) return { ok: false, reason: '体能不够：需要 ' + effect.fitnessCost + '，现在剩 ' + state.fitness };
     if (effect.minFitness && state.fitness < effect.minFitness) return { ok: false, reason: '体能需要达到 ' + effect.minFitness };
     return { ok: true, reason: '' };
   }

@@ -779,7 +779,7 @@ test('事件只预览成本，确认后显示具体结果；保存、读档和�
   const before = ui.evaluate('JSON.stringify(state)');
   ui.click('#dialogBody', { investmentPreset: 'join', amount: '26' });
   assert.match(ui.element('#investment-options-join').innerHTML, /data-amount="26" aria-pressed="true"/);
-  assert.match(ui.element('#investment-cost-join').textContent, /精力 −26/);
+  assert.match(ui.element('#investment-cost-join').textContent, /精力 −26.*体能 −4/);
   assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /常见|预计|平均|约八成|体能 约/);
   assert.equal(ui.evaluate('JSON.stringify(state)'), before);
   ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
@@ -866,8 +866,43 @@ test('天佑会堂只有固定观演成本，不提供预算档位或收益预�
   const ui = app(); ui.start();
   ui.evaluate('openPlace("auditorium")');
   const html = ui.element('#actionList').innerHTML;
-  assert.match(html, /时间 −1.*精力 −2.*钱包 −40 元/);
+  assert.match(html, /时间 −1.*精力 −2.*钱包 −40 元.*体能 −1/);
   assert.doesNotMatch(html, /investment-tier|investment-controls|type="range"|type="number"|心情 \+|社交 \+/);
+});
+
+test('行动卡展示体能成本，体能不足时禁用并提示', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('openPlace("think")');
+  ui.evaluate('state = { ...state, fitness: 1 }');
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '15' });
+  assert.equal(ui.element('#action-choice-study').disabled, true);
+  assert.match(ui.element('#investment-reason-action-study').textContent, /体能不够：需要 3，现在剩 1/);
+});
+
+test('锻炼结果区分体能消耗与扣除消耗后的净变化', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('openPlace("think")');
+  assert.doesNotMatch(ui.element('#actionList').innerHTML, /运动会消耗体能/);
+  ui.evaluate('openPlace("track")');
+  const trackHtml = ui.element('#actionList').innerHTML;
+  assert.match(trackHtml, /运动会消耗体能，但锻炼结束后能恢复更多体能/);
+  for (const [title, hint] of [['健身房锻炼', '需要额外预算，但体能提升更明显'], ['多人运动', '更耗费精力，但心情和社交提升更多'], ['单人运动', '精力消耗最少，适合日常保持体能']]) {
+    assert.ok(trackHtml.includes(title), title);
+    assert.ok(trackHtml.includes(hint), hint);
+  }
+  assert.match(trackHtml, /钱包 −50 元/);
+  assert.match(trackHtml, /精力 −15/);
+  assert.match(trackHtml, /精力 −3/);
+  assert.match(trackHtml, /体能 −3（消耗）/);
+  assert.match(trackHtml, /体能 −1（消耗）/);
+  ui.click('#actionList', { actionInvestmentPreset: 'gym', amount: '100' });
+  assert.match(ui.element('#investment-cost-action-gym').textContent, /钱包 −100 元/);
+  ui.click('#actionList', { actionInvestmentPreset: 'exercise', amount: '10' });
+  assert.match(ui.element('#investment-cost-action-exercise').textContent, /体能 −2（消耗）/);
+  ui.click('#actionList', { action: 'exercise', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.match(ui.element('#dialogBody').innerHTML, /另消耗 <b>2 点体能<\/b>/);
+  assert.match(ui.element('#dialogBody').innerHTML, /体能 \+\d+ 是扣除本次 2 点消耗后的净变化/);
 });
 
 test('常规课程可调成本，提交后揭晓并保存结果；下一行动的校园事件在回顾之后展示', () => {
@@ -877,7 +912,7 @@ test('常规课程可调成本，提交后揭晓并保存结果；下一行动�
   const before = ui.evaluate('JSON.stringify(state)');
   ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '15' });
   assert.match(ui.element('#investment-options-action-study').innerHTML, /data-amount="15" aria-pressed="true"/);
-  assert.match(ui.element('#investment-cost-action-study').textContent, /精力 −15/);
+  assert.match(ui.element('#investment-cost-action-study').textContent, /精力 −15.*体能 −3/);
   assert.equal(ui.evaluate('JSON.stringify(state)'), before);
   ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');

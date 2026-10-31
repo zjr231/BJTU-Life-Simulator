@@ -23,8 +23,8 @@ function roundtrip(state) {
   return loaded.state;
 }
 
-test('16 项日常行动支持三类资源投入，实际成本、随机回报与行动文案一致', () => {
-  assert.equal(Object.keys(game.ACTION_INVESTMENTS).length, 16);
+test('19 项日常行动支持三类资源投入，实际成本、随机回报与行动文案一致', () => {
+  assert.equal(Object.keys(game.ACTION_INVESTMENTS).length, 19);
   for (const id of Object.keys(game.ACTION_INVESTMENTS)) {
     const state = actionable(id);
     const original = structuredClone(state);

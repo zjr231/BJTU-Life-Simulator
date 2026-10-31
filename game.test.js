@@ -62,7 +62,8 @@ test('收益上限和已满状态，休息不能增加学期时间', () => {
   assert.equal(rest.changes.energy, 5);
   assert.equal(rest.state.time, 11);
   assert.equal(game.executeAction(rest.state, 'rest').ok, true);
-  assert.equal(game.executeAction({ ...rest.state, mood: 100 }, 'rest').ok, false);
+  // 休息现在也恢复体能，只有精力、心情、体能都满时才算收益到头。
+  assert.equal(game.executeAction({ ...rest.state, energy: 100, mood: 100, fitness: 100 }, 'rest').ok, false);
   const study = game.executeAction({ ...game.createGame(), preparation: 95 }, 'study');
   assert.equal(study.state.preparation, 100);
   assert.equal(study.changes.preparation, 5);
@@ -154,7 +155,8 @@ test('连续八学期完整流程，第八学期只结算一次，不创建第�
   assert.ok(state.social > 20 && state.social <= 100);
   assert.ok(state.fitness > 50 && state.fitness <= 100);
   assert.ok(state.mood >= 70 && state.mood <= 100);
-  assert.equal(state.experiences.length, 3);
+  // 行动先扣体能、体测按提交时的体能判定；固定脚本每学期仅一次锻炼，早期体测多不达标。
+  assert.equal(state.experiences.length, 1);
   assert.equal(state.experiences.every((item) => item.type === 'fitnessTest'), true);
   assert.equal(state.courses.every((course) => course.grade === Math.round(40 + course.preparation * 0.6)), true);
   assert.equal(game.endTerm(state).ok, false);
@@ -184,7 +186,8 @@ test('锻炼消耗精力并提升长期体能，散步恢复心情与精力但�
   const walk = game.executeAction(exercise.state, 'walk');
   assert.equal(walk.state.time, 10);
   assert.ok(walk.state.energy > exercise.state.energy);
-  assert.equal(walk.state.fitness, exercise.state.fitness);
+  assert.ok(walk.state.fitness > exercise.state.fitness);
+  assert.ok(walk.changes.fitness > 0);
   assert.ok(walk.state.mood > exercise.state.mood);
   assert.deepEqual(initial, game.createGame());
 });
@@ -270,7 +273,8 @@ test('体测为秋季学期全员主测：第 3/5/7 学期任意行动触发，�
 });
 
 test('体测达标留经历并记成绩；未达标标记春季补测', () => {
-  const pass = game.executeAction({ ...game.createGame(), term: 3, fitness: 60 }, 'study').state;
+  // 两次学习各消耗 3 点体能，起始 66 才能让提交体测时恰好为 60。
+  const pass = game.executeAction({ ...game.createGame(), term: 3, fitness: 66 }, 'study').state;
   const passAgain = game.executeAction(pass, 'study').state;
   assert.equal(passAgain.pendingEvent.id, 'fitnessTest');
   const passed = game.submitEventChoice(passAgain, 'participate');
