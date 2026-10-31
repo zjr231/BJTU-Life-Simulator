@@ -167,7 +167,12 @@
     card: { priority: 63, title: '地上的校园卡', description: '路上躺着一张校园卡，照片上的面孔有点眼熟，可能是隔壁班的。卡里余额还不少。', trigger: '地上躺着一张校园卡', choices: [
       { id: 'return', title: '交到失物招领', description: '登记的时候，失主在群里正好喊了一嗓子：卡丢了，急。', time: 1, social: 3, mood: 5 },
       { id: 'later', title: '放回原处', description: '你把它放回原地。' },
-      { id: 'pocket', title: '装进口袋', description: '揣进兜里。晚上睡觉前，你把卡塞到了枕头下面。', income: 50, mood: -8 }
+      { id: 'pocket', title: '装进口袋', description: '揣进兜里。晚上睡觉前，你把卡塞到了枕头下面。', income: 50, mood: -8, flag: 'cardPocketed' }
+    ] },
+    cardTrace: { priority: 15, title: '校园卡消费记录', description: '保卫处贴出一张消费记录：丢卡当天，有人在超市刷了五十元。时间、地点和监控都对得上，失主正在等一个解释。', trigger: '保卫处贴出了消费记录', choices: [
+      { id: 'return', title: '主动归还并说明', description: '你把卡交回保卫处，补上了那五十元，也把这件事写进了检讨。', mood: -4, social: 2, clearFlag: 'cardPocketed' },
+      { id: 'deny', title: '死不承认', description: '你说卡是捡的，钱不是你花的。保卫处把监控截图推到你面前。', ending: 'cardThief', reason: '你选择死不承认，保卫处调出了完整的消费记录。' },
+      { id: 'run', title: '拔腿就跑', description: '你转身就跑，跑过银杏大道、南门和三个路口。监控拍得很清楚。', ending: 'cardThief', reason: '你选择拔腿就跑，监控把你跑过的每一个路口都拍了下来。' }
     ] },
     wall: { priority: 64, title: '表白墙点名', description: '表白墙上有人发了你：今天在校园里遇到的穿灰卫衣的同学。室友把截图甩进群里，连发三个问号。', trigger: '室友把截图甩进了群里', choices: [
       { id: 'reply', title: '在群里否认', description: '群里闹了一晚上，最后也没人猜出是谁发的。', time: 1, social: 4, mood: 4 },
@@ -255,6 +260,10 @@
     ] }
   };
   const ENDINGS = { graduationAverage: 60, passedTerms: 6, furtherStudyAverage: 80, furtherStudyPreparation: 60, jobPreparation: 60 };
+  const TERMINAL_ENDINGS = {
+    cheatNote: { title: '小抄的第一行' },
+    cardThief: { title: '校园卡大盗' }
+  };
   const RANDOM_POOL = ['campusDiscussion', 'cat', 'canteen', 'card', 'wall', 'seat', 'snow', 'parcel', 'night', 'injury', 'flu', 'insomnia', 'lecture', 'drama', 'alumniStory', 'frontDesk', 'ginkgo', 'hawthorn', 'alumniFair', 'rollCall', 'jobFair', 'medicalInsurance', 'labNight', 'danceParty', 'memorial129'];
   // Elapsed time is an estimate of semester progress, not a week/day calendar.
   const CAMPUS_SCHEDULE = {
@@ -311,7 +320,7 @@
   // 可选在线对话：relay 为云函数中转地址，空字符串表示关闭（NPC 只回本地台词）。
   // 密钥只放在云函数的环境变量里，前端永远接触不到；未连接或超时自动回退本地台词。
   const AI_CHAT = { relay: 'https://deepseek-relay-bsxioiwmxt.cn-hangzhou.fcapp.run', timeoutMs: 15000 };
-  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT };
+  const api = { RULES, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, EVENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

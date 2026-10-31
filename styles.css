@@ -237,6 +237,7 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .event-choice h3 { margin: 0 0 8px; font-size: 17px; }
 .event-choice button { padding: 10px 12px; border: 0; border-radius: 4px; background: var(--deep); color: var(--paper); font-size: 12px; cursor: pointer; }
 .event-choice button:disabled { background: #d6d9d1; color: #626a62; cursor: not-allowed; }
+.action-warning { margin: 10px 0; padding: 8px 10px; border-left: 3px solid #9b3f2f; background: #f7e6de; color: #7e2f22; font-size: 12px; font-weight: 700; }
 .event-dialog .dialog-buttons { display: none; }
 #dialogBody h3 { font-size: 17px; }
 #dialogBody ul { font-size: 13px; line-height: 1.8; padding-left: 22px; }
@@ -404,6 +405,8 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .course-desc { font-size: 12px; line-height: 1.6; color: #59665d; }
 .course-count { margin: 0; font-size: 12px; color: #296248; }
 #courseForm > button[type="submit"], #examForm > button[type="submit"] { width: 100%; margin-top: 12px; padding: 11px 16px; border: 0; border-radius: 4px; background: #193d31; color: #fff6df; font-weight: 700; font-size: 13px; cursor: pointer; }
+.danger-button { width: 100%; margin-top: 14px; padding: 10px 16px; border: 1px dashed #9b3f2f; border-radius: 4px; background: transparent; color: #7e2f22; font-size: 12px; cursor: pointer; }
+.danger-button:hover { background: #f7e6de; }
 .exam-question { margin: 16px 0; padding: 14px; border: 1px solid var(--line); border-radius: 6px; background: #fffdf6; }
 .exam-question-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 11px; color: #637269; }
 .exam-index { font-weight: 700; color: var(--deep); }
