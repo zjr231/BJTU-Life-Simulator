@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" role="img" aria-label="南门">
+  <defs>
+    <linearGradient id="g-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e7f0ea"/><stop offset="1" stop-color="#f8f1e2"/>
+    </linearGradient>
+    <linearGradient id="g-stone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4ecdc"/><stop offset="1" stop-color="#d9c9a8"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" rx="28" fill="url(#g-sky)"/>
+  <ellipse cx="320" cy="412" rx="250" ry="26" fill="#1d3a33" opacity=".10"/>
+  <!-- 拱门 -->
+  <path d="M186 412 V268 a134 134 0 0 1 268 0 V412 h-52 V272 a82 82 0 0 0 -164 0 V412 z" fill="url(#g-stone)"/>
+  <path d="M238 412 V274 a82 82 0 0 1 164 0 V412" fill="#2f6f5e" opacity=".25"/>
+  <!-- 牌匾 -->
+  <rect x="272" y="176" width="96" height="46" rx="8" fill="#9a4f38"/>
+  <text x="320" y="207" font-size="22" text-anchor="middle" fill="#f7d98a" font-family="'Microsoft YaHei',serif" letter-spacing="8">南门</text>
+  <!-- 侧柱 -->
+  <rect x="150" y="300" width="26" height="112" rx="6" fill="url(#g-stone)"/>
+  <rect x="464" y="300" width="26" height="112" rx="6" fill="url(#g-stone)"/>
+  <!-- 地面与路 -->
+  <path d="M300 412 h40 l60 68 h-160 z" fill="#e5d2ae"/>
+  <path d="M316 412 h8 v68 h-8 z" fill="#fdf6e6" opacity=".7"/>
+  <!-- 树列 -->
+  <g fill="#3f7d64">
+    <circle cx="120" cy="384" r="24"/><circle cx="104" cy="404" r="16"/>
+    <circle cx="520" cy="384" r="24"/><circle cx="536" cy="404" r="16"/>
+    <circle cx="86" cy="352" r="16"/><circle cx="554" cy="352" r="16" fill="#5b9a7e"/>
+  </g>
+</svg>

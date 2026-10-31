@@ -293,6 +293,52 @@ function renderActions() {
     return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div><p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : action)) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>确认' + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
   }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
 }
+// 地点插画：按建筑名取 assets/places 下对应的矢量图；锚点与地图热点坐标一致。
+const PLACE_ART = {
+  activity: 'assets/places/activity.svg',
+  think: 'assets/places/think.svg',
+  library: 'assets/places/library.svg',
+  hospital: 'assets/places/hospital.svg',
+  gate: 'assets/places/gate.svg',
+  track: 'assets/places/track.svg',
+  auditorium: 'assets/places/auditorium.svg',
+  ginkgo: 'assets/places/ginkgo.svg',
+  yifu: 'assets/places/yifu.svg',
+  dorm: 'assets/places/dorm.svg',
+  hotel: 'assets/places/hotel.svg'
+};
+const PLACE_ANCHOR = {
+  activity: { x: 6.75, y: 31.12 }, think: { x: 44.22, y: 28.8 }, library: { x: 76.18, y: 43.82 },
+  hospital: { x: 87.93, y: 39.34 }, gate: { x: 30.57, y: 78.17 }, track: { x: 44.58, y: 5.39 },
+  auditorium: { x: 43.46, y: 51.62 }, ginkgo: { x: 28.32, y: 35.77 }, yifu: { x: 92.74, y: 73.28 },
+  dorm: { x: 77.35, y: 20.66 }, hotel: { x: 64.67, y: 62.82 }
+};
+function showPlaceArt(key) {
+  const src = PLACE_ART[key];
+  if (!src) return;
+  const anchor = PLACE_ANCHOR[key];
+  const mapArt = $('#mapPlaceArt');
+  const mapImage = $('#mapPlaceArtImage');
+  if (mapImage) mapImage.setAttribute('src', src);
+  if (mapArt) {
+    if (anchor) {
+      mapArt.style.left = anchor.x + '%';
+      mapArt.style.top = anchor.y + '%';
+    }
+    mapArt.classList.remove('is-open');
+    mapArt.classList.add('is-open');
+  }
+  const placeImage = $('#placeArtImage');
+  if (placeImage) placeImage.setAttribute('src', src);
+  const placeArt = $('#placeArt');
+  if (placeArt) placeArt.classList.add('is-open');
+}
+function hidePlaceArt() {
+  const mapArt = $('#mapPlaceArt');
+  if (mapArt) mapArt.classList.remove('is-open');
+  const placeArt = $('#placeArt');
+  if (placeArt) placeArt.classList.remove('is-open');
+}
 function openPlace(key, hotspot) {
   if (!state) return;
   if (state.phase !== 'playing') { resumePhase(); return; }
@@ -305,6 +351,8 @@ function openPlace(key, hotspot) {
   $('#placeDescription').textContent = game.PLACES[key].description;
   $('#actionFeedback').textContent = '先安排投入，再决定行动。完成之后，会记下这次发生的事。';
   hotspots.forEach((item) => item.classList.toggle('is-active', item.dataset.place === key));
+  // 从点击的建筑坐标展开对应插画，场所屏右侧同时半透明铺开。
+  showPlaceArt(key);
   // 过场动画：地图聚焦压暗离场，场所屏入场时内容错落升起；入场标记随后清理，避免每次行动重绘都重播动画。
   $('#mapScreen').classList.add('is-leaving');
   const placeScreen = $('#placeScreen');
@@ -320,6 +368,7 @@ function openPlace(key, hotspot) {
   $('#backButton').focus();
 }
 function closePlace() {
+  hidePlaceArt();
   const placeScreen = $('#placeScreen');
   placeScreen.classList.remove('is-open');
   placeScreen.classList.remove('is-entering');

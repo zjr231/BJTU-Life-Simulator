@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" role="img" aria-label="操场">
+  <defs>
+    <linearGradient id="tr-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8f2ea"/><stop offset="1" stop-color="#f8f1e2"/>
+    </linearGradient>
+    <linearGradient id="tr-track" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c96f4f"/><stop offset="1" stop-color="#b05a3e"/>
+    </linearGradient>
+    <linearGradient id="tr-field" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fb069"/><stop offset="1" stop-color="#5f9450"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" rx="28" fill="url(#tr-sky)"/>
+  <ellipse cx="320" cy="404" rx="260" ry="30" fill="#1d3a33" opacity=".10"/>
+  <!-- 跑道 -->
+  <ellipse cx="320" cy="288" rx="228" ry="120" fill="url(#tr-track)"/>
+  <ellipse cx="320" cy="288" rx="176" ry="82" fill="url(#tr-field)"/>
+  <g fill="none" stroke="#fdf6e6" stroke-width="3" opacity=".75">
+    <ellipse cx="320" cy="288" rx="214" ry="110"/>
+    <ellipse cx="320" cy="288" rx="200" ry="100"/>
+    <ellipse cx="320" cy="288" rx="186" ry="90"/>
+  </g>
+  <!-- 足球场线 -->
+  <g fill="none" stroke="#fdf6e6" stroke-width="3" opacity=".65">
+    <rect x="244" y="236" width="152" height="104" rx="2"/>
+    <circle cx="320" cy="288" r="20"/>
+    <path d="M320 236 v104"/>
+  </g>
+  <!-- 看台 -->
+  <g fill="#d9c9a8">
+    <rect x="120" y="120" width="400" height="18" rx="8"/>
+    <rect x="100" y="140" width="440" height="16" rx="8" fill="#cdbb98"/>
+  </g>
+  <!-- 树 -->
+  <g fill="#3f7d64">
+    <circle cx="78" cy="360" r="26"/><circle cx="60" cy="382" r="18"/>
+    <circle cx="562" cy="360" r="26"/><circle cx="580" cy="382" r="18"/>
+  </g>
+  <!-- 跑步的人 -->
+  <g transform="translate(470 300)" fill="#1d3a33" opacity=".7">
+    <circle cx="0" cy="-26" r="7"/>
+    <path d="M0 -18 l-10 16 l12 6 l10 -14 z"/>
+    <path d="M-10 -2 l-8 18 M12 4 l10 16" stroke="#1d3a33" stroke-width="5" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" role="img" aria-label="天佑会堂">
+  <defs>
+    <linearGradient id="au-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eaf0e8"/><stop offset="1" stop-color="#f8f1e2"/>
+    </linearGradient>
+    <linearGradient id="au-dome" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c9785c"/><stop offset="1" stop-color="#a85b40"/>
+    </linearGradient>
+    <linearGradient id="au-wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6edda"/><stop offset="1" stop-color="#e6d4b2"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" rx="28" fill="url(#au-sky)"/>
+  <ellipse cx="320" cy="410" rx="240" ry="28" fill="#1d3a33" opacity=".10"/>
+  <!-- 主体 -->
+  <rect x="140" y="238" width="360" height="164" rx="8" fill="url(#au-wall)"/>
+  <path d="M180 238 a140 128 0 0 1 280 0 z" fill="url(#au-dome)"/>
+  <path d="M212 238 a108 96 0 0 1 216 0 z" fill="#f3d9b0" opacity=".35"/>
+  <!-- 圆顶装饰 -->
+  <circle cx="320" cy="132" r="10" fill="#f7d98a"/>
+  <path d="M320 122 v-16" stroke="#9a4f38" stroke-width="4"/>
+  <!-- 柱廊 -->
+  <g fill="#f3e6cc">
+    <rect x="176" y="238" width="20" height="150" rx="4"/><rect x="216" y="238" width="20" height="150" rx="4"/>
+    <rect x="256" y="238" width="20" height="150" rx="4"/><rect x="296" y="238" width="20" height="150" rx="4"/>
+    <rect x="336" y="238" width="20" height="150" rx="4"/><rect x="376" y="238" width="20" height="150" rx="4"/>
+    <rect x="416" y="238" width="20" height="150" rx="4"/><rect x="456" y="238" width="20" height="150" rx="4"/>
+  </g>
+  <!-- 门厅 -->
+  <rect x="278" y="300" width="84" height="102" rx="6" fill="#2f6f5e" opacity=".5"/>
+  <path d="M278 300 q42 -26 84 0" fill="none" stroke="#f7d98a" stroke-width="4"/>
+  <!-- 幕布装饰 -->
+  <path d="M150 238 q20 60 -4 120 l-6 0 v-114 z" fill="#c9785c" opacity=".5"/>
+  <path d="M490 238 q-20 60 4 120 l6 0 v-114 z" fill="#c9785c" opacity=".5"/>
+  <!-- 台阶 -->
+  <rect x="260" y="402" width="120" height="10" rx="4" fill="#d8c7a5"/>
+  <rect x="246" y="412" width="148" height="10" rx="4" fill="#cdbb98"/>
+  <!-- 树 -->
+  <g fill="#3f7d64">
+    <circle cx="92" cy="386" r="24"/><circle cx="76" cy="406" r="16"/>
+    <circle cx="548" cy="386" r="24"/><circle cx="564" cy="406" r="16"/>
+  </g>
+</svg>
