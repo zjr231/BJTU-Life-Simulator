@@ -17,7 +17,6 @@
       <div class="map-layer" id="mapLayer">
         <img class="map-art" src="assets/campus-map-reference.png" alt="北交大主校区地点交互地图">
         <div class="map-wash"></div>
-        <div class="map-place-art" id="mapPlaceArt" aria-hidden="true"><img id="mapPlaceArtImage" alt=""></div>
         <div class="npc-layer" id="npcLayer" aria-hidden="true"></div>
 
         <button class="map-hotspot hotspot-activity" data-place="activity" aria-label="进入学生活动中心">
@@ -66,35 +65,114 @@
         </button>
       </div>
 
-      <header class="hud-top">
-        <div class="brand-lockup">
-          <span class="brand-mark">北</span>
-          <div>
-            <p class="eyebrow" id="playerLabel">北交人生 · 等待入学</p>
-            <h1>校园地图</h1>
+      <header class="app-bar" id="appBar">
+        <div class="app-profile">
+          <button class="avatar" id="playerAvatar" type="button" aria-label="更换头像" title="点击更换头像">北</button>
+          <input id="avatarInput" type="file" accept="image/*" hidden>
+          <div class="player-meta">
+            <b class="player-name" id="playerName">等待入学</b>
+            <span class="player-sub" id="playerLabel">北交人生 · 等待入学</span>
+          </div>
+          <div class="player-chips">
+            <span class="term-chip"><span class="term-dot"></span><span id="termLabel">大一上 · 第 1 学期</span></span>
+            <span class="resource-chip" id="timeLabel">时间 12 / 12</span>
           </div>
         </div>
-        <div class="term-chip"><span class="term-dot"></span><span id="termLabel">大一上 · 第 1 学期</span></div>
+
+        <div class="vitals" aria-label="角色状态条">
+          <div class="vital" data-vital="energy">
+            <span class="vital-icon" aria-hidden="true">⚡</span>
+            <span class="vital-label">精力</span>
+            <span class="vital-track"><i id="barEnergy" style="width:80%"></i></span>
+            <b class="vital-value" id="valueEnergy">80</b>
+          </div>
+          <div class="vital" data-vital="mood">
+            <span class="vital-icon" aria-hidden="true">☀</span>
+            <span class="vital-label">心情</span>
+            <span class="vital-track"><i id="barMood" style="width:70%"></i></span>
+            <b class="vital-value" id="valueMood">70</b>
+          </div>
+          <div class="vital" data-vital="fitness">
+            <span class="vital-icon" aria-hidden="true">◎</span>
+            <span class="vital-label">体能</span>
+            <span class="vital-track"><i id="barFitness" style="width:50%"></i></span>
+            <b class="vital-value" id="valueFitness">50</b>
+          </div>
+          <div class="vital" data-vital="social">
+            <span class="vital-icon" aria-hidden="true">☺</span>
+            <span class="vital-label">社交</span>
+            <span class="vital-track"><i id="barSocial" style="width:20%"></i></span>
+            <b class="vital-value" id="valueSocial">20</b>
+          </div>
+          <div class="vital vital-learning" data-vital="learning">
+            <span class="vital-icon" aria-hidden="true">✎</span>
+            <span class="vital-label">学习</span>
+            <span class="vital-track"><i id="barPreparation" style="width:0%"></i></span>
+            <b class="vital-value" id="valuePreparation">0</b>
+          </div>
+        </div>
+
+        <nav class="app-menu" id="appMenu" aria-label="功能导航">
+          <button type="button" class="app-menu-button" data-panel="status" aria-expanded="false">角色</button>
+          <button type="button" class="app-menu-button" data-panel="term" aria-expanded="false">学业</button>
+          <button type="button" class="app-menu-button" data-panel="goals" aria-expanded="false">发展</button>
+          <button type="button" class="app-menu-button" data-panel="records" aria-expanded="false">记录</button>
+          <button type="button" class="app-menu-button" data-panel="saves" aria-expanded="false">存档</button>
+          <button type="button" class="app-menu-button" data-panel="settings" aria-expanded="false">设置</button>
+        </nav>
       </header>
 
-      <aside class="status-card" aria-label="五项角色属性与当前资源">
-        <div class="status-head"><span>角色状态</span><div class="resource-labels"><span class="status-count" id="timeLabel">时间 12 / 12</span><span class="status-count" id="energyLabel">精力 80 / 100</span></div></div>
-        <div class="status-grid" id="mapStats"></div>
-        <div class="preparation-row"><label for="preparationMeter">本学期学习进度 <b id="preparationValue">0 / 100</b></label><progress id="preparationMeter" max="100" value="0"></progress><span>期末成绩来源</span></div>
-        <div class="direction-brief" id="directionBrief" aria-label="毕业方向与事件链进度"></div>
-        <div class="status-controls">
+      <div class="app-panels" id="appPanels">
+        <section class="app-panel" id="panelStatus" data-panel-name="status" hidden aria-label="角色状态">
+          <h3 class="app-panel-title">角色状态</h3>
+          <p class="app-panel-note" id="energyLabel">精力 80 / 100</p>
+          <div class="status-grid" id="mapStats"></div>
+          <div class="preparation-row"><label for="preparationMeter">本学期学习进度 <b id="preparationValue">0 / 100</b></label><progress id="preparationMeter" max="100" value="0"></progress><span>期末成绩来源</span></div>
+          <div class="panel-grid-2">
+            <button class="utility-button" id="changeAvatarButton" type="button">更换头像</button>
+            <button class="utility-button" id="backgroundButton" type="button">入学背景</button>
+          </div>
+        </section>
+
+        <section class="app-panel" id="panelTerm" data-panel-name="term" hidden aria-label="学业">
+          <h3 class="app-panel-title">学业</h3>
+          <div class="panel-list" id="termBrief"></div>
+          <p class="app-panel-note" id="termNote">安排完行动后，结束学期进入期末考试。</p>
           <button class="end-term-button" id="endTermButton" type="button">结束学期</button>
+        </section>
+
+        <section class="app-panel" id="panelGoals" data-panel-name="goals" hidden aria-label="发展与事件链">
+          <h3 class="app-panel-title">发展与事件链</h3>
+          <div class="panel-list" id="directionBrief"></div>
+          <p class="app-panel-note">事件链进度与毕业条件详见「记录」。</p>
+        </section>
+
+        <section class="app-panel" id="panelRecords" data-panel-name="records" hidden aria-label="成长记录">
+          <h3 class="app-panel-title">成长记录</h3>
+          <p class="app-panel-note">八个学期的成绩、校园经历、事件链进度与毕业条件。</p>
           <button class="history-button" id="historyButton" type="button">查看成长记录</button>
-          <button class="utility-button" id="saveButton" type="button">保存进度</button>
-          <button class="utility-button" id="loadButton" type="button">读取进度</button>
-          <button class="utility-button" id="soundButton" type="button">声音:开</button>
-          <button class="utility-button" id="backgroundButton" type="button">入学背景</button>
-          <button class="utility-button" id="helpButton" type="button">玩法说明</button>
-          <button class="utility-button" id="restartButton" type="button">重新开始</button>
+        </section>
+
+        <section class="app-panel" id="panelSaves" data-panel-name="saves" hidden aria-label="存档">
+          <h3 class="app-panel-title">存档</h3>
+          <p class="app-panel-note">共 3 个栏位；学期结算与毕业确认后自动保存到当前栏位。</p>
+          <div class="panel-grid-2">
+            <button class="utility-button" id="saveButton" type="button">保存进度</button>
+            <button class="utility-button" id="loadButton" type="button">读取进度</button>
+          </div>
           <p class="session-note" id="sessionNote" role="status">入学后就能保存进度了。</p>
-        </div>
-        <div id="debugPanel" hidden><p id="debugSummary"></p><button type="button" class="utility-button" id="exportLogButton">导出复现日志</button></div>
-      </aside>
+        </section>
+
+        <section class="app-panel" id="panelSettings" data-panel-name="settings" hidden aria-label="设置">
+          <h3 class="app-panel-title">设置</h3>
+          <div class="status-controls">
+            <button class="utility-button" id="soundButton" type="button">声音:开</button>
+            <button class="utility-button" id="helpButton" type="button">玩法说明</button>
+            <button class="utility-button" id="restartButton" type="button">重新开始</button>
+          </div>
+          <div id="debugPanel" hidden><p id="debugSummary"></p><button type="button" class="utility-button" id="exportLogButton">导出复现日志</button></div>
+        </section>
+      </div>
 
       <div class="map-caption">
         <span class="caption-line"></span>
@@ -103,8 +181,9 @@
     </section>
 
     <section class="place-screen" id="placeScreen" aria-hidden="true" inert>
-      <div class="place-backdrop" id="placeBackdrop"></div>
-      <div class="place-art" id="placeArt" aria-hidden="true"><img id="placeArtImage" alt=""></div>
+      <div class="place-backdrop" id="placeBackdrop">
+        <img class="place-bg-art" id="placeArtImage" alt="" aria-hidden="true">
+      </div>
       <div class="place-content">
         <button class="back-button" id="backButton" type="button"><span aria-hidden="true">←</span> 返回地图</button>
         <div class="place-kicker" id="placeKicker">主校区 · 地点</div>

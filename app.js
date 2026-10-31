@@ -256,9 +256,100 @@ function chainLabel(chain) {
   const labels = { idle: '未申请', active: '进行中', deferred: '暂缓申请', completed: '已完成', missed: '未完成' };
   return labels[chain.status] + (['active', 'missed'].includes(chain.status) ? ' · ' + chain.progress + '/2 次投入' : '');
 }
+// 头像：点击可上传本地图片，压缩后存本地（只影响界面，不进存档格式）。
+const AVATAR_KEY = 'bjt-life-avatar';
+function setAvatarImage(dataUrl) {
+  const avatar = $('#playerAvatar');
+  if (!avatar || !avatar.style) return;
+  if (dataUrl) {
+    avatar.style.backgroundImage = 'url("' + dataUrl + '")';
+    avatar.classList.add('has-image');
+  } else {
+    avatar.style.backgroundImage = '';
+    avatar.classList.remove('has-image');
+  }
+}
+function loadAvatar() {
+  try {
+    const saved = window.localStorage && window.localStorage.getItem(AVATAR_KEY);
+    if (saved) setAvatarImage(saved);
+  } catch (_) {}
+}
+function saveAvatarFile(file) {
+  try {
+    if (!file || !/^image\//.test(file.type)) { showToast('请选择图片文件'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const image = new Image();
+        image.onload = () => {
+          try {
+            const size = 160;
+            const canvas = document.createElement('canvas');
+            canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            const side = Math.min(image.width, image.height);
+            const sx = (image.width - side) / 2;
+            const sy = (image.height - side) / 2;
+            ctx.drawImage(image, sx, sy, side, side, 0, 0, size, size);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.86);
+            setAvatarImage(dataUrl);
+            try { window.localStorage.setItem(AVATAR_KEY, dataUrl); } catch (_) {}
+            showToast('头像已更新');
+          } catch (_) { showToast('图片处理失败，换一张试试'); }
+        };
+        image.onerror = () => showToast('图片读取失败');
+        image.src = String(reader.result);
+      } catch (_) {}
+    };
+    reader.onerror = () => showToast('图片读取失败');
+    reader.readAsDataURL(file);
+  } catch (_) {}
+}
+function pickAvatar() {
+  const input = $('#avatarInput');
+  if (input && typeof input.click === 'function') input.click();
+}
+// 顶部菜单：点击展开对应面板，再点或点空白处收起。
+let openPanelName = null;
+function setPanel(name) {
+  openPanelName = name;
+  document.querySelectorAll('.app-panel').forEach((panel) => {
+    panel.hidden = panel.dataset.panelName !== name;
+  });
+  document.querySelectorAll('.app-menu-button').forEach((button) => {
+    button.setAttribute('aria-expanded', button.dataset.panel === name ? 'true' : 'false');
+  });
+}
+function closePanel() { setPanel(null); }
+function syncBarHeight() {
+  try {
+    const bar = $('#appBar');
+    if (bar && typeof bar.getBoundingClientRect === 'function' && document.documentElement && document.documentElement.style) {
+      const rect = bar.getBoundingClientRect();
+      document.documentElement.style.setProperty('--bar-bottom', Math.round(rect.bottom + 8) + 'px');
+      document.documentElement.style.setProperty('--bar-h', Math.round(rect.height) + 'px');
+    }
+  } catch (_) {}
+}
 function renderState() {
   if (!state) return;
-  $('#playerLabel').textContent = state.nickname + ' · ' + state.background.major;
+  $('#playerLabel').textContent = (state.background.college ? state.background.college + ' · ' : '') + state.background.major;
+  const avatar = $('#playerAvatar');
+  if (avatar) avatar.textContent = String(state.nickname || '北').trim().slice(0, 1) || '北';
+  const playerName = $('#playerName');
+  if (playerName) playerName.textContent = state.nickname;
+  const setVital = (barId, valueId, value, max) => {
+    const bar = $('#' + barId);
+    if (bar && bar.style) bar.style.width = Math.max(0, Math.min(100, Math.round(value / max * 100))) + '%';
+    const label = $('#' + valueId);
+    if (label) label.textContent = String(value);
+  };
+  setVital('barEnergy', 'valueEnergy', state.energy, 100);
+  setVital('barMood', 'valueMood', state.mood, 100);
+  setVital('barFitness', 'valueFitness', state.fitness, 100);
+  setVital('barSocial', 'valueSocial', state.social, 100);
+  setVital('barPreparation', 'valuePreparation', state.preparation, 100);
   $('#termLabel').textContent = game.TERM_NAMES[state.term - 1] + (state.phase === 'finished' ? ' · 已结束' : ' · ' + game.getTermStage(state));
   $('#timeLabel').textContent = '时间 ' + state.time + ' / 12';
   $('#energyLabel').textContent = '精力 ' + state.energy + ' / 100';
@@ -268,7 +359,8 @@ function renderState() {
   $('#placeStats').innerHTML = '<div class="place-resources"><span>时间 <b>' + state.time + ' / 12</b></span><span>精力 <b>' + state.energy + ' / 100</b></span><span>学习进度 <b>' + state.preparation + ' / 100</b></span></div><div class="place-attributes">' + statsMarkup() + '</div>';
   const selectedIds = state.selectedCourses || [];
   const selectedNames = selectedIds.map((id) => game.courseById(id)?.name || id).join('、') || '未选课';
-  $('#directionBrief').innerHTML = '<div>本学期课程 <b>' + h(selectedNames) + '</b>' + (state.phase === 'examPending' ? ' · 考试待提交' : '') + '</div><div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
+  $('#termBrief').innerHTML = '<div>本学期课程 <b>' + h(selectedNames) + '</b>' + (state.phase === 'examPending' ? ' · 考试待提交' : '') + '</div><div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div>';
+  $('#directionBrief').innerHTML = '<div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
   $('#endTermButton').textContent = ({ eventPending: '处理当前事件', examPending: '继续期末考试', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果' })[state.phase] || (selectedIds.length ? '结束学期并考试' : '结束学期');
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
   $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection'].includes(dialogMode);
@@ -307,40 +399,62 @@ const PLACE_ART = {
   dorm: 'assets/places/dorm.svg',
   hotel: 'assets/places/hotel.svg'
 };
-const PLACE_ANCHOR = {
-  activity: { x: 6.75, y: 31.12 }, think: { x: 44.22, y: 28.8 }, library: { x: 76.18, y: 43.82 },
-  hospital: { x: 87.93, y: 39.34 }, gate: { x: 30.57, y: 78.17 }, track: { x: 44.58, y: 5.39 },
-  auditorium: { x: 43.46, y: 51.62 }, ginkgo: { x: 28.32, y: 35.77 }, yifu: { x: 92.74, y: 73.28 },
-  dorm: { x: 77.35, y: 20.66 }, hotel: { x: 64.67, y: 62.82 }
-};
-function showPlaceArt(key) {
+// 用点击的建筑位置作为整屏展开的圆心；拿不到位置时退回屏幕中心。
+function placeRevealOrigin(hotspot) {
+  try {
+    if (hotspot && typeof hotspot.getBoundingClientRect === 'function' && typeof window !== 'undefined' &&
+        Number.isFinite(window.innerWidth) && window.innerWidth > 0 && Number.isFinite(window.innerHeight) && window.innerHeight > 0) {
+      const rect = hotspot.getBoundingClientRect();
+      if (rect && Number.isFinite(rect.left) && Number.isFinite(rect.top) && rect.width > 0) {
+        return {
+          x: (rect.left + rect.width / 2) / window.innerWidth * 100,
+          y: (rect.top + rect.height / 2) / window.innerHeight * 100
+        };
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+function showPlaceArt(key, hotspot) {
   const src = PLACE_ART[key];
   if (!src) return;
-  const anchor = PLACE_ANCHOR[key];
-  const mapArt = $('#mapPlaceArt');
-  const mapImage = $('#mapPlaceArtImage');
-  if (mapImage) mapImage.setAttribute('src', src);
-  if (mapArt) {
-    if (anchor) {
-      mapArt.style.left = anchor.x + '%';
-      mapArt.style.top = anchor.y + '%';
-    }
-    mapArt.classList.remove('is-open');
-    mapArt.classList.add('is-open');
-  }
   const placeImage = $('#placeArtImage');
   if (placeImage) placeImage.setAttribute('src', src);
-  const placeArt = $('#placeArt');
-  if (placeArt) placeArt.classList.add('is-open');
+  const placeScreen = $('#placeScreen');
+  const origin = placeRevealOrigin(hotspot);
+  if (placeScreen && placeScreen.style && typeof placeScreen.style.setProperty === 'function') {
+    if (origin) {
+      placeScreen.style.setProperty('--ox', origin.x.toFixed(2) + '%');
+      placeScreen.style.setProperty('--oy', origin.y.toFixed(2) + '%');
+    } else {
+      placeScreen.style.removeProperty('--ox');
+      placeScreen.style.removeProperty('--oy');
+    }
+  }
 }
-function hidePlaceArt() {
-  const mapArt = $('#mapPlaceArt');
-  if (mapArt) mapArt.classList.remove('is-open');
-  const placeArt = $('#placeArt');
-  if (placeArt) placeArt.classList.remove('is-open');
+// 锁定页面滚动时补偿滚动条宽度，避免布局横向跳动（地图"甩一下"的来源）。
+function lockBodyScroll() {
+  try {
+    if (typeof document !== 'undefined' && document.body && document.body.style) {
+      const root = document.documentElement;
+      const gap = (root && Number.isFinite(root.clientWidth) && Number.isFinite(window?.innerWidth))
+        ? Math.max(0, window.innerWidth - root.clientWidth) : 0;
+      if (gap > 0) document.body.style.paddingRight = gap + 'px';
+      lockBodyScroll();
+    }
+  } catch (_) {}
+}
+function unlockBodyScroll() {
+  try {
+    if (typeof document !== 'undefined' && document.body && document.body.style) {
+      unlockBodyScroll();
+      document.body.style.paddingRight = '';
+    }
+  } catch (_) {}
 }
 function openPlace(key, hotspot) {
   if (!state) return;
+  closePanel();
   if (state.phase !== 'playing') { resumePhase(); return; }
   if (!Object.hasOwn(game.PLACES, key)) return;
   audio?.play(PLACE_SOUNDS[key]);
@@ -351,8 +465,8 @@ function openPlace(key, hotspot) {
   $('#placeDescription').textContent = game.PLACES[key].description;
   $('#actionFeedback').textContent = '先安排投入，再决定行动。完成之后，会记下这次发生的事。';
   hotspots.forEach((item) => item.classList.toggle('is-active', item.dataset.place === key));
-  // 从点击的建筑坐标展开对应插画，场所屏右侧同时半透明铺开。
-  showPlaceArt(key);
+  // 以点击的建筑为圆心，把整屏背景展开成该建筑的插画。
+  showPlaceArt(key, hotspot);
   // 过场动画：地图聚焦压暗离场，场所屏入场时内容错落升起；入场标记随后清理，避免每次行动重绘都重播动画。
   $('#mapScreen').classList.add('is-leaving');
   const placeScreen = $('#placeScreen');
@@ -363,12 +477,11 @@ function openPlace(key, hotspot) {
   placeScreen.setAttribute('aria-hidden', 'false');
   placeScreen.inert = false;
   $('#mapScreen').inert = true;
-  document.body.style.overflow = 'hidden';
+  lockBodyScroll();
   renderState();
   $('#backButton').focus();
 }
 function closePlace() {
-  hidePlaceArt();
   const placeScreen = $('#placeScreen');
   placeScreen.classList.remove('is-open');
   placeScreen.classList.remove('is-entering');
@@ -378,7 +491,7 @@ function closePlace() {
   placeScreen.inert = true;
   $('#mapScreen').inert = false;
   hotspots.forEach((item) => item.classList.remove('is-active'));
-  document.body.style.overflow = '';
+  unlockBodyScroll();
   activePlace = null;
   if (!dialog.open) lastHotspot?.focus();
 }
@@ -1188,6 +1301,35 @@ $('#helpButton').addEventListener('click', () => { if (state) showTutorial(); })
 $('#backgroundButton').addEventListener('click', () => { if (state) showBackground(); });
 $('#restartButton').addEventListener('click', () => { if (state) askRestart(); });
 $('#historyButton').addEventListener('click', () => { if (state) showDialog('history', '四年成长记录', growthRecord(), [{ id: 'resume', text: '继续安排' }]); });
+
+const avatarButton = $('#playerAvatar');
+if (avatarButton && typeof avatarButton.addEventListener === 'function') avatarButton.addEventListener('click', pickAvatar);
+const changeAvatarButton = $('#changeAvatarButton');
+if (changeAvatarButton && typeof changeAvatarButton.addEventListener === 'function') changeAvatarButton.addEventListener('click', pickAvatar);
+const avatarInput = $('#avatarInput');
+if (avatarInput && typeof avatarInput.addEventListener === 'function') {
+  avatarInput.addEventListener('change', () => {
+    const file = avatarInput.files && avatarInput.files[0];
+    if (file) saveAvatarFile(file);
+    try { avatarInput.value = ''; } catch (_) {}
+  });
+}
+loadAvatar();
+
+document.querySelectorAll('.app-menu-button').forEach((button) => {
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setPanel(openPanelName === button.dataset.panel ? null : button.dataset.panel);
+  });
+});
+document.addEventListener('click', (event) => {
+  if (!openPanelName) return;
+  const target = event.target;
+  if (target && typeof target.closest === 'function' && (target.closest('.app-bar') || target.closest('.app-panels'))) return;
+  closePanel();
+});
+window.addEventListener('resize', syncBarHeight);
+syncBarHeight();
 $('#exportLogButton').addEventListener('click', () => { if (state) exportLog(); });
 const soundButton = $('#soundButton');
 if (audio) {
@@ -1213,7 +1355,9 @@ dialog.addEventListener('cancel', (event) => {
   if (!state || ['eventPending', 'examPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment', 'courseSelection', 'exam'].includes(dialogMode)) event.preventDefault();
 });
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && activePlace && !dialog.open) closePlace();
+  if (event.key !== 'Escape') return;
+  if (openPanelName) { closePanel(); return; }
+  if (activePlace && !dialog.open) closePlace();
 });
 window.addEventListener('beforeunload', guardUnsavedProgress);
 if (typeof HTMLDialogElement === 'undefined' || typeof HTMLDialogElement.prototype.showModal !== 'function') {
