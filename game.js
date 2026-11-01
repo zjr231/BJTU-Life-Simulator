@@ -3,7 +3,7 @@
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
   const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
-  const { RULES, FAMILIES, ACTION_EXTRAS, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
+  const { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
   const { COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
@@ -23,18 +23,97 @@
     return FAMILIES.find(item => (total += item.weight) > roll) || FAMILIES.at(-1);
   }
   function startEconomyTerm(state) {
-    const economy = state.economy || { version: 1, familyId: familyForSeed(state.rng.seed).id, startTerm: state.term, grants: [] };
+    let economy = state.economy || { version: 2, familyId: familyForSeed(state.rng.seed).id, startTerm: state.term, grants: [] };
     if (economy.grants.some(item => item.term === state.term)) return state;
+    if (economy.version === 1) economy = { ...economy, version: 2 };
     const family = FAMILIES.find(item => item.id === economy.familyId);
     const allowance = family.termAllowance;
-    const livingCost = RULES.termLivingCost;
+    const defaultPlan = budgetPlan(DEFAULT_BUDGET);
+    const livingCost = defaultPlan.costs.total;
     const debtPaid = Math.min(state.cardDebt || 0, allowance - livingCost);
-    const grant = { term: state.term, openingMoney: state.money, allowance, livingCost, debtPaid, moneyAfter: state.money + allowance - livingCost - debtPaid };
+    const grant = {
+      term: state.term, openingMoney: state.money, allowance, livingCost, debtPaid,
+      moneyAfter: state.money + allowance - livingCost - debtPaid,
+      budget: { ...DEFAULT_BUDGET }, budgetCosts: { ...defaultPlan.costs },
+      budgetEffects: { mood: 0, social: 0, energy: 0, fitness: 0 },
+      budgetModifiers: { restMultiplier: 1, dormMood: 0, dormSocial: 0 },
+      budgetDelta: 0, budgetChosen: false
+    };
     return { ...state, money: grant.moneyAfter, cardDebt: (state.cardDebt || 0) - debtPaid, economy: { ...economy, grants: [...economy.grants, grant] } };
   }
   function budgetFor(state) {
     if (!state.economy) return null;
     return { family: FAMILIES.find(item => item.id === state.economy.familyId), grant: state.economy.grants.find(item => item.term === state.term) };
+  }
+  function budgetPlan(selection) {
+    if (!selection || typeof selection !== 'object' || Array.isArray(selection)) return null;
+    const keys = Object.keys(BUDGET_DIMENSIONS);
+    if (Object.keys(selection).length !== keys.length) return null;
+    const items = {};
+    const costs = {};
+    const effects = { mood: 0, social: 0, energy: 0, fitness: 0 };
+    let total = 0;
+    for (const key of keys) {
+      const dimension = BUDGET_DIMENSIONS[key];
+      const tierId = selection[key];
+      if (typeof tierId !== 'string') return null;
+      const tier = dimension.tiers.find(item => item.id === tierId);
+      if (!tier) return null;
+      items[key] = tier;
+      costs[key] = tier.cost;
+      total += tier.cost;
+      for (const [attribute, amount] of Object.entries(tier.effects || {})) {
+        if (!own(effects, attribute)) return null;
+        effects[attribute] += amount;
+      }
+    }
+    costs.total = total;
+    const housing = items.housing;
+    return {
+      selection: { ...selection }, items, costs, effects,
+      modifiers: { restMultiplier: housing.restMultiplier || 1, dormMood: housing.dormMood || 0, dormSocial: housing.dormSocial || 0 },
+      housing
+    };
+  }
+  function currentGrant(state) {
+    return state.economy?.grants.find(grant => grant.term === state.term) || null;
+  }
+  function activeBudget(state) {
+    const grant = currentGrant(state);
+    return grant && grant.budget && grant.budgetChosen === true ? budgetPlan(grant.budget) : null;
+  }
+  function housingFor(state) {
+    const plan = activeBudget(state);
+    return plan ? plan.housing : null;
+  }
+  function applyDormEventBonus(state, eventId, effect) {
+    const plan = activeBudget(state);
+    if (!plan || !BUDGET_DIMENSIONS.housing.dormEvents.includes(eventId)) return effect;
+    const adjusted = { ...effect };
+    if ((adjusted.mood || 0) > 0) adjusted.mood += plan.modifiers.dormMood;
+    if ((adjusted.social || 0) > 0) adjusted.social += plan.modifiers.dormSocial;
+    return adjusted;
+  }
+  function applyHousingActionEffect(state, id, effect) {
+    const plan = activeBudget(state);
+    if (!plan || id !== 'chat') return effect;
+    const adjusted = { ...effect };
+    if ((adjusted.social || 0) > 0) adjusted.social += plan.modifiers.dormSocial;
+    if ((adjusted.mood || 0) > 0) adjusted.mood += plan.modifiers.dormMood;
+    return adjusted;
+  }
+  function placeFor(state, key) {
+    if (!own(PLACES, key)) return null;
+    const place = { ...PLACES[key] };
+    if (key === 'dorm') {
+      const housing = housingFor(state);
+      if (housing && housing.placeDescription) place.description = housing.placeDescription;
+    }
+    return place;
+  }
+  function placeDescription(state, key) {
+    const place = placeFor(state, key);
+    return place ? place.description : '';
   }
   function fitnessTier(stateOrValue) {
     const value = typeof stateOrValue === 'number' ? stateOrValue : stateOrValue.fitness;
@@ -126,6 +205,11 @@
       for (const tier of profile.tiers) tier.amount = Math.max(1, tier.amount - discount);
     }
     for (const key of Object.keys(profile.rewards)) profile.rewards[key] += 3 * ((action[key] || 0) - (ACTIONS[id][key] || 0));
+    const plan = activeBudget(state);
+    if (plan && id === 'rest') {
+      profile.rewards.recovery *= plan.modifiers.restMultiplier;
+      profile.rewards.fitness *= plan.modifiers.restMultiplier;
+    }
     return profile;
   }
   function previewActionInvestment(state, id, requestedAmount) {
@@ -135,7 +219,8 @@
     const check = investmentCheck(profile, amount);
     if (!check.ok) return check;
     const curve = investmentCurve(profile, amount);
-    const effect = fitnessAdjustedEffect(state, investmentEffect(getAction(state, id), profile, amount, curve.mean, curve.q), id);
+    const adjusted = fitnessAdjustedEffect(state, investmentEffect(getAction(state, id), profile, amount, curve.mean, curve.q), id);
+    const effect = id === 'chat' ? applyHousingActionEffect(state, id, adjusted) : adjusted;
     return { ok: true, amount, effect, level: investmentLevel(profile, amount) };
   }
   function availability(state, id, requestedAmount) {
@@ -326,6 +411,7 @@
     } else {
       action = fitnessAdjustedEffect(state, action, id);
     }
+    if (id === 'chat') action = applyHousingActionEffect(state, id, action);
     const changes = previewChanges(state, action);
     let extraRecord;
     if (extra) {
@@ -377,10 +463,11 @@
     if (!check.ok) return check;
     const choice = EVENTS[state.pendingEvent.id].choices.find(item => item.id === choiceId);
     const curve = investmentCurve(profile, amount);
-    const effect = fitnessAdjustedEffect(state, investmentEffect(choice, profile, amount, curve.mean, curve.q), null);
+    const eventId = state.pendingEvent.id;
+    const effect = applyDormEventBonus(state, eventId, fitnessAdjustedEffect(state, investmentEffect(choice, profile, amount, curve.mean, curve.q), null));
     return { ok: true, amount, effect, average: previewChanges(state, effect),
-      low: previewChanges(state, fitnessAdjustedEffect(state, investmentEffect(choice, profile, amount, curve.factor(0.1), curve.q), null)),
-      high: previewChanges(state, fitnessAdjustedEffect(state, investmentEffect(choice, profile, amount, curve.factor(0.9), curve.q), null)),
+      low: previewChanges(state, applyDormEventBonus(state, eventId, fitnessAdjustedEffect(state, investmentEffect(choice, profile, amount, curve.factor(0.1), curve.q), null))),
+      high: previewChanges(state, applyDormEventBonus(state, eventId, fitnessAdjustedEffect(state, investmentEffect(choice, profile, amount, curve.factor(0.9), curve.q), null))),
       level: investmentLevel(profile, amount) };
   }
   function describeInvestment(profile, preview, factor, mean, adjustedEffect) {
@@ -405,7 +492,8 @@
     if (!profile && requestedAmount !== undefined) return { ok: false, reason: '这个选项不需要设置投入' };
     const preview = profile && previewEventInvestment(state, choiceId, requestedAmount);
     if (preview && !preview.ok) return preview;
-    return resourceCheck(state, preview ? preview.effect : fitnessAdjustedEffect(state, choice, null));
+    const fixed = preview ? null : applyDormEventBonus(state, state.pendingEvent.id, fitnessAdjustedEffect(state, choice, null));
+    return resourceCheck(state, preview ? preview.effect : fixed);
   }
   function resolveOutcome(state, choice) {
     if (!choice.outcomeBy) return null;
@@ -449,7 +537,7 @@
     for (const key of ['time', 'energy', 'recovery', 'money', 'income', 'preparation', 'social', 'fitness', 'mood', 'furtherStudy', 'jobPreparation']) {
       effect[key] = (baseEffect[key] || 0) + (outcome[key] || 0);
     }
-    effect = fitnessAdjustedEffect(state, effect, null);
+    effect = applyDormEventBonus(state, pending.id, fitnessAdjustedEffect(state, effect, null));
     if (profile) investment = describeInvestment(profile, investmentPreview, investmentFactor, investmentCurveData.mean, effect);
     const changes = previewChanges(state, effect);
     const cardDebtAdded = choice.restitution ? Math.max(0, choice.money - (effect.money || 0)) : 0;
@@ -491,6 +579,13 @@
     next = attachEvents(next, 'eventChoice');
     return commit(state, next, { operation: 'submitEventChoice', id: choiceId, eventInstanceId: pending.instanceId, ...(investment ? { investment: investment.amount } : {}) }, entry, command.commandId);
   }
+  function eventChoiceEffect(state, choiceId) {
+    const pending = state.pendingEvent;
+    const event = pending && EVENTS[pending.id];
+    const choice = event && event.choices.find(item => item.id === choiceId);
+    if (!choice) return null;
+    return applyDormEventBonus(state, pending.id, fitnessAdjustedEffect(state, choice, null));
+  }
   function settlementChains(state) {
     const chains = clone(state.chains);
     const notices = [];
@@ -509,7 +604,7 @@
     const grade = graded ? gradeFor(usualScore, score) : Math.round(40 + state.preparation * 0.6);
     const budget = budgetFor(state);
     const aid = budget ? 0 : Math.max(0, RULES.livingCost - state.money);
-    const summary = { term: state.term, name: TERM_NAMES[state.term - 1], preparation: state.preparation, grade, passed: grade >= 60, livingCost: budget ? budget.grant.livingCost : RULES.livingCost, aid, moneyAfter: budget ? state.money : state.money + aid - RULES.livingCost, unusedTime: state.time, counts: { ...state.counts }, attributes: { social: state.social, fitness: state.fitness, mood: state.mood }, notices: settlementChains(state).notices, ...(budget ? { economyVersion: 1, budget: clone(budget.grant), familyId: budget.family.id } : {}) };
+    const summary = { term: state.term, name: TERM_NAMES[state.term - 1], preparation: state.preparation, grade, passed: grade >= 60, livingCost: budget ? budget.grant.livingCost : RULES.livingCost, aid, moneyAfter: budget ? state.money : state.money + aid - RULES.livingCost, unusedTime: state.time, counts: { ...state.counts }, attributes: { social: state.social, fitness: state.fitness, mood: state.mood }, notices: settlementChains(state).notices, ...(budget ? { economyVersion: budget.grant.budget ? 2 : 1, budget: clone(budget.grant), familyId: budget.family.id } : {}) };
     if (graded) Object.assign(summary, { usualScore, examScore: score, rating: ratingFor(grade), courseIds: [...selectedCoursesOf(state)], courseNames: selectedCoursesOf(state).map((id) => courseById(id)?.name || id) });
     return summary;
   }
@@ -523,6 +618,31 @@
     const summary = previewSettlement(state);
     const next = { ...state, phase: 'summary', money: summary.moneyAfter, chains: settlementChains(state).chains, courses: [...state.courses, summary], summary };
     return commit(state, next, { operation: 'endTerm' }, { action: 'endTerm', title: '学期结算' }, command.commandId);
+  }
+  function chooseBudget(state, selection, options = {}) {
+    const command = commandCheck(state, options, 'chooseBudget');
+    if (!command.ok) return command;
+    if (state.phase !== 'playing') return { ok: false, reason: '现在不能调整学期预算', state };
+    if (selectedCoursesOf(state).length) return { ok: false, reason: '请先完成学期预算，再选课', state };
+    const grant = currentGrant(state);
+    if (!grant || !state.economy || state.economy.version !== 2 || !grant.budget) return { ok: false, reason: '本学期沿用旧版预算，下一学期开始可选择', state };
+    if (grant.budgetChosen) return { ok: false, reason: '本学期预算已经确认', state };
+    const plan = budgetPlan(selection);
+    if (!plan) return { ok: false, reason: '预算档位无效', state };
+    const delta = plan.costs.total - grant.livingCost;
+    if (delta > state.money) return { ok: false, reason: '预算需要追加 ' + delta + ' 元，当前可用 ' + state.money + ' 元', state };
+    const changes = previewChanges(state, { recovery: plan.effects.energy, mood: plan.effects.mood, social: plan.effects.social, fitness: plan.effects.fitness });
+    changes.money = delta === 0 ? 0 : -delta;
+    const updatedGrant = {
+      ...grant, livingCost: plan.costs.total,
+      moneyAfter: grant.openingMoney + grant.allowance - plan.costs.total - grant.debtPaid,
+      budget: { ...plan.selection }, budgetCosts: { ...plan.costs }, budgetEffects: { ...plan.effects },
+      budgetModifiers: { ...plan.modifiers }, budgetDelta: delta, budgetChosen: true
+    };
+    let next = applyChanges(state, changes);
+    next = { ...next, economy: { ...state.economy, version: 2, grants: state.economy.grants.map(item => item === grant ? updatedGrant : item) } };
+    const entry = { action: 'chooseBudget', title: '确认学期预算', budget: { ...plan.selection }, changes };
+    return commit(state, next, { operation: 'chooseBudget', id: plan.selection }, entry, command.commandId);
   }
   function selectCourses(state, ids, options = {}) {
     const command = commandCheck(state, options, 'selectCourses');
@@ -689,7 +809,7 @@
     let state = createGame({ nickname, seed, legacyEconomy: legacyEconomy || economyStartTerm > 1 });
     for (const [index, command] of commands.entries()) {
       const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment, extra: command.extra, economyStartTerm };
-      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), cheatExam: () => cheatExam(state, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args) };
+      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), chooseBudget: () => chooseBudget(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), cheatExam: () => cheatExam(state, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args) };
       if (!own(handlers, command.operation)) return { ok: false, reason: '第 ' + (index + 1) + ' 步操作未知', state };
       const result = handlers[command.operation]();
       if (!result.ok) return { ...result, reason: '第 ' + (index + 1) + ' 步：' + result.reason };
@@ -697,7 +817,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, budgetPlan, currentGrant, activeBudget, housingFor, placeFor, placeDescription, applyDormEventBonus, eventChoiceEffect, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, chooseBudget, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -24,10 +24,13 @@ test('家庭预算在入学、开学选课、钱包与成长记录中展示；�
   ui.evaluate("showBackground()");
   assert.match(ui.element("#dialogBody").innerHTML, /你的家庭环境/);
   assert.match(enrollment, /\+6000 元/);
-  assert.match(enrollment, /−4800 元/);
+  assert.match(enrollment, /默认预留 <b>4800 元/);
+  assert.match(enrollment, /普通 <b>1000 元/);
+  assert.match(enrollment, /普通宿舍 <b>1000 元/);
+  assert.match(enrollment, /基础通勤 <b>400 元/);
   assert.match(enrollment, /1200 元/);
   ui.evaluate('showCourseSelection()');
-  assert.match(ui.element('#dialogBody').innerHTML, /日常开支已预留/);
+  assert.match(ui.element('#dialogBody').innerHTML, /默认预留/);
   ui.evaluate('dialog.close()');
   const before = JSON.stringify(ui.evaluate('state'));
   ui.click('#mapStats', { walletBudget: '1' });
@@ -43,7 +46,7 @@ test('学期总结显示预留4800与期末零扣费，旧版总结仍展示300�
   const ui = app();
   ui.start();
   const modern = ui.evaluate('summaryMarkup(CampusGame.previewSettlement(state))');
-  assert.match(modern, /日常开支已预留 <b>−4800 元/);
+  assert.match(modern, /预算合计 <b>4800 元/);
   assert.match(modern, /期末额外扣费 <b>0 元/);
   assert.doesNotMatch(modern, /−300 元/);
   const legacy = ui.evaluate('summaryMarkup(CampusGame.previewSettlement({ ...CampusGame.createGame({ legacyEconomy: true }), money: 100 }))');
@@ -183,7 +186,7 @@ function app(storage = memory(), withSms = false, withNpc = false) {
       click('#dialogButtons', { dialogAction: 'resume' });
       assert.equal(evaluate('dialogMode'), 'tutorial');
       click('#dialogButtons', { dialogAction: 'resume' });
-      if (selectCourses && evaluate('dialogMode') === 'courseSelection') {
+      if (selectCourses && ['courseSelection', 'budget'].includes(evaluate('dialogMode'))) {
         const ids = evaluate('CampusGame.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map((course) => course.id)');
         evaluate('state = CampusGame.selectCourses(state, ' + JSON.stringify(ids) + ', { expectedRevision: state.revision }).state; renderState(); resumePhase()');
         assert.equal(evaluate('state.selectedCourses.length'), 3);
@@ -377,7 +380,7 @@ for (const state of phaseStates()) {
       ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
       assert.equal(ui.evaluate('activeSaveSlot'), 2);
       assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state)')), state);
-      const mode = { playing: 'courseSelection', eventPending: 'event', summary: 'summary', endingChoice: 'endingChoice', finished: 'finished' }[state.phase];
+      const mode = { playing: 'budget', eventPending: 'event', summary: 'summary', endingChoice: 'endingChoice', finished: 'finished' }[state.phase];
       if (mode) assert.equal(ui.evaluate('dialogMode'), mode);
       else assert.equal(ui.element('#termDialog').open, false);
       ui.click('#saveButton');
@@ -639,6 +642,9 @@ test('NPC 聊天规则结算：非 playing 阶段纯闲聊零消耗，精力不�
 test('开学选课、结束学期开考与期末总结界面可依次渲染', () => {
   const ui = app();
   ui.start(false);
+  assert.equal(ui.evaluate('dialogMode'), 'budget');
+  ui.click('#dialogButtons', { dialogAction: 'budgetConfirm' });
+  ui.flush();
   assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
   assert.match(ui.element('#dialogBody').innerHTML, /id="courseForm"/);
   assert.match(ui.element('#dialogBody').innerHTML, /course-card/);
@@ -656,6 +662,51 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
   assert.equal(ui.evaluate('dialogMode'), 'summary');
   assert.match(ui.element('#dialogBody').innerHTML, /平时分/);
   assert.match(ui.element('#dialogBody').innerHTML, /期末考试/);
+});
+
+test('开学先独立确认四维预算：默认合计、低体能警告、不可负担禁用与行待完善', () => {
+  const ui = app();
+  ui.start(false);
+  let seed = 'budget-picker-0';
+  for (let i = 0; game.familyForSeed(seed).id !== 'ordinary'; i++) seed = 'budget-picker-' + (i + 1);
+  ui.evaluate('state = CampusGame.createGame({ seed: ' + JSON.stringify(seed) + ' }); budgetDraft = null; budgetDraftTerm = null; renderState(); showBudget()');
+  assert.equal(ui.evaluate('dialogMode'), 'budget');
+  let body = ui.element('#dialogBody').innerHTML;
+  for (const dimension of ['clothing', 'food', 'housing', 'transport']) assert.match(body, new RegExp('data-budget-dimension="' + dimension + '"'));
+  assert.match(body, /影响待完善/);
+  assert.match(body, /本学期预算合计 4800 元/);
+  assert.match(body, /与默认预留持平/);
+  assert.equal((body.match(/aria-pressed="true"/g) || []).length, 4);
+  assert.doesNotMatch(body, /普通档组合/);
+  assert.doesNotMatch(ui.element('#dialogButtons').innerHTML, /disabled/);
+
+  ui.click('#dialogBody', { budgetDimension: 'food', budgetTier: 'gourmet' });
+  body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /本学期预算合计 5800 元/);
+  assert.match(body, /需追加 1000 元/);
+  ui.evaluate('state = { ...state, fitness: 26 }; showBudget()');
+  assert.match(ui.element('#dialogBody').innerHTML, /预计体能 22，低于 25 会生病/);
+
+  ui.click('#dialogBody', { budgetDimension: 'housing', budgetTier: 'offCampus' });
+  body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /本学期预算合计 7800 元/);
+  assert.match(body, /余额不足，还差 1800 元/);
+  assert.match(ui.element('#dialogButtons').innerHTML, /disabled/);
+  const revision = ui.evaluate('state.revision');
+  ui.click('#dialogButtons', { dialogAction: 'budgetConfirm' });
+  assert.equal(ui.evaluate('state.revision'), revision);
+  assert.equal(ui.evaluate('dialogMode'), 'budget');
+  assert.match(ui.element('#budgetError').textContent, /预算未能确认/);
+
+  ui.click('#dialogBody', { budgetDimension: 'housing', budgetTier: 'ordinaryDorm' });
+  ui.click('#dialogButtons', { dialogAction: 'budgetConfirm' });
+  ui.flush();
+  assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
+  assert.equal(ui.evaluate('state.economy.grants[0].budgetChosen'), true);
+  assert.equal(ui.evaluate('state.economy.grants[0].budget.food'), 'gourmet');
+  assert.equal(ui.evaluate('state.economy.grants[0].budget.housing'), 'ordinaryDorm');
+  assert.equal(ui.evaluate('state.money'), 200);
+  assert.equal(ui.evaluate('state.fitness'), 22);
 });
 
 test('开考确认显示剩余时间和平时分，打开与取消均不生成试卷或修改进度', () => {

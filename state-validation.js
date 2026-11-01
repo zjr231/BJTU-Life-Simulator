@@ -33,10 +33,22 @@
       if (state.cardDebt !== undefined && !integer(state.cardDebt, 0, 1000000)) return fail('校园卡待还款');
       if (state.economy !== undefined) {
         const e = state.economy;
-        if (!object(e) || e.version !== 1 || e.familyId !== game.familyForSeed(state.rng.seed).id || !integer(e.startTerm, 1, state.term) || !Array.isArray(e.grants) || e.grants.length !== state.term - e.startTerm + 1) return fail('家庭与学期预算');
+        if (!object(e) || ![1, 2].includes(e.version) || e.familyId !== game.familyForSeed(state.rng.seed).id || !integer(e.startTerm, 1, state.term) || !Array.isArray(e.grants) || e.grants.length !== state.term - e.startTerm + 1) return fail('家庭与学期预算');
         const family = game.FAMILIES.find(item => item.id === e.familyId);
+        let sawBudget = false;
         for (const [index, grant] of e.grants.entries()) {
-          if (!object(grant) || grant.term !== e.startTerm + index || !integer(grant.openingMoney, 0, 1000000) || grant.allowance !== family.termAllowance || grant.livingCost !== RULES.termLivingCost || !integer(grant.debtPaid, 0, grant.allowance - grant.livingCost) || grant.moneyAfter !== grant.openingMoney + grant.allowance - grant.livingCost - grant.debtPaid) return fail('学期拨款记录');
+          if (!object(grant) || grant.term !== e.startTerm + index || !integer(grant.openingMoney, 0, 1000000) || grant.allowance !== family.termAllowance || !integer(grant.livingCost, 0, 1000000) || !integer(grant.debtPaid, 0, Math.max(0, grant.allowance - grant.livingCost)) || grant.moneyAfter !== grant.openingMoney + grant.allowance - grant.livingCost - grant.debtPaid) return fail('学期拨款记录');
+          if (grant.budget !== undefined) {
+            sawBudget = true;
+            if (e.version !== 2) return fail('学期预算版本');
+            const plan = game.budgetPlan(grant.budget);
+            if (!plan || !same(grant.budgetCosts, plan.costs) || grant.livingCost !== plan.costs.total) return fail('学期预算档位');
+            if (grant.budgetChosen === true) {
+              if (!same(grant.budgetEffects, plan.effects) || !same(grant.budgetModifiers, plan.modifiers) || grant.budgetDelta !== plan.costs.total - RULES.termLivingCost) return fail('学期预算快照');
+            } else if (grant.budgetChosen === false) {
+              if (!same(grant.budget, game.DEFAULT_BUDGET) || plan.costs.total !== RULES.termLivingCost || !same(grant.budgetEffects, { mood: 0, social: 0, energy: 0, fitness: 0 }) || !same(grant.budgetModifiers, { restMultiplier: 1, dormMood: 0, dormSocial: 0 }) || grant.budgetDelta !== 0) return fail('未确认预算快照');
+            } else return fail('学期预算确认标记');
+          } else if (sawBudget) return fail('学期预算迁移顺序');
           if (grant.term === 1 ? grant.openingMoney !== 0 : grant.openingMoney !== state.courses[grant.term - 2]?.moneyAfter) return fail('结余结转');
         }
       }
@@ -104,7 +116,7 @@
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
+        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'chooseBudget', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');
         if (command.extra !== undefined || entry.extra !== undefined) {
           const extra = game.getActionExtra(command.id);
@@ -126,6 +138,11 @@
         if (!validInvestment(entry) || command.investment !== entry.investment?.amount) return fail('历史事件投入');
         if (command.operation === 'chooseEnding' && !['ordinary', 'employment', 'furtherStudy', 'notQualified', 'delayed', 'blankResume'].includes(command.id)) return fail('历史方向');
         if (command.operation === 'chatWithNpc' && (!own(NPC_CHAT.identities, command.identityId) || !integer(command.quality, 0, 2))) return fail('历史对话');
+        if (command.operation === 'chooseBudget') {
+          const grant = state.economy?.grants.find(item => item.term === entry.term);
+          const plan = game.budgetPlan(command.id);
+          if (!grant || !plan || grant.budgetChosen !== true || !same(command.id, grant.budget) || !entry.changes || entry.changes.money !== -(plan.costs.total - RULES.termLivingCost)) return fail('学期预算命令');
+        }
         for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished', 'ended'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !integer(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 2010)) return fail('历史状态摘要');
       }
       const expectedCourses = ['summary', 'endingChoice', 'finished'].includes(state.phase) ? state.term : state.term - 1;
@@ -133,7 +150,11 @@
       const validCourse = (course, index) => {
         if (!object(course)) return false;
         const grant = state.economy?.grants.find(item => item.term === course.term);
-        const validBudget = grant ? course.economyVersion === 1 && course.familyId === state.economy.familyId && same(course.budget, grant) && course.livingCost === grant.livingCost && course.aid === 0 : course.economyVersion === undefined && course.livingCost === RULES.livingCost && integer(course.aid, 0, RULES.livingCost);
+        const validBudget = grant
+          ? grant.budget !== undefined
+            ? course.economyVersion === 2 && course.familyId === state.economy.familyId && same(course.budget, grant) && course.livingCost === grant.livingCost && course.aid === 0
+            : course.economyVersion === 1 && course.familyId === state.economy.familyId && same(course.budget, grant) && course.livingCost === grant.livingCost && course.aid === 0
+          : course.economyVersion === undefined && course.livingCost === RULES.livingCost && integer(course.aid, 0, RULES.livingCost);
         if (course.term !== index + 1 || course.name !== TERM_NAMES[index] || !integer(course.preparation, 0, 100) || course.passed !== (course.grade >= 60) || !validBudget || !integer(course.moneyAfter, 0, 1000000) || !integer(course.unusedTime, 0, 12) || !validCounts(course.counts) || !Array.isArray(course.notices) || !course.notices.every((note) => typeof note === 'string' && note.length < 200) || !object(course.attributes) || !['social', 'fitness', 'mood'].every((key) => integer(course.attributes[key], 0, 100))) return false;
         const legacy = course.grade === Math.round(40 + course.preparation * 0.6);
         const examined = integer(course.usualScore, 0, 100) && course.usualScore === course.preparation && integer(course.examScore, 0, 100) && course.examScore % 20 === 0 && course.grade === gradeFor(course.usualScore, course.examScore) && course.rating === ratingFor(course.grade) && Array.isArray(course.courseIds) && course.courseIds.length === 3 && new Set(course.courseIds).size === 3 && course.courseIds.every((id) => COURSES.some((item) => item.id === id)) && Array.isArray(course.courseNames) && course.courseNames.length === 3 && course.courseNames.every((name) => typeof name === 'string' && name.length < 200);

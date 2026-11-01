@@ -34,6 +34,8 @@ let activeSaveSlot = null;
 let saveTarget = null;
 let state = null;
 let activePlace = null;
+let budgetDraft = null;
+let budgetDraftTerm = null;
 let lastHotspot = null;
 let dialogMode = null;
 let terminalChoice = null;
@@ -245,14 +247,90 @@ const NPC_FIGURES = {
 function npcFigureSvg(figure) {
   return '<svg class="npc-svg" viewBox="0 0 40 48" aria-hidden="true">' + (NPC_FIGURES[figure] || NPC_FIGURES.student) + '</svg>';
 }
+const BUDGET_EFFECT_NAMES = { mood: '心情', social: '社交', energy: '精力', fitness: '体能' };
+function budgetEffectText(effects) {
+  return Object.entries(effects || {}).filter(([, value]) => value).map(([key, value]) => (BUDGET_EFFECT_NAMES[key] || key) + ' ' + (value > 0 ? '+' : '−') + Math.abs(value)).join('、') || '无属性变化';
+}
+function budgetTierExtras(dimension, tier) {
+  if (dimension.id !== 'housing') return '';
+  const parts = [];
+  if (tier.restMultiplier) parts.push('休息恢复 ×' + Number(tier.restMultiplier).toFixed(2));
+  if (tier.dormMood || tier.dormSocial) parts.push('宿舍事件/交流 心情' + (tier.dormMood >= 0 ? '+' : '−') + Math.abs(tier.dormMood) + '/社交' + (tier.dormSocial >= 0 ? '+' : '−') + Math.abs(tier.dormSocial));
+  else parts.push('宿舍事件/交流 无额外加成');
+  return parts.join('；');
+}
+function budgetPickerMarkup() {
+  return '<div class="budget-picker">' + Object.values(game.BUDGET_DIMENSIONS).map(dimension => {
+    const tiers = dimension.tiers.map(tier => {
+      const selected = budgetDraft[dimension.id] === tier.id;
+      return '<button type="button" class="budget-tier' + (selected ? ' is-selected' : '') + '" data-budget-dimension="' + dimension.id + '" data-budget-tier="' + tier.id + '" aria-pressed="' + selected + '"><span class="budget-tier-head"><b>' + h(tier.label) + '</b><em>' + tier.cost + ' 元</em></span><small>' + h(budgetEffectText(tier.effects)) + '</small>' + (dimension.pending ? '<span class="budget-badge-pending">影响待完善</span>' : '') + (dimension.id === 'housing' ? '<small>' + h(budgetTierExtras(dimension, tier)) + '</small>' : '') + '</button>';
+    }).join('');
+    return '<fieldset class="budget-dimension"><legend>' + h(dimension.label) + ' · ' + h(dimension.title) + '</legend><p>' + h(dimension.description) + '</p><div class="budget-tier-list">' + tiers + '</div></fieldset>';
+  }).join('') + '</div>';
+}
+function budgetSummaryMarkup() {
+  const grant = game.currentGrant(state);
+  if (!grant) return '';
+  const plan = game.budgetPlan(budgetDraft);
+  if (!plan) return '<p class="action-reason">预算档位无效</p>';
+  const delta = plan.costs.total - grant.livingCost;
+  const affordable = delta <= state.money;
+  const preview = game.previewChanges(state, { recovery: plan.effects.energy, mood: plan.effects.mood, social: plan.effects.social, fitness: plan.effects.fitness });
+  const projectedFitness = state.fitness + preview.fitness;
+  return '<div class="budget-summary"><h3>本学期预算合计 ' + plan.costs.total + ' 元</h3><p>家庭本学期到账 ' + grant.allowance + ' 元 · 默认预留 ' + grant.livingCost + ' 元 · 当前可用 ' + state.money + ' 元</p><p>' + (delta > 0 ? '需追加 ' + delta + ' 元' : delta < 0 ? '退回 ' + (-delta) + ' 元' : '与默认预留持平') + '</p><p>即时变化：' + h(changeText(preview)) + '</p>' + (projectedFitness < 25 ? '<p class="action-warning">预计体能 ' + projectedFitness + '，低于 25 会生病。</p>' : '') + (!affordable ? '<p class="action-reason">余额不足，还差 ' + (delta - state.money) + ' 元</p>' : '') + '</div>';
+}
+function showBudget() {
+  if (!state || state.phase !== 'playing') { resumePhase(); return; }
+  const grant = game.currentGrant(state);
+  if (!grant || !grant.budget || grant.budgetChosen) { resumePhase(); return; }
+  if (budgetDraftTerm !== state.term) {
+    budgetDraft = { ...grant.budget };
+    budgetDraftTerm = state.term;
+  }
+  const plan = game.budgetPlan(budgetDraft);
+  const affordable = !!plan && plan.costs.total - grant.livingCost <= state.money;
+  const body = '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。先安排本学期的衣、食、住、行，确认后再进入选课。</p>' + budgetPickerMarkup() + budgetSummaryMarkup() + '<p id="budgetError" class="action-reason" role="alert"></p>';
+  showDialog('budget', '学期生活预算', body, [{ id: 'budgetConfirm', text: '确认预算', disabled: !affordable }]);
+}
+function selectBudgetTier(dimension, tierId) {
+  const config = game.BUDGET_DIMENSIONS[dimension];
+  if (!config || !config.tiers.some(tier => tier.id === tierId)) return;
+  budgetDraft = { ...(budgetDraft || {}), [dimension]: tierId };
+  showBudget();
+}
+function submitBudget() {
+  if (!state || !budgetDraft) return;
+  const plan = game.budgetPlan(budgetDraft);
+  if (!plan) { showToast('预算档位无效'); return; }
+  const result = runCommand('chooseBudget', { ...budgetDraft }, state.revision);
+  if (!result) {
+    const error = $('#budgetError');
+    if (error) error.textContent = '预算未能确认，请检查余额或档位。';
+    return;
+  }
+  budgetDraft = null;
+  budgetDraftTerm = null;
+  audio?.play('success');
+  showToast('学期预算已确认');
+  resumePhase();
+}
 function budgetMarkup() {
   const budget = game.budgetFor(state);
   if (!budget) return '<p>本学期沿用旧版生活费结算，下一学期开始按家庭情况一次性发放学期生活费并预留日常开支。</p>';
   const { family, grant } = budget;
-  return '<section class="wallet-budget"><h3>本学期生活预算 · ' + h(family.label) + '</h3><p>家里已一次性转入本学期生活费 <b>' + family.termAllowance + ' 元</b>。</p><div class="summary-lines"><span>上学期结余 <b>' + grant.openingMoney + ' 元</b></span><span>家庭生活费到账 <b>+' + grant.allowance + ' 元</b></span><span>日常开支已预留 <b>−' + grant.livingCost + ' 元</b></span>' + (grant.debtPaid ? '<span>校园卡赔偿 <b>−' + grant.debtPaid + ' 元</b></span>' : '') + '<span>开学可支配资金 <b>' + grant.moneyAfter + ' 元</b></span><span>当前可用余额 <b>' + state.money + ' 元</b></span></div><p class="dialog-note">本学期固定日常开支 ' + game.RULES.termLivingCost + ' 元，包含普通三餐、日用品、话费和日常市内交通。已预留的金额期末不再扣除；学费、住宿费、基础参保费用与返乡车票由家庭另行承担。补习、健身房、娱乐、加餐和突发医疗从可用余额支付，结余跨学期保留。</p>' + ((state.cardDebt || 0) ? '<p class="action-warning">校园卡赔偿待还 ' + state.cardDebt + ' 元，后续收入优先偿还。</p>' : '') + '</section>';
+  const plan = grant.budget ? game.budgetPlan(grant.budget) : null;
+  const dimensionLines = plan ? ['clothing', 'food', 'housing', 'transport'].map(key => '<span>' + h(plan.items[key].label) + ' <b>' + plan.items[key].cost + ' 元</b></span>').join('') : '';
+  const status = grant.budget && grant.budgetChosen
+    ? '<span>预算合计 <b>' + grant.livingCost + ' 元</b></span><span>' + (grant.budgetDelta > 0 ? '追加' : grant.budgetDelta < 0 ? '退回' : '与默认预留持平') + '<b>' + (grant.budgetDelta > 0 ? '−' : grant.budgetDelta < 0 ? '+' : '') + Math.abs(grant.budgetDelta) + ' 元</b></span>'
+    : '<span>默认预留 <b>' + grant.livingCost + ' 元</b></span><span>开学选课时先确认衣/食/住/行，确认后多退少补</span>';
+  return '<section class="wallet-budget"><h3>本学期生活预算 · ' + h(family.label) + '</h3><p>家里已一次性转入本学期生活费 <b>' + family.termAllowance + ' 元</b>。</p><div class="summary-lines"><span>上学期结余 <b>' + grant.openingMoney + ' 元</b></span><span>家庭生活费到账 <b>+' + grant.allowance + ' 元</b></span>' + (plan ? dimensionLines : '') + status + (grant.debtPaid ? '<span>校园卡赔偿 <b>−' + grant.debtPaid + ' 元</b></span>' : '') + '<span>开学可支配资金 <b>' + grant.moneyAfter + ' 元</b></span><span>当前可用余额 <b>' + state.money + ' 元</b></span></div><p class="dialog-note">衣、食、住、行各自独立选档，学期预算为四项之和；确认后才进入选课。高预算从结余支付，低预算退回；学费、基础参保与返乡车票由家庭另行承担，结余跨学期保留。</p>' + ((state.cardDebt || 0) ? '<p class="action-warning">校园卡赔偿待还 ' + state.cardDebt + ' 元，后续收入优先偿还。</p>' : '') + '</section>';
 }
 function walletHistory() {
-  return budgetMarkup() + (state.economy ? '<h3>历次学期拨款</h3><ul>' + state.economy.grants.map(grant => '<li>' + h(game.TERM_NAMES[grant.term - 1]) + '：家庭转入 ' + grant.allowance + ' 元，预留日常开支 ' + grant.livingCost + ' 元，结转 ' + grant.openingMoney + ' 元' + (grant.debtPaid ? '，偿还 ' + grant.debtPaid + ' 元' : '') + '，开学可用 ' + grant.moneyAfter + ' 元。</li>').join('') + '</ul>' : '');
+  return budgetMarkup() + (state.economy ? '<h3>历次学期拨款</h3><ul>' + state.economy.grants.map(grant => {
+    const plan = grant.budget ? game.budgetPlan(grant.budget) : null;
+    const detail = plan ? '（' + ['clothing', 'food', 'housing', 'transport'].map(key => plan.items[key].label + ' ' + plan.items[key].cost + ' 元').join('、') + '）' : '';
+    return '<li>' + h(game.TERM_NAMES[grant.term - 1]) + '：家庭转入 ' + grant.allowance + ' 元，预算 ' + grant.livingCost + ' 元' + detail + '，结转 ' + grant.openingMoney + ' 元' + (grant.debtPaid ? '，偿还 ' + grant.debtPaid + ' 元' : '') + '，开学可用 ' + grant.moneyAfter + ' 元。</li>';
+  }).join('') + '</ul>' : '');
 }
 function statsMarkup() {
   const latest = state.courses.at(-1);
@@ -384,7 +462,7 @@ function renderState() {
   $('#directionBrief').innerHTML = '<div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
   $('#endTermButton').textContent = ({ eventPending: '处理当前事件', examPending: '继续期末考试', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果', ended: '查看本局结局' })[state.phase] || (selectedIds.length ? '结束学期并考试' : '结束学期');
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
-  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'confirmCheat', 'confirmEnding'].includes(dialogMode);
+  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding'].includes(dialogMode);
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
@@ -488,9 +566,10 @@ function openPlace(key, hotspot) {
   audio?.play(PLACE_SOUNDS[key]);
   activePlace = key;
   lastHotspot = hotspot;
-  $('#placeTitle').textContent = game.PLACES[key].title;
-  $('#placeKicker').textContent = '主校区 · ' + game.PLACES[key].kicker;
-  $('#placeDescription').textContent = game.PLACES[key].description;
+  const place = game.placeFor(state, key);
+  $('#placeTitle').textContent = place.title;
+  $('#placeKicker').textContent = '主校区 · ' + place.kicker;
+  $('#placeDescription').textContent = place.description;
   $('#actionFeedback').textContent = '先安排投入，再决定行动。完成之后，会记下这次发生的事。';
   hotspots.forEach((item) => item.classList.toggle('is-active', item.dataset.place === key));
   // 以点击的建筑为圆心，把整屏背景展开成该建筑的插画。
@@ -752,12 +831,12 @@ function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
   stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', npc: '校园偶遇' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', budget: '学期预算', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', npc: '校园偶遇' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
-  $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
-  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'confirmCheat', 'confirmEnding'].includes(mode);
+  $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary, disabled }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked || disabled ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
+  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding'].includes(mode);
   if (!dialog.open) dialog.showModal();
   (dialog.querySelector('input') || $('#dialogTitle')).focus({ preventScroll: true });
   dialog.scrollTop = 0;
@@ -780,7 +859,7 @@ function lockUi() {
 function runCommand(operation, id, expectedRevision, eventInstanceId, investment, extra) {
   if (!state || uiLocked) return null;
   const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId, investment, extra };
-  const result = ['executeAction', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'updateExamAnswers', 'submitExam', 'chatWithNpc'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const result = ['executeAction', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'chooseBudget', 'updateExamAnswers', 'submitExam', 'chatWithNpc'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');
@@ -942,14 +1021,14 @@ function startGame() {
 }
 function familyIntroMarkup() {
   const family = game.budgetFor(state)?.family;
-  return family ? '<section class="wallet-budget"><h3>你的家庭环境 · ' + h(family.label) + '</h3><p>' + h(family.description) + '</p><p class="dialog-note">家庭情况会影响生活费，不改变你的学院、专业与毕业条件。</p></section>' : '';
+  return family ? '<section class="wallet-budget"><h3>你的家庭环境 · ' + h(family.label) + '</h3><p>' + h(family.description) + '</p><p class="dialog-note">家庭情况会影响每学期生活费；开学先选衣、食、住、行预算，再进入选课。它不改变你的学院、专业与毕业条件。</p></section>' : '';
 }
 function showEnrollment() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
-  showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p>' + familyIntroMarkup() + budgetMarkup() + '<p class="dialog-note">背景只影响一项行动加成，不会锁死你的毕业路线。看完玩法说明后先完成本学期选课。</p>', [{ id: 'resume', text: '看看怎么安排' }]);
+  showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p>' + familyIntroMarkup() + budgetMarkup() + '<p class="dialog-note">背景只影响一项行动加成，不会锁死你的毕业路线。看完玩法说明后先确认本学期的衣/食/住/行预算，再完成选课。</p>', [{ id: 'resume', text: '看看怎么安排' }]);
 }
 function showTutorial() {
-  showDialog('tutorial', '八学期怎么安排', '<ol><li>每学期开学先选 3 门课程，再去地图上安排行动。选课决定期末考试覆盖的学科；数学、物理、计算机、交通、土木、经管等定量课程会按主题随机生成计算题。</li><li>点击地图上的地点，先看活动安排和成本，再决定做不做。逛逛、返回都不花钱。</li><li>日常行动和部分事件可选固定投入档位；确认前查看时间及资源成本。勤工与实习按工作量支付固定报酬，其余投入完成后揭晓实际收益，并写入成长记录。课程学习与自习可选配套资料，每学期合计最多增加 4 点学习进度；室友交流可选零食分享。额外消费可以跳过，原有时间与精力成本照常支付。军训成本包含训练和汇演，汇演免费连续完成。</li><li>学习和自学都攒同一个学习进度，它是总评里的平时分（40%）。</li><li>期末参加 5 题考试，覆盖所选课程，每题 20 分；总评 = 平时分 × 40% + 考试 × 60%，60 分达标。</li><li>每学期 12 点时间。消耗精力的行动也会消耗体能；休息能回精力与体能，散步、锻炼也能回体能，但都回不了时间。体能分五档：虚弱、一般、良好、优秀会缩放行动的收益与消耗；低于 25 会生病，只能先去校医院。长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目的成果在之后的学期确认，社团和实习在投入完成后即可收尾。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
+  showDialog('tutorial', '八学期怎么安排', '<ol><li>每学期开学先选衣、食、住、行四个生活预算档位，确认后再从本学期可选课程中选择 3 门，然后去地图上安排行动。四个维度各自选档、按费用求和；普通档合计 4800 元，高预算从结余补，低预算退回。住宿会影响休息恢复、宿舍事件和宿舍描述；「行」目前只有 400 元基础通勤，属性影响待完善。</li><li>选课决定期末考试覆盖的学科；数学、物理、计算机、交通、土木、经管等定量课程会按主题随机生成计算题。</li><li>点击地图上的地点，先看活动安排和成本，再决定做不做。逛逛、返回都不花钱。</li><li>日常行动和部分事件可选固定投入档位；确认前查看时间及资源成本。勤工与实习按工作量支付固定报酬，其余投入完成后揭晓实际收益，并写入成长记录。课程学习与自习可选配套资料，每学期合计最多增加 4 点学习进度；室友交流可选零食分享。额外消费可以跳过，原有时间与精力成本照常支付。军训成本包含训练和汇演，汇演免费连续完成。</li><li>学习和自学都攒同一个学习进度，它是总评里的平时分（40%）。</li><li>期末参加 5 题考试，覆盖所选课程，每题 20 分；总评 = 平时分 × 40% + 考试 × 60%，60 分达标。</li><li>每学期 12 点时间。消耗精力的行动也会消耗体能；休息能回精力与体能，散步、锻炼也能回体能，但都回不了时间。体能分五档：虚弱、一般、良好、优秀会缩放行动的收益与消耗；低于 25 会生病，只能先去校医院。长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目的成果在之后的学期确认，社团和实习在投入完成后即可收尾。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
 }
 function showBackground() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
@@ -1026,7 +1105,7 @@ function showEvent() {
       const amount = eventDraft(choice.id, true);
       const preview = profile && game.previewEventInvestment(state, choice.id, amount);
       const check = game.eventAvailability(state, choice.id, pending.instanceId, amount);
-      return '<article class="event-choice' + (profile ? ' has-investment' : '') + '"><h3>' + h(choice.title) + '</h3><p>' + h(profile ? profile.description : choice.description) + '</p>' + (profile ? investmentControls(choice, profile, preview) : '') + '<div class="action-cost" id="investment-cost-' + choice.id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, choice, null))) + '</div>' + (choice.ending ? '<div class="action-warning">本局结束 · 这个选择没有回头路</div>' : '') + '<button type="button" id="event-choice-' + choice.id + '" data-event-choice="' + choice.id + '" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '"' + (!check.ok || uiLocked ? ' disabled' : '') + '>' + (profile ? '确认投入，' : '选择：') + h(choice.title) + '</button><div class="action-reason" id="investment-reason-' + choice.id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
+      return '<article class="event-choice' + (profile ? ' has-investment' : '') + '"><h3>' + h(choice.title) + '</h3><p>' + h(profile ? profile.description : choice.description) + '</p>' + (profile ? investmentControls(choice, profile, preview) : '') + '<div class="action-cost" id="investment-cost-' + choice.id + '">' + h(costs(preview?.ok ? preview.effect : game.eventChoiceEffect(state, choice.id))) + '</div>' + (choice.ending ? '<div class="action-warning">本局结束 · 这个选择没有回头路</div>' : '') + '<button type="button" id="event-choice-' + choice.id + '" data-event-choice="' + choice.id + '" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '"' + (!check.ok || uiLocked ? ' disabled' : '') + '>' + (profile ? '确认投入，' : '选择：') + h(choice.title) + '</button><div class="action-reason" id="investment-reason-' + choice.id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
     }).join('');
   const note = sick
     ? '身体不适，先处理身体。待处理事件可以先去校医院，之后再回来处理。'
@@ -1047,6 +1126,11 @@ function showEventResult(entry) {
   const title = entry.event ? game.EVENTS[entry.event].title : game.ACTIONS[entry.action].title;
   showDialog('eventResult', title + ' · 结果', '<div class="investment-result"><span class="outcome-badge outcome-' + result.outcome + '">' + (profile.fixedIncome ? '工作完成' : INVESTMENT_OUTCOMES[result.outcome]) + '</span><p class="investment-spent">本次投入 <b>' + spent + ' ' + investmentUnit(result.resource) + '</b>' + (fitnessCost ? '，另消耗 <b>' + fitnessCost + ' 点体能</b>' : '') + '</p>' + (scaled ? '<p class="dialog-note">受体能挡位影响，实际投入以本次结算为准。</p>' : '') + '<p class="investment-story">' + h(result.description + extraFeedback(entry) + debtFeedback(entry)) + '</p><div class="investment-actual"><span>实际变化</span><b>' + h(changeText(entry.changes)) + '</b></div>' + (fitnessCost && entry.changes.fitness > 0 ? '<p class="dialog-note">体能 +' + entry.changes.fitness + ' 是扣除本次 ' + fitnessCost + ' 点消耗后的净变化。</p>' : '') + (capped ? '<p>部分属性已达上限，实际增加量以当前状态为准。</p>' : '') + '<p class="dialog-note">这次结果已经记入成长记录，继续或保存都不会重新结算。</p></div>', [{ id: 'eventContinue', text: state.pendingEvent?.id === 'military2' ? '继续军训汇演' : state.pendingEvent ? '处理下一个事件' : '继续安排' }]);
 
+}
+function needsBudget() {
+  if (!state || state.phase !== 'playing' || (state.selectedCourses || []).length) return false;
+  const grant = game.currentGrant(state);
+  return !!(grant && grant.budget && grant.budgetChosen === false);
 }
 function needsCourseSelection() {
   return !!state && state.phase === 'playing' && !(state.selectedCourses || []).length && !state.history.some((entry) => entry.term === state.term && entry.command.operation === 'executeAction');
@@ -1119,9 +1203,22 @@ function submitExamForm(form) {
   showSummary();
   showToast('考试得分 ' + state.summary.examScore + ' 分，总评 ' + state.summary.grade + ' 分');
 }
+function summaryBudgetLines(summary) {
+  if (summary.economyVersion === 2 && summary.budget?.budget) {
+    const plan = game.budgetPlan(summary.budget.budget);
+    if (plan) {
+      return ['clothing', 'food', 'housing', 'transport'].map(key => '<span>' + h(plan.items[key].label) + ' <b>' + plan.items[key].cost + ' 元</b></span>').join('')
+        + '<span>预算合计 <b>' + summary.livingCost + ' 元</b></span>'
+        + (summary.budget.budgetDelta ? '<span>预算调整 <b>' + (summary.budget.budgetDelta > 0 ? '−' : '+') + Math.abs(summary.budget.budgetDelta) + ' 元</b></span>' : '')
+        + '<span>期末额外扣费 <b>0 元</b></span>';
+    }
+  }
+  if (summary.economyVersion === 1) return '<span>生活费已到账 <b>+' + summary.budget.allowance + ' 元</b></span><span>日常开支已预留 <b>−' + summary.livingCost + ' 元</b></span><span>期末额外扣费 <b>0 元</b></span>';
+  return '<span>旧版生活费 <b>−' + summary.livingCost + ' 元</b></span><span>补助 <b>+' + summary.aid + ' 元</b></span>';
+}
 function summaryMarkup(summary) {
-  if (summary.examScore === undefined) return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>学习进度 ' + summary.preparation + ' / 100。期末成绩按 40 + 学习进度 × 0.6 计算。</p><div class="summary-lines">' + (summary.economyVersion === 1 ? '<span>生活费已到账 <b>+' + summary.budget.allowance + ' 元</b></span><span>日常开支已预留 <b>−' + summary.livingCost + ' 元</b></span><span>期末额外扣费 <b>0 元</b></span>' : '<span>旧版生活费 <b>−' + summary.livingCost + ' 元</b></span><span>补助 <b>+' + summary.aid + ' 元</b></span>') + '<span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
-  return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + h(summary.rating) + ' · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>平时分 ' + summary.usualScore + ' / 100（40%）+ 期末考试 ' + summary.examScore + ' / 100（60%）。</p><p class="dialog-note">本学期课程：' + h(summary.courseNames.join('、')) + '</p><div class="summary-lines">' + (summary.economyVersion === 1 ? '<span>生活费已到账 <b>+' + summary.budget.allowance + ' 元</b></span><span>日常开支已预留 <b>−' + summary.livingCost + ' 元</b></span><span>期末额外扣费 <b>0 元</b></span>' : '<span>旧版生活费 <b>−' + summary.livingCost + ' 元</b></span><span>补助 <b>+' + summary.aid + ' 元</b></span>') + '<span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
+  if (summary.examScore === undefined) return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>学习进度 ' + summary.preparation + ' / 100。期末成绩按 40 + 学习进度 × 0.6 计算。</p><div class="summary-lines">' + summaryBudgetLines(summary) + '<span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
+  return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + h(summary.rating) + ' · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>平时分 ' + summary.usualScore + ' / 100（40%）+ 期末考试 ' + summary.examScore + ' / 100（60%）。</p><p class="dialog-note">本学期课程：' + h(summary.courseNames.join('、')) + '</p><div class="summary-lines">' + summaryBudgetLines(summary) + '<span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
 }
 function requestEndTerm() {
   if (!state) return;
@@ -1188,6 +1285,7 @@ function resumePhase() {
   else if (state.phase === 'summary') showSummary();
   else if (state.phase === 'endingChoice') showEndings();
   else if (state.phase === 'finished' || state.phase === 'ended') showResult();
+  else if (needsBudget()) showBudget();
   else if (needsCourseSelection()) showCourseSelection();
   else dialog.close();
 }
@@ -1288,6 +1386,7 @@ $('#dialogBody').addEventListener('click', (event) => {
     if (button.dataset.examMissing) { focusExamQuestion(state.exam.questions.findIndex((_, index) => state.exam.answers[index] === undefined || state.exam.answers[index] === null)); return; }
   }
   if (button.dataset.cheatExam) { confirmCheatExam(); return; }
+  if (button.dataset.budgetDimension) { selectBudgetTier(button.dataset.budgetDimension, button.dataset.budgetTier); return; }
   if (button.dataset.saveSlot) {
     if (dialogMode === 'save') selectSaveSlot(Number(button.dataset.saveSlot));
   } else if (button.dataset.loadSlot) {
@@ -1356,6 +1455,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
   }
   else if (id === 'settle' && dialogMode === 'confirm') { if (runCommand('endTerm', null, button.dataset.revision)) { saveCurrent(true); showSummary(); } }
   else if (id === 'next' && dialogMode === 'summary') { if (runCommand('continueGame', null, button.dataset.revision)) resumePhase(); }
+  else if (id === 'budgetConfirm' && dialogMode === 'budget') submitBudget();
   else if (id === 'cheatExam' && dialogMode === 'confirmCheat') { if (runCommand('cheatExam', null, button.dataset.revision)) { saveCurrent(true); showResult(); } }
   else if (id === 'backToExam' && dialogMode === 'confirmCheat') showExam();
   else if (id === 'confirmEventEnding' && dialogMode === 'confirmEnding' && terminalChoice) {
@@ -1455,7 +1555,7 @@ window.addEventListener('storage', (event) => {
   }
 });
 dialog.addEventListener('cancel', (event) => {
-  if (!state || ['eventPending', 'examPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment', 'courseSelection', 'exam', 'confirmCheat', 'confirmEnding'].includes(dialogMode)) event.preventDefault();
+  if (!state || ['eventPending', 'examPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment', 'courseSelection', 'budget', 'exam', 'confirmCheat', 'confirmEnding'].includes(dialogMode)) event.preventDefault();
 });
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;

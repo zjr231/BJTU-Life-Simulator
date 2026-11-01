@@ -149,6 +149,21 @@ h1 { margin: 0; font-family: serif; font-size: clamp(25px, 3.5vw, 40px); line-he
 button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .wallet-details { border: 0; background: transparent; color: #215f46; padding: 4px 0; font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
 .wallet-budget { margin: 12px 0; padding: 12px; border: 1px solid #cbd1bb; border-radius: 8px; background: #f8f6ec; }
+.budget-picker { display: grid; gap: 14px; margin: 14px 0; }
+.budget-dimension { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #fffdf6; }
+.budget-dimension legend { font-weight: 700; padding: 0 6px; }
+.budget-dimension > p { margin: 0 0 8px; font-size: 12px; line-height: 1.6; color: #59665d; }
+.budget-tier-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.budget-tier { display: flex; flex-direction: column; gap: 4px; align-items: stretch; text-align: left; font: inherit; border: 1px solid var(--line); border-radius: 6px; background: #fffdf6; color: var(--ink); padding: 8px; cursor: pointer; }
+.budget-tier.is-selected { border-color: #597d58; background: #eef4e9; }
+.budget-tier-head { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
+.budget-tier em { font-style: normal; font-weight: 700; color: #96643d; }
+.budget-tier small { font-size: 11px; color: #59665d; line-height: 1.5; }
+.budget-badge-pending { font-size: 10px; color: #8f2929; border: 1px solid #d9b3a8; border-radius: 999px; padding: 1px 6px; width: max-content; }
+.budget-summary { margin: 12px 0; padding: 12px; border: 1px solid #cbd1bb; border-radius: 8px; background: #f8f6ec; }
+.budget-summary h3 { margin: 0 0 8px; font-size: 16px; }
+.budget-summary p { margin: 4px 0; font-size: 13px; line-height: 1.6; }
+@media (max-width: 720px) { .budget-tier-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .place-screen { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .place-content { width: min(1040px, calc(100% - 64px)); margin: 0 auto; padding: 30px 0 50px; padding: 30px 0 calc(50px + env(safe-area-inset-bottom, 0px)); min-height: 100%; }
 .place-kicker { margin-top: 28px; }
