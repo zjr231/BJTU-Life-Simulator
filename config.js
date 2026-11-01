@@ -1,6 +1,18 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.5.5', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.6.1', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, termLivingCost: 4800, lowMood: 30, fitnessThreshold: 60 };
+  // initialMoney/livingCost are retained only for the current term of legacy saves.
+  const FAMILIES = [
+    { id: 'tight', label: '预算较紧', termAllowance: 5200, weight: 20, description: '家里的收支安排得比较紧凑。父母提前为你留好了这一学期的生活费，日常吃住能够安心，额外花销需要多做些计划。临行前，家里人叮嘱你照顾好身体，有困难记得说。' },
+    { id: 'ordinary', label: '普通家庭', termAllowance: 6000, weight: 60, description: '你来自一个收入稳定的普通家庭。父母会提前给足这一学期的生活费，希望你安心学习，也能交朋友、参加喜欢的活动。日常之外还有一些余量，较大的花销需要自己攒一攒，或与家里商量。' },
+    { id: 'comfortable', label: '相对宽裕', termAllowance: 8000, weight: 17, description: '家里的经济条件比较宽裕。父母支持你在完成学业之余多尝试，给你的学期生活费也留出了探索兴趣的余地。如何安排这些钱，家里希望你学着自己作决定。' },
+    { id: 'affluent', label: '比较优渥', termAllowance: 10000, weight: 3, description: '家里在经济上能给你充足的支持，基本生活之外，也为你的校园体验留出了较多预算。父母愿意支持你的兴趣和计划，而大学里的选择、经历和成长仍需要你亲自完成。' }
+  ];
+  // Optional purchases belong to a few actions, not the general event system.
+  const ACTION_EXTRAS = {
+    materials: { id: 'materials', title: '配套学习资料', actions: ['study', 'selfStudy'], price: 80, limit: 2, bonuses: { preparation: 2 }, description: '为这次课程学习或自习买一份配套练习与讲义，帮助整理刚学过的内容。' },
+    snacks: { id: 'snacks', title: '零食分享', actions: ['chat'], price: 40, limit: 1, bonuses: { social: 1, mood: 2 }, description: '室友交流时买点零食一起分享，让这次聊天更轻松。' }
+  };
   // Fitness tiers scale the costs/rewards of non-health actions and events.
   const FITNESS_TIERS = [
     { id: 'sick', label: '生病', min: 0, max: 24, reward: 0, cost: 0, ill: true },
@@ -34,7 +46,7 @@
     tutoring: { place: 'think', title: '课程补习', description: '约了学长把卡住的章节讲透。两个小时，白板擦了又写。', time: 2, energy: 10, fitnessCost: 2, money: 100, preparation: 25, limit: 2 },
     selfStudy: { place: 'library', title: '自主学习', description: '图书馆靠窗的位子，耳机一戴，按自己的节奏过一遍。', time: 2, energy: 12, fitnessCost: 3, money: 0, preparation: 20, limit: 3 },
     furtherStudy: { place: 'library', title: '深造准备', description: '目标院校的招生简章打印出来，一张张贴进计划本，用荧光笔标好时间线。', time: 1, energy: 8, fitnessCost: 2, money: 0, furtherStudy: 20, minTerm: 5, limit: 2 },
-    work: { place: 'gate', title: '校内勤工助学', description: '在值班室坐一个下午。来人办事就登记，没人就翻书。月底有一笔工资到账。', time: 2, energy: 20, fitnessCost: 4, money: 0, income: 200, social: 2, mood: -5, limit: 3 },
+    work: { place: 'gate', title: '校内勤工助学', description: '在值班室坐一个下午。来人办事就登记，没人就翻书。做完这一轮任务，约定好的报酬当场到账。', time: 2, energy: 20, fitnessCost: 4, money: 0, income: 200, social: 2, mood: -5, limit: 3 },
     jobPreparation: { place: 'gate', title: '求职准备', description: '简历逐行改过，面试常见题抄了半本。对着镜子练自我介绍，练到不再卡壳。', time: 1, energy: 8, fitnessCost: 2, money: 0, jobPreparation: 20, minTerm: 5, limit: 2 },
     rest: { place: 'dorm', title: '休息调整', description: '拉上帘子睡一觉。再睁眼，天都擦黑了。', time: 1, energy: 0, fitnessCost: 0, money: 0, recovery: 30, mood: 3 },
     chat: { place: 'dorm', title: '室友交流', description: '熄灯前的卧谈，从选课聊到食堂的菜，越聊越精神。', time: 1, energy: 5, fitnessCost: 1, money: 0, social: 5, mood: 8, limit: 2 },
@@ -271,12 +283,12 @@
       { id: 'later', fitnessCost: 0, title: '临时退出', description: '在后台站到散场，把演出看完了。' }
     ] },
     ticket1: { priority: 45, title: '春运抢票', description: '秋季学期进入尾声，寒假将近，宿舍群里开始流传抢票攻略。室友说，你回家的票还没买吧。', trigger: '秋季学期末，宿舍群里开始流传抢票攻略', choices: [
-      { id: 'buy', title: '定好闹钟抢票', description: '准点开抢，页面转了三圈。回家和开学返校的车次都安排好了。', time: 1, energy: 3, fitnessCost: 1, mood: 2 },
+      { id: 'buy', title: '定好闹钟抢票', description: '准点开抢，页面转了三圈。回家和开学返校的车次都安排好了，车票由家里另行承担。', time: 1, energy: 3, fitnessCost: 1, mood: 2 },
       { id: 'later', fitnessCost: 0, title: '寒假再说', description: '把群消息设成免打扰。' }
     ] },
     ticket2: { priority: 46, title: '返校的车', description: '寒假结束，该回北京上课了。你在家乡的车站等候返校列车，行李里装着家人准备的特产。', trigger: '春季开学，确认上一学期约好的返校行程', choices: [
       { id: 'board', title: '上车返校', description: '火车开动，家乡慢慢退后，北京和新的学期就在前面。', time: 1, energy: 5, fitnessCost: 1, mood: 6 },
-      { id: 'later', fitnessCost: 0, title: '另作返校安排', description: '原定车次不合适，你改签换乘，返校行程另外安排。' }
+      { id: 'later', fitnessCost: 0, title: '另作返校安排', description: '原定车次不合适，你改签换乘，返校行程另外安排，车票由家里另行承担。' }
     ] },
     ticket3: { priority: 47, title: '家乡特产', description: '假期结束返校，行李箱里塞满了家里塞给你的东西。你拎了一袋特产，分给宿舍。', trigger: '行李箱里塞满了家里塞给你的东西', choices: [
       { id: 'share', title: '分给室友', description: '特产摆了一桌，大家边吃边聊起各自的家乡。', time: 1, energy: 3, fitnessCost: 1, social: 6, mood: 6, experience: 'trip' },
@@ -295,16 +307,16 @@
       { id: 'later', fitnessCost: 0, title: '赶时间，先走了', description: '你绕开它。它也不恼，继续晒太阳。' }
     ] },
     canteen: { priority: 62, title: '益民餐厅新窗口', description: '群里有人发来消息：益民餐厅开了新窗口，队伍拐了两个弯，招牌菜每天都卖断货。', trigger: '新窗口的队伍拐了两个弯', choices: [
-      { id: 'queue', fitnessCost: 1, title: '排队尝一尝', description: '排到窗口，阿姨手一抖，多给了半勺。', time: 1, money: 20, mood: 6, energy: 3 },
+      { id: 'queue', fitnessCost: 1, title: '加餐尝鲜', description: '普通三餐已计入日常开支。今天额外花十元升级套餐，尝尝新窗口的招牌菜。', time: 1, money: 10, mood: 6, energy: 3 },
       { id: 'later', fitnessCost: 0, title: '人太多，改天', description: '拍了张菜单照片，发给室友。' }
     ] },
     card: { priority: 63, title: '地上的校园卡', description: '路上躺着一张校园卡，照片上的面孔有点眼熟，可能是隔壁班的。卡里余额还不少。', trigger: '地上躺着一张校园卡', choices: [
       { id: 'return', fitnessCost: 0, title: '交到失物招领', description: '登记的时候，失主在群里正好喊了一嗓子：卡丢了，急。', time: 1, social: 3, mood: 5 },
       { id: 'later', fitnessCost: 0, title: '放回原处', description: '你把它放回原地。' },
-      { id: 'pocket', fitnessCost: 0, title: '装进口袋', description: '揣进兜里。晚上睡觉前，你把卡塞到了枕头下面。', income: 50, mood: -8, flag: 'cardPocketed' }
+      { id: 'pocket', fitnessCost: 0, title: '装进口袋', description: '你用捡来的校园卡刷了五十元，省下自己的钱。消费记录也留了下来。', income: 50, mood: -8, flag: 'cardPocketed' }
     ] },
     cardTrace: { priority: 15, title: '校园卡消费记录', description: '保卫处贴出一张消费记录：丢卡当天，有人在超市刷了五十元。时间、地点和监控都对得上，失主正在等一个解释。', trigger: '保卫处贴出了消费记录', choices: [
-      { id: 'return', fitnessCost: 0, title: '主动归还并说明', description: '你把卡交回保卫处，补上了那五十元，也把这件事写进了检讨。', mood: -4, social: 2, clearFlag: 'cardPocketed' },
+      { id: 'return', fitnessCost: 0, title: '主动归还并说明', description: '你把卡交回保卫处并说明情况。赔偿五十元；余额不足先支付现有的钱，待还部分从后续收入中补齐。', money: 50, emergencyMoney: true, restitution: true, mood: -4, social: 2, clearFlag: 'cardPocketed' },
       { id: 'deny', fitnessCost: 0, title: '死不承认', description: '你说卡是捡的，钱不是你花的。保卫处把监控截图推到你面前。', ending: 'cardThief', reason: '你选择死不承认，保卫处调出了完整的消费记录。' },
       { id: 'run', fitnessCost: 0, title: '拔腿就跑', description: '你转身就跑，跑过银杏大道、南门和三个路口。监控拍得很清楚。', ending: 'cardThief', reason: '你选择拔腿就跑，监控把你跑过的每一个路口都拍了下来。' }
     ] },
@@ -344,7 +356,7 @@
       { id: 'listen', title: '进场听一场', description: '两个小时的讲座，你记了半页关键词。', time: 1, energy: 2, fitnessCost: 1, social: 3, mood: 3 },
       { id: 'later', fitnessCost: 0, title: '门口转转就走', description: '人太多了。你拍了张海报，发给同学。' }
     ] },
-    drama: { priority: 78, title: '毕业大戏', description: '会堂今晚是话剧社的毕业大戏。票卖得只剩最后几张，门口有人举着手机找票。', trigger: '门口有人举着手机找票', choices: [
+    drama: { priority: 78, title: '毕业大戏', description: '话剧社另有一场单独售票的毕业大戏，与刚才的普通演出不是同一场。门口有人举着手机找票。', trigger: '门口有人举着手机找票', choices: [
       { id: 'buy', fitnessCost: 0, title: '买票进去看', description: '谢幕时全场起立。你在掌声里坐了很久。', time: 1, money: 30, mood: 8 },
       { id: 'later', fitnessCost: 0, title: '看个海报就好', description: '你拍下剧名，想着下次早点买票。' }
     ] },
@@ -376,8 +388,8 @@
       { id: 'browse', title: '凑近看岗位', description: '扫了几个二维码，把感兴趣的展位记下来。', time: 1, energy: 2, fitnessCost: 1, social: 2, mood: 2 },
       { id: 'later', fitnessCost: 0, title: '离毕业还早', description: '你摆摆手。海报上的字，以后再看。' }
     ] },
-    medicalInsurance: { priority: 86, title: '医保办理', description: '校医院的宣传栏贴出通知：大学生医保参保登记开始，门诊报销比例又调高了。', trigger: '宣传栏贴出医保通知', choices: [
-      { id: 'register', fitnessCost: 0, title: '登记参保', description: '排队交材料。从此看病买药，能报一点是一点。', time: 1, money: 100, mood: 3 },
+    medicalInsurance: { priority: 86, title: '医保办理', description: '校医院的宣传栏贴出通知：大学生医保参保登记开始，基础参保费用已由家里另行承担，来核对资料即可。', trigger: '宣传栏贴出医保通知', choices: [
+      { id: 'register', fitnessCost: 0, title: '登记参保', description: '免费核对参保资料，基础参保费用由家里另行承担。本次不改变校医院自付费用。', time: 1, mood: 3 },
       { id: 'later', fitnessCost: 0, title: '下次再说', description: '想着自己身体还行，先把这事放一放。' }
     ] },
     labNight: { priority: 87, title: '实验室通宵', description: '逸夫楼的实验室今晚灯火通明。师兄师姐们赶着跑最后一批数据，白板上写着倒计时。', trigger: '逸夫楼的灯亮到很晚', choices: [
@@ -389,7 +401,7 @@
       { id: 'later', fitnessCost: 0, title: '在门口看看', description: '音乐挺好听。你听了一会儿，转身走了。' }
     ] },
     memorial129: { priority: 89, season: 'autumn', title: '12·9 文艺汇演', description: '纪念「一二·九」运动的文艺汇演在天佑会堂拉开帷幕。整场演出从合唱到话剧，节目单厚厚一沓。', trigger: '天佑会堂挂出了横幅', choices: [
-      { id: 'watch', title: '进场看演出', description: '谢幕的时候全场起立。有人小声说：这台晚会排了三个月。', time: 1, energy: 2, fitnessCost: 1, money: 20, mood: 8, social: 3 },
+      { id: 'watch', title: '进场看演出', description: '谢幕的时候全场起立。有人小声说：这台免费校园汇演排了三个月。', time: 1, energy: 2, fitnessCost: 1, mood: 8, social: 3 },
       { id: 'later', fitnessCost: 0, title: '路过不进去', description: '门口转了一圈，拍了张节目单。' }
     ] }
   };
@@ -572,7 +584,7 @@
     'singer3:perform': [tier('light', '熟悉曲目上场', 4, 1), tier('steady', '认真准备整首歌', 10, 2), tier('deep', '编排完整舞台', 30, 3)],
     'contest2:compete': [tier('light', '检查核心部分', 4, 1), tier('steady', '完整模拟答辩', 12, 2), tier('deep', '深入验证与问答', 36, 3)],
     'seminar:attend': [tier('steady', '带着问题听讲', 3, 1), tier('deep', '整理资料并留下交流', 12, 2)],
-    'graduation:photos': [tier('light', '朋友互拍与简单冲印', 20, 1), tier('steady', '安排正式合影', 80, 2), tier('deep', '拍摄与制作相册', 240, 3)],
+    'graduation:photos': [tier('light', '朋友互拍与简单冲印', 20, 1), tier('steady', '安排正式合影', 80, 2), tier('deep', '拍摄与制作相册', 160, 3)],
     'cat:feed': [tier('light', '放下一小份猫粮', 3, 1), tier('steady', '准备食物并陪它一会儿', 10, 2)],
     'night:join': [tier('steady', '分享最近的事情', 5, 1), tier('deep', '放下手机认真倾听', 15, 2)],
     'lecture:listen': [tier('steady', '认真听完讲座', 2, 1), tier('deep', '准备问题与现场交流', 12, 2)],
@@ -584,6 +596,14 @@
   delete EVENT_INVESTMENTS['military2:perform'];
   for (const [id, tiers] of Object.entries(ACTION_TIERS)) ACTION_INVESTMENTS[id].tiers = tiers;
   for (const [id, tiers] of Object.entries(EVENT_TIERS)) EVENT_INVESTMENTS[id].tiers = tiers;
+  LEGACY_INVESTMENTS.events['graduation:photos'] = { ...EVENT_INVESTMENTS['graduation:photos'], tiers: EVENT_TIERS['graduation:photos'].map(item => item.id === 'deep' ? { ...item, amount: 240 } : { ...item }) };
+  for (const [id, wages] of [['work', [100, 200, 300]], ['internshipWork', [50, 100, 150]]]) {
+    LEGACY_INVESTMENTS.actions[id] = { ...ACTION_INVESTMENTS[id], tiers: ACTION_INVESTMENTS[id].tiers.map(item => ({ ...item })), outcomes: { ...ACTION_INVESTMENTS[id].outcomes } };
+    ACTION_INVESTMENTS[id].fixedIncome = true;
+    ACTION_INVESTMENTS[id].tiers = ACTION_INVESTMENTS[id].tiers.map((item, index) => ({ ...item, income: wages[index] }));
+    ACTION_INVESTMENTS[id].description = '选择明确的工作量和固定报酬，完成本次任务立即到账；体能与随机发挥不改变报酬。';
+    for (const key of Object.keys(ACTION_INVESTMENTS[id].outcomes)) ACTION_INVESTMENTS[id].outcomes[key] = '这一轮任务完成，约定的固定报酬已结算。';
+  }
   Object.assign(EVENT_INVESTMENTS['military1:join'], { default: 18, h: 18, max: 26, label: '整个军训的安排', description: '选择训练与汇演的整体安排。以下成本包含整个流程，汇演不再额外扣费。' });
   // Retain historical choice IDs for old saves, but offer one continuous training flow.
   for (const choice of EVENTS.military1.choices) if (['tug', 'choir'].includes(choice.id)) choice.legacyHidden = true;
@@ -664,7 +684,7 @@
     qualityEffects: { 0: {}, 1: { social: 1, mood: 2 }, 2: { social: 2, mood: 4 } },
     academicPrep: { 1: 3, 2: 5 }
   };
-  const api = { RULES, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -1,0 +1,272 @@
+[
+  {
+    "seed": "wallet-route-1",
+    "semesters": [
+      {
+        "term": 1,
+        "money": 770,
+        "grade": 65,
+        "work": 0
+      },
+      {
+        "term": 2,
+        "money": 1540,
+        "grade": 67,
+        "work": 0
+      },
+      {
+        "term": 3,
+        "money": 2310,
+        "grade": 69,
+        "work": 0
+      },
+      {
+        "term": 4,
+        "money": 3080,
+        "grade": 67,
+        "work": 0
+      },
+      {
+        "term": 5,
+        "money": 3850,
+        "grade": 68,
+        "work": 0
+      },
+      {
+        "term": 6,
+        "money": 4620,
+        "grade": 63,
+        "work": 0
+      },
+      {
+        "term": 7,
+        "money": 5390,
+        "grade": 69,
+        "work": 0
+      },
+      {
+        "term": 8,
+        "money": 6160,
+        "grade": 64,
+        "work": 0
+      }
+    ],
+    "finalMoney": 6160
+  },
+  {
+    "seed": "wallet-route-102",
+    "semesters": [
+      {
+        "term": 1,
+        "money": 770,
+        "grade": 64,
+        "work": 0
+      },
+      {
+        "term": 2,
+        "money": 1540,
+        "grade": 67,
+        "work": 0
+      },
+      {
+        "term": 3,
+        "money": 2310,
+        "grade": 64,
+        "work": 0
+      },
+      {
+        "term": 4,
+        "money": 3080,
+        "grade": 70,
+        "work": 0
+      },
+      {
+        "term": 5,
+        "money": 3850,
+        "grade": 65,
+        "work": 0
+      },
+      {
+        "term": 6,
+        "money": 4620,
+        "grade": 66,
+        "work": 0
+      },
+      {
+        "term": 7,
+        "money": 5390,
+        "grade": 67,
+        "work": 0
+      },
+      {
+        "term": 8,
+        "money": 6160,
+        "grade": 70,
+        "work": 0
+      }
+    ],
+    "finalMoney": 6160
+  },
+  {
+    "seed": "wallet-route-200",
+    "semesters": [
+      {
+        "term": 1,
+        "money": 770,
+        "grade": 64,
+        "work": 0
+      },
+      {
+        "term": 2,
+        "money": 1540,
+        "grade": 68,
+        "work": 0
+      },
+      {
+        "term": 3,
+        "money": 2310,
+        "grade": 63,
+        "work": 0
+      },
+      {
+        "term": 4,
+        "money": 3080,
+        "grade": 62,
+        "work": 0
+      },
+      {
+        "term": 5,
+        "money": 3850,
+        "grade": 68,
+        "work": 0
+      },
+      {
+        "term": 6,
+        "money": 4620,
+        "grade": 70,
+        "work": 0
+      },
+      {
+        "term": 7,
+        "money": 5390,
+        "grade": 62,
+        "work": 0
+      },
+      {
+        "term": 8,
+        "money": 6160,
+        "grade": 70,
+        "work": 0
+      }
+    ],
+    "finalMoney": 6160
+  },
+  {
+    "seed": "wallet-route-300",
+    "semesters": [
+      {
+        "term": 1,
+        "money": 770,
+        "grade": 65,
+        "work": 0
+      },
+      {
+        "term": 2,
+        "money": 1540,
+        "grade": 66,
+        "work": 0
+      },
+      {
+        "term": 3,
+        "money": 2310,
+        "grade": 64,
+        "work": 0
+      },
+      {
+        "term": 4,
+        "money": 3080,
+        "grade": 68,
+        "work": 0
+      },
+      {
+        "term": 5,
+        "money": 3850,
+        "grade": 65,
+        "work": 0
+      },
+      {
+        "term": 6,
+        "money": 4620,
+        "grade": 68,
+        "work": 0
+      },
+      {
+        "term": 7,
+        "money": 5390,
+        "grade": 63,
+        "work": 0
+      },
+      {
+        "term": 8,
+        "money": 6160,
+        "grade": 65,
+        "work": 0
+      }
+    ],
+    "finalMoney": 6160
+  },
+  {
+    "seed": "wallet-route-405",
+    "semesters": [
+      {
+        "term": 1,
+        "money": 770,
+        "grade": 65,
+        "work": 0
+      },
+      {
+        "term": 2,
+        "money": 1540,
+        "grade": 64,
+        "work": 0
+      },
+      {
+        "term": 3,
+        "money": 2310,
+        "grade": 70,
+        "work": 0
+      },
+      {
+        "term": 4,
+        "money": 3080,
+        "grade": 70,
+        "work": 0
+      },
+      {
+        "term": 5,
+        "money": 3850,
+        "grade": 65,
+        "work": 0
+      },
+      {
+        "term": 6,
+        "money": 4620,
+        "grade": 67,
+        "work": 0
+      },
+      {
+        "term": 7,
+        "money": 5390,
+        "grade": 68,
+        "work": 0
+      },
+      {
+        "term": 8,
+        "money": 6160,
+        "grade": 68,
+        "work": 0
+      }
+    ],
+    "finalMoney": 6160
+  }
+]

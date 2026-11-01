@@ -15,7 +15,7 @@
         // still use the original college's discount and must remain readable.
         const original = game.createGame({ seed: state.rng.seed }).background;
         profiles = [state.background, original].map(background => game.getActionInvestment({ ...state, background }, entry.action) || game.LEGACY_INVESTMENTS.actions[entry.action]);
-      } else profiles = [EVENT_INVESTMENTS[entry.event + ':' + entry.choice] || game.LEGACY_INVESTMENTS.events[entry.event + ':' + entry.choice]];
+      } else profiles = [EVENT_INVESTMENTS[entry.event + ':' + entry.choice], game.LEGACY_INVESTMENTS.events[entry.event + ':' + entry.choice]].filter(Boolean);
       const value = entry.investment;
       return profiles.some(profile => profile && object(value) && integer(value.amount, profile.min, profile.max) && value.resource === profile.resource
         && ['light', 'steady', 'deep'].includes(value.level) && Object.hasOwn(profile.outcomes, value.outcome)
@@ -30,6 +30,18 @@
       if (typeof state.nickname !== 'string' || !state.nickname.trim() || state.nickname !== state.nickname.trim() || [...state.nickname].length > 12 || /[\u0000-\u001f\u007f]/.test(state.nickname)) return fail('昵称');
       if (!integer(state.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished', 'ended'].includes(state.phase) || !integer(state.revision, 0, 2000)) return fail('学期、阶段或状态版本');
       for (const [key, max] of [['time', 12], ['energy', 100], ['money', 1000000], ['social', 100], ['fitness', 100], ['mood', 100], ['preparation', 100], ['furtherStudy', 100], ['jobPreparation', 100]]) if (!integer(state[key], 0, max)) return fail(key);
+      if (state.cardDebt !== undefined && !integer(state.cardDebt, 0, 1000000)) return fail('校园卡待还款');
+      if (state.economy !== undefined) {
+        const e = state.economy;
+        if (!object(e) || e.version !== 1 || e.familyId !== game.familyForSeed(state.rng.seed).id || !integer(e.startTerm, 1, state.term) || !Array.isArray(e.grants) || e.grants.length !== state.term - e.startTerm + 1) return fail('家庭与学期预算');
+        const family = game.FAMILIES.find(item => item.id === e.familyId);
+        for (const [index, grant] of e.grants.entries()) {
+          if (!object(grant) || grant.term !== e.startTerm + index || !integer(grant.openingMoney, 0, 1000000) || grant.allowance !== family.termAllowance || grant.livingCost !== RULES.termLivingCost || !integer(grant.debtPaid, 0, grant.allowance - grant.livingCost) || grant.moneyAfter !== grant.openingMoney + grant.allowance - grant.livingCost - grant.debtPaid) return fail('学期拨款记录');
+          if (grant.term === 1 ? grant.openingMoney !== 0 : grant.openingMoney !== state.courses[grant.term - 2]?.moneyAfter) return fail('结余结转');
+        }
+      }
+      const totalDebt = state.history.reduce((sum, entry) => sum + (entry.cardDebtAdded || 0) - (entry.cardDebtPaid || 0), 0) - (state.economy?.grants || []).reduce((sum, grant) => sum + grant.debtPaid, 0);
+      if ((state.cardDebt || 0) !== totalDebt) return fail('校园卡还款记录');
       // 旧存档没有选课/考试字段，读取时按“未选课”处理；一旦存在就必须结构完整。
       const selectedCourses = state.selectedCourses === undefined ? [] : state.selectedCourses;
       if (!Array.isArray(selectedCourses) || ![0, 3].includes(selectedCourses.length) || new Set(selectedCourses).size !== selectedCourses.length || !selectedCourses.every((id) => COURSES.some((course) => course.id === id))) return fail('选课记录');
@@ -54,7 +66,7 @@
       // 重放需要创建时合法的新昵称，旧档昵称不合新规则时用默认昵称重放（昵称不参与随机数抽取，入学背景不受影响）。
       const replayNickname = game.validateNickname(state.nickname).ok ? state.nickname : '北交同学';
       const initialBackground = game.createGame({ nickname: replayNickname, seed: state.rng.seed }).background;
-      const backgroundReplay = game.replay({ nickname: replayNickname, seed: state.rng.seed, commands: state.history.map((entry) => entry.command) });
+      const backgroundReplay = game.replay({ nickname: replayNickname, seed: state.rng.seed, legacyEconomy: !state.economy || state.economy.startTerm > 1, economyStartTerm: state.economy?.startTerm ?? 9, commands: state.history.map((entry) => entry.command) });
       const transferred = state.eventHistory.some((entry) => entry.event === 'transferResult' && entry.choice === 'check') && state.experiences.some((item) => item.type === 'transfer');
       const legacyBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && (item.legacyMajors || []).includes(background.major));
       const validBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && item.majors.includes(background.major));
@@ -88,11 +100,24 @@
       }
       if (chargedIdentities > NPC_CHAT.timeChargeCapPerTerm) return fail('NPC 聊天时间上限');
       if (state.history.length !== state.revision || state.processedCommands.length !== state.revision || new Set(state.processedCommands).size !== state.revision) return fail('操作序号');
+      const extraCounts = new Map();
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
         if (!['executeAction', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');
+        if (command.extra !== undefined || entry.extra !== undefined) {
+          const extra = game.getActionExtra(command.id);
+          const record = entry.extra;
+          if (command.operation !== 'executeAction' || !extra || command.extra !== extra.id || !object(record) || record.id !== extra.id || record.title !== extra.title || !object(record.bonuses) || Object.keys(record.bonuses).length !== Object.keys(extra.bonuses).length || !Object.entries(record.bonuses).every(([key, amount]) => own(extra.bonuses, key) && integer(amount, 0, extra.bonuses[key]))) return fail('可选消费记录');
+          const purchased = Object.values(record.bonuses).some(amount => amount > 0);
+          if (record.price !== (purchased ? extra.price : 0) || record.skipped !== !purchased || entry.changes?.money !== -record.price) return fail('可选消费扣款');
+          if (purchased) {
+            const key = entry.term + ':' + extra.id;
+            extraCounts.set(key, (extraCounts.get(key) || 0) + 1);
+            if (extraCounts.get(key) > extra.limit) return fail('可选消费次数');
+          }
+        }
         const syntheticExit = command.id === 'sickLeave' && entry.choice === 'sickLeave';
         if (command.operation === 'submitEventChoice' && (!own(EVENTS, entry.event) || (!syntheticExit && !EVENTS[entry.event].choices.some((choice) => choice.id === command.id)) || command.eventInstanceId !== entry.instanceId)) return fail('历史事件');
         if (command.operation === 'selectCourses' && (!Array.isArray(command.id) || command.id.length !== 3 || new Set(command.id).size !== 3 || !command.id.every((id) => COURSES.some((course) => course.id === id)))) return fail('历史选课');
@@ -106,7 +131,10 @@
       const expectedCourses = ['summary', 'endingChoice', 'finished'].includes(state.phase) ? state.term : state.term - 1;
       if (state.courses.length !== expectedCourses) return fail('课程记录数量与阶段不符');
       const validCourse = (course, index) => {
-        if (!object(course) || course.term !== index + 1 || course.name !== TERM_NAMES[index] || !integer(course.preparation, 0, 100) || course.passed !== (course.grade >= 60) || course.livingCost !== 300 || !integer(course.aid, 0, 300) || !integer(course.moneyAfter, 0, 1000000) || !integer(course.unusedTime, 0, 12) || !validCounts(course.counts) || !Array.isArray(course.notices) || !course.notices.every((note) => typeof note === 'string' && note.length < 200) || !object(course.attributes) || !['social', 'fitness', 'mood'].every((key) => integer(course.attributes[key], 0, 100))) return false;
+        if (!object(course)) return false;
+        const grant = state.economy?.grants.find(item => item.term === course.term);
+        const validBudget = grant ? course.economyVersion === 1 && course.familyId === state.economy.familyId && same(course.budget, grant) && course.livingCost === grant.livingCost && course.aid === 0 : course.economyVersion === undefined && course.livingCost === RULES.livingCost && integer(course.aid, 0, RULES.livingCost);
+        if (course.term !== index + 1 || course.name !== TERM_NAMES[index] || !integer(course.preparation, 0, 100) || course.passed !== (course.grade >= 60) || !validBudget || !integer(course.moneyAfter, 0, 1000000) || !integer(course.unusedTime, 0, 12) || !validCounts(course.counts) || !Array.isArray(course.notices) || !course.notices.every((note) => typeof note === 'string' && note.length < 200) || !object(course.attributes) || !['social', 'fitness', 'mood'].every((key) => integer(course.attributes[key], 0, 100))) return false;
         const legacy = course.grade === Math.round(40 + course.preparation * 0.6);
         const examined = integer(course.usualScore, 0, 100) && course.usualScore === course.preparation && integer(course.examScore, 0, 100) && course.examScore % 20 === 0 && course.grade === gradeFor(course.usualScore, course.examScore) && course.rating === ratingFor(course.grade) && Array.isArray(course.courseIds) && course.courseIds.length === 3 && new Set(course.courseIds).size === 3 && course.courseIds.every((id) => COURSES.some((item) => item.id === id)) && Array.isArray(course.courseNames) && course.courseNames.length === 3 && course.courseNames.every((name) => typeof name === 'string' && name.length < 200);
         return legacy || examined;

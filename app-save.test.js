@@ -10,6 +10,130 @@ const game = require('./game.js');
 const saves = require('./save.js');
 const sms = require('./sms.js');
 
+test('家庭预算在入学、开学选课、钱包与成长记录中展示；打开收支不重复拨款', () => {
+  const ui = app();
+  ui.start();
+  let seed = 'budget-ui-0';
+  for (let i = 0; game.familyForSeed(seed).id !== 'ordinary'; i++) seed = 'budget-ui-' + (i + 1);
+  ui.evaluate('state = CampusGame.createGame({ seed: ' + JSON.stringify(seed) + ' }); renderState(); showEnrollment()');
+  const enrollment = ui.element('#dialogBody').innerHTML;
+  assert.match(enrollment, /普通家庭/);
+  assert.match(enrollment, /你的家庭环境/);
+  assert.match(enrollment, /你来自一个收入稳定的普通家庭/);
+  assert.doesNotMatch(enrollment, /每月|个月/);
+  ui.evaluate("showBackground()");
+  assert.match(ui.element("#dialogBody").innerHTML, /你的家庭环境/);
+  assert.match(enrollment, /\+6000 元/);
+  assert.match(enrollment, /−4800 元/);
+  assert.match(enrollment, /1200 元/);
+  ui.evaluate('showCourseSelection()');
+  assert.match(ui.element('#dialogBody').innerHTML, /日常开支已预留/);
+  ui.evaluate('dialog.close()');
+  const before = JSON.stringify(ui.evaluate('state'));
+  ui.click('#mapStats', { walletBudget: '1' });
+  assert.equal(ui.evaluate('dialogMode'), 'wallet');
+  assert.match(ui.element('#dialogBody').innerHTML, /历次学期拨款/);
+  assert.match(ui.element('#dialogBody').innerHTML, /当前可用余额/);
+  assert.equal(JSON.stringify(ui.evaluate('state')), before);
+  ui.evaluate('showDialog("history", "成长记录", growthRecord())');
+  assert.match(ui.element('#dialogBody').innerHTML, /家庭生活费到账/);
+});
+
+test('学期总结显示预留4800与期末零扣费，旧版总结仍展示300与补助', () => {
+  const ui = app();
+  ui.start();
+  const modern = ui.evaluate('summaryMarkup(CampusGame.previewSettlement(state))');
+  assert.match(modern, /日常开支已预留 <b>−4800 元/);
+  assert.match(modern, /期末额外扣费 <b>0 元/);
+  assert.doesNotMatch(modern, /−300 元/);
+  const legacy = ui.evaluate('summaryMarkup(CampusGame.previewSettlement({ ...CampusGame.createGame({ legacyEconomy: true }), money: 100 }))');
+  assert.match(legacy, /旧版生活费 <b>−300 元/);
+  assert.match(legacy, /补助 <b>\+200 元/);
+});
+
+test('勤工档位在确认前明确固定100/200/300元报酬', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('dialog.close(); activePlace = "gate"; renderActions()');
+  const html = ui.element('#actionList').innerHTML;
+  for (const amount of [100, 200, 300]) assert.match(html, new RegExp('固定报酬 \\+' + amount + ' 元'));
+});
+
+test('校园卡赔偿余额不足时归还入口可用，界面明确说明待还金额', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = { ...state, money: 10, phase: "eventPending", pendingEvent: { id: "cardTrace", term: 1, instanceId: "daily:cardTrace:1" } }; renderState(); showEvent()');
+  assert.match(ui.element('#dialogBody').innerHTML, /钱包 −10 元/);
+  ui.click('#dialogBody', { eventChoice: 'return', revision: String(ui.evaluate('state.revision')), instance: 'daily:cardTrace:1' });
+  assert.equal(ui.evaluate('state.money'), 0);
+  assert.equal(ui.evaluate('state.cardDebt'), 40);
+  assert.match(ui.element('#actionFeedback').textContent, /赔偿待还 40 元/);
+});
+
+test('学习先询问可选资料；确认前不扣费，购买后仅加2点且不会重复提交', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("think")');
+  const before = ui.evaluate('JSON.stringify(state)');
+  const plain = game.executeAction(JSON.parse(before), 'study', { investment: 15 });
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'actionExtra');
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.match(ui.element('#dialogBody').innerHTML, /80 元/);
+  assert.match(ui.element('#dialogBody').innerHTML, /合计最多 \+4/);
+  ui.click('#dialogButtons', { dialogAction: 'extraBuy' });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.equal(ui.evaluate('state.money'), plain.state.money - 80);
+  assert.equal(ui.evaluate('state.preparation'), plain.state.preparation + 2);
+  assert.equal(ui.evaluate('state.time'), plain.state.time);
+  assert.match(ui.element('#dialogBody').innerHTML, /额外消费：配套学习资料/);
+  const after = ui.evaluate('JSON.stringify(state)');
+  ui.flush();
+  ui.click('#dialogButtons', { dialogAction: 'extraBuy' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), after);
+  ui.click('#dialogSave'); ui.click('#dialogBody', { saveSlot: '2' });
+  ui.click('#loadButton'); ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), after);
+  assert.match(ui.element('#dialogBody').innerHTML, /额外消费：配套学习资料/);
+  assert.match(ui.evaluate('investmentRecord()'), /配套学习资料 −80 元/);
+});
+
+test('取消可选消费不执行行动，跳过按原规则执行；余额不足不额外弹窗', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("library")');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#actionList', { action: 'selfStudy', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'actionExtra');
+  ui.click('#dialogButtons', { dialogAction: 'extraCancel' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.equal(ui.element('#termDialog').open, false);
+  ui.click('#actionList', { action: 'selfStudy', revision: String(ui.evaluate('state.revision')) });
+  ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
+  assert.equal(ui.evaluate('state.history.at(-1).extra'), undefined);
+  assert.equal(ui.evaluate('state.money'), JSON.parse(before).money);
+  ui.flush();
+  ui.evaluate('dialog.close(); state.money = 0; openPlace("think")');
+  const revision = ui.evaluate('state.revision');
+  ui.click('#actionList', { action: 'study', revision: String(revision) });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.equal(ui.evaluate('state.money'), 0);
+  assert.equal(ui.evaluate('state.revision'), revision + 1);
+});
+
+test('仅三项行动有可选消费，付费确认使用原版本号，过期时不扣费', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("think")');
+  assert.equal(ui.evaluate('offerActionExtra("tutoring", state.revision, 100)'), false);
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  ui.evaluate('state = CampusGame.chatWithNpc(state, { identityId: "student", quality: 1 }).state');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#dialogButtons', { dialogAction: 'extraBuy' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.match(ui.element('#toast').textContent, /更新/);
+});
+
 function memory() {
   const data = new Map();
   return { data, getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
@@ -942,6 +1066,7 @@ test('虚弱挡位的投入结果页显示实际消耗', () => {
   ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '15' });
   assert.match(ui.element('#investment-cost-action-study').textContent, /精力 −19/);
   ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  if (ui.evaluate('dialogMode') === 'actionExtra') ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');
   assert.match(ui.element('#dialogBody').innerHTML, /本次投入 <b>19 点精力<\/b>/);
   assert.equal(ui.evaluate('state.history.at(-1).investment.amount'), 15);
@@ -957,6 +1082,7 @@ test('常规课程可调成本，提交后揭晓并保存结果；下一行动�
   assert.match(ui.element('#investment-cost-action-study').textContent, /精力 −15.*体能 −3/);
   assert.equal(ui.evaluate('JSON.stringify(state)'), before);
   ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  if (ui.evaluate('dialogMode') === 'actionExtra') ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');
   assert.equal(ui.evaluate('state.energy'), 65);
   assert.equal(ui.evaluate('state.history.find(entry => entry.investment).investment.amount'), 15);
@@ -971,6 +1097,7 @@ test('常规课程可调成本，提交后揭晓并保存结果；下一行动�
   ui.evaluate('openPlace("think")');
   ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '5' });
   ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  if (ui.evaluate('dialogMode') === 'actionExtra') ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
   assert.equal(ui.evaluate('state.pendingEvent.id'), 'military1');
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');
   ui.flush(); ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
@@ -988,12 +1115,14 @@ test('界面同步展示联动时间，时间不够禁用高投入，少量投�
   assert.equal(ui.element('#action-choice-study').disabled, true);
   assert.match(ui.element('#investment-reason-action-study').textContent, /时间不够/);
   ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  if (ui.evaluate('dialogMode') === 'actionExtra') ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
   assert.equal(ui.evaluate('JSON.stringify(state)'), original);
   ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '5' });
   assert.match(ui.element('#investment-cost-action-study').textContent, /时间 −1.*精力 −5/);
   assert.equal(ui.element('#action-choice-study').disabled, false);
   assert.doesNotMatch(ui.element('#actionList').innerHTML, /预计|预期|平均收益|常见|investment-preview/);
   ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  if (ui.evaluate('dialogMode') === 'actionExtra') ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
   assert.equal(ui.evaluate('state.time'), 1);
   assert.equal(ui.evaluate('state.energy'), 75);
   assert.match(ui.element('#dialogBody').innerHTML, /时间 −1.*精力 −5/);

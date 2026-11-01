@@ -40,6 +40,7 @@ test('19 项日常行动支持三类资源投入，实际成本、随机回报�
       const effect = { ...game.getAction(state, id), [profile.resource]: amount };
       effect.time = profile.tiers.find(tier => tier.amount === amount).time;
       for (const [key, ceiling] of Object.entries(profile.rewards)) effect[key] = Math.round(ceiling * q * factor);
+      if (profile.fixedIncome) effect.income = profile.tiers.find(tier => tier.amount === amount).income;
       assert.deepEqual(result.changes, game.previewChanges(state, effect), id);
       assert.equal(result.entry.command.investment, amount);
       assert.equal(result.entry.investment.resource, profile.resource);

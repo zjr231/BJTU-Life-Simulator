@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const game = require('./game.js');
 
 function actionableState(id) {
-  const state = game.createGame();
+  const state = game.createGame({ legacyEconomy: true });
   const action = game.ACTIONS[id];
   state.term = 5;
   if (action.sickOnly) state.fitness = 24;
@@ -98,7 +98,7 @@ test('结算预览不修改状态，成绩不跨学期累加，资源仅扣一�
   assert.equal(preview.grade, Math.round(40 + state.preparation * 0.6));
   assert.equal(preview.passed, true);
   const settled = game.endTerm(state).state;
-  assert.equal(settled.money, state.money - 300);
+  assert.equal(settled.money, state.money);
   assert.equal(settled.courses.length, 1);
   assert.equal(game.endTerm(settled).ok, false);
   assert.equal(game.executeAction(settled, 'work').ok, false);
@@ -111,13 +111,13 @@ test('结算预览不修改状态，成绩不跨学期累加，资源仅扣一�
   assert.equal(next.social, state.social);
   assert.equal(next.fitness, state.fitness);
   assert.equal(next.mood, state.mood);
-  assert.equal(next.money, settled.money);
+  assert.equal(next.money, settled.money + game.budgetFor(next).grant.allowance - 4800);
   assert.deepEqual(next.courses, settled.courses);
   assert.equal(game.previewSettlement(next).grade, 40);
 });
-test('零时间、零精力、无资金仍可结算：援助刚好补足支出', () => {
+test('旧规则存档零时间、零精力、无资金仍可结算：援助刚好补足支出', () => {
   for (const money of [0, 299, 300, 301]) {
-    const state = { ...game.createGame(), money, time: 0, energy: 0 };
+    const state = { ...game.createGame({ legacyEconomy: true }), money, time: 0, energy: 0 };
     const result = game.endTerm(state);
     assert.equal(result.ok, true);
     assert.equal(result.summary.aid, Math.max(0, 300 - money));
@@ -176,7 +176,7 @@ test('初始五项属性，成绩由记录生成，科研不进入原型', () =>
   assert.equal(state.social, 20);
   assert.equal(state.fitness, 50);
   assert.equal(state.mood, 70);
-  assert.equal(state.money, 1000);
+  assert.equal(state.money, game.familyForSeed(state.rng.seed).termAllowance - 4800);
   assert.equal(state.courses.length, 0);
   assert.equal(state.preparation, 0);
   assert.equal(Object.hasOwn(state, 'research'), false);
@@ -324,7 +324,7 @@ test('春季补测按标记触发：通过清标记留经历，未通过保留�
 });
 
 test('低心情与体测条件同时满足时，依次处理，不遗漏或提前结算', () => {
-  const pending = game.executeAction({ ...game.createGame(), term: 3, mood: 20 }, 'study').state;
+  const pending = game.executeAction({ ...game.createGame({ legacyEconomy: true }), term: 3, mood: 20 }, 'study').state;
   assert.equal(pending.pendingEvent.id, 'roommateCare');
   const second = game.submitEventChoice(pending, 'later').state;
   const secondPending = game.executeAction(second, 'study').state;

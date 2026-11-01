@@ -3,7 +3,7 @@
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
   const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
-  const { RULES, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
+  const { RULES, FAMILIES, ACTION_EXTRAS, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
   const { COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
@@ -16,6 +16,26 @@
   const SICK_LEAVE_ID = 'sickLeave';
   const REWARD_KEYS = ['preparation', 'social', 'mood', 'fitness', 'furtherStudy', 'jobPreparation'];
   const COST_KEYS = ['energy', 'fitnessCost'];
+  function familyForSeed(seed) {
+    // A separate stream keeps college, courses and existing event RNG unchanged.
+    const roll = random.draw(random.create(String(seed) + ':family-budget-v1')).number * FAMILIES.reduce((sum, item) => sum + item.weight, 0);
+    let total = 0;
+    return FAMILIES.find(item => (total += item.weight) > roll) || FAMILIES.at(-1);
+  }
+  function startEconomyTerm(state) {
+    const economy = state.economy || { version: 1, familyId: familyForSeed(state.rng.seed).id, startTerm: state.term, grants: [] };
+    if (economy.grants.some(item => item.term === state.term)) return state;
+    const family = FAMILIES.find(item => item.id === economy.familyId);
+    const allowance = family.termAllowance;
+    const livingCost = RULES.termLivingCost;
+    const debtPaid = Math.min(state.cardDebt || 0, allowance - livingCost);
+    const grant = { term: state.term, openingMoney: state.money, allowance, livingCost, debtPaid, moneyAfter: state.money + allowance - livingCost - debtPaid };
+    return { ...state, money: grant.moneyAfter, cardDebt: (state.cardDebt || 0) - debtPaid, economy: { ...economy, grants: [...economy.grants, grant] } };
+  }
+  function budgetFor(state) {
+    if (!state.economy) return null;
+    return { family: FAMILIES.find(item => item.id === state.economy.familyId), grant: state.economy.grants.find(item => item.term === state.term) };
+  }
   function fitnessTier(stateOrValue) {
     const value = typeof stateOrValue === 'number' ? stateOrValue : stateOrValue.fitness;
     return FITNESS_TIERS.find(tier => value >= tier.min && value <= tier.max) || FITNESS_TIERS[0];
@@ -51,13 +71,14 @@
     const second = random.draw(first.rng);
     const chains = {};
     for (const id of Object.keys(CHAIN_NAMES)) chains[id] = { status: 'idle', progress: 0, startedTerm: 0, deadline: 0, nextEligibleTerm: 1, reviewAfter: 0 };
-    return {
+    const state = {
       version: RULES.version, rulesVersion: RULES.version, saveFormatVersion: RULES.saveFormatVersion, appVersion: RULES.appVersion,
       nickname: nickname.value, background: { id: background.id, college: background.college, major: background.majors[Math.floor(second.number * background.majors.length)] }, rng: second.rng,
       term: 1, phase: 'playing', revision: 0, processedCommands: [], time: RULES.time, energy: RULES.energy, money: RULES.initialMoney,
       social: RULES.initialSocial, fitness: RULES.initialFitness, mood: RULES.initialMood, preparation: 0, furtherStudy: 0, jobPreparation: 0,
       counts: {}, courses: [], selectedCourses: [], exam: null, history: [], summary: null, pendingEvent: null, eventQueue: [], eventFlags: {}, eventHistory: [], experiences: [], chains, endingOptions: null, result: null, npcChats: {}
     };
+    return options.legacyEconomy ? state : startEconomyTerm({ ...state, money: 0 });
   }
   function getAction(state, id) {
     if (!own(ACTIONS, id)) return null;
@@ -77,7 +98,7 @@
     const fitnessTarget = effect.fitnessFloor === undefined ? fitnessBase : Math.max(fitnessBase, effect.fitnessFloor);
     return {
       time: effect.time ? -effect.time : 0, energy: clamp(state.energy - (effect.energy || 0) + (effect.recovery || 0), 100) - state.energy,
-      money: (effect.income || 0) - (effect.money || 0), preparation: clamp(state.preparation + (effect.preparation || 0), 100) - state.preparation,
+      money: (effect.income || 0) - (effect.money || 0) - Math.min(state.cardDebt || 0, effect.income || 0), preparation: clamp(state.preparation + (effect.preparation || 0), 100) - state.preparation,
       social: clamp(state.social + (effect.social || 0), 100) - state.social, fitness: clamp(fitnessTarget, 100) - state.fitness,
       mood: clamp(state.mood + (effect.mood || 0), 100) - state.mood,
       furtherStudy: clamp(state.furtherStudy + (effect.furtherStudy || 0), 100) - state.furtherStudy,
@@ -94,8 +115,9 @@
   }
   function getActionInvestment(state, id) {
     if (!own(ACTION_INVESTMENTS, id)) return null;
-    const original = ACTION_INVESTMENTS[id];
+    const original = !state.economy && ['work', 'internshipWork'].includes(id) ? LEGACY_INVESTMENTS.actions[id] : ACTION_INVESTMENTS[id];
     const profile = { ...original, rewards: { ...original.rewards }, tiers: original.tiers.map(tier => ({ ...tier })) };
+    if (!state.economy) delete profile.fixedIncome;
     const action = getAction(state, id);
     const discount = original.resource === 'energy' ? ACTIONS[id].energy - action.energy : 0;
     if (discount) {
@@ -148,9 +170,31 @@
     if (!action.chain && !Object.values(previewChanges(state, action)).some((value) => value > 0)) return { ok: false, reason: '这项行动的收益已经到头了' };
     return { ok: true, reason: '' };
   }
-  function applyChanges(state, changes) {
+  function getActionExtra(id) {
+    return Object.values(ACTION_EXTRAS).find(extra => extra.actions.includes(id)) || null;
+  }
+  function extraBonuses(state, changes, extra) {
+    return Object.fromEntries(Object.entries(extra.bonuses).map(([key, amount]) => [key, Math.max(0, Math.min(amount, 100 - state[key] - changes[key]))]));
+  }
+  function actionExtraAvailability(state, id, investment, extraId) {
+    const baseCheck = availability(state, id, investment);
+    if (!baseCheck.ok) return baseCheck;
+    const extra = getActionExtra(id);
+    if (!extra || extraId !== extra.id) return { ok: false, reason: '这个行动没有这项可选消费' };
+    const used = state.history.filter(entry => entry.term === state.term && entry.extra?.id === extra.id && entry.extra.price > 0).length;
+    if (used >= extra.limit) return { ok: false, reason: extra.title + '本学期已购买 ' + extra.limit + ' 次' };
+    const effect = previewActionInvestment(state, id, investment)?.effect || fitnessAdjustedEffect(state, getAction(state, id), id);
+    const check = resourceCheck(state, { ...effect, money: (effect.money || 0) + extra.price });
+    if (!check.ok) return check;
+    const bonuses = extraBonuses(state, previewChanges(state, effect), extra);
+    if (!Object.values(bonuses).some(amount => amount > 0)) return { ok: false, reason: '本次预计已达到属性上限，无需额外购买' };
+    return { ok: true, reason: '', extra, used };
+  }
+  function applyChanges(state, changes, effect = {}) {
     const next = { ...state };
     for (const [key, value] of Object.entries(changes)) next[key] += value;
+    const debtPaid = Math.min(state.cardDebt || 0, effect.income || 0);
+    if (debtPaid) next.cardDebt = state.cardDebt - debtPaid;
     return next;
   }
   function instanceFor(state, id) { return { id, term: state.term, instanceId: (EVENTS[id].chain || 'daily') + ':' + id + ':' + state.term }; }
@@ -261,6 +305,12 @@
     if (!command.ok) return command;
     const check = availability(state, id, options.investment);
     if (!check.ok) return { ...check, state };
+    let extra;
+    if (options.extra !== undefined) {
+      const extraCheck = actionExtraAvailability(state, id, options.investment, options.extra);
+      if (!extraCheck.ok) return { ...extraCheck, state };
+      extra = extraCheck.extra;
+    }
     const profile = getActionInvestment(state, id);
     let action = getAction(state, id);
     let rng = state.rng;
@@ -277,13 +327,26 @@
       action = fitnessAdjustedEffect(state, action, id);
     }
     const changes = previewChanges(state, action);
-    let next = { ...applyChanges(state, changes), rng, counts: { ...state.counts, [id]: (state.counts[id] || 0) + 1 } };
+    let extraRecord;
+    if (extra) {
+      // Apply a small absolute bonus after fitness scaling; never amplify it again.
+      const bonuses = extraBonuses(state, changes, extra);
+      const purchased = Object.values(bonuses).some(amount => amount > 0);
+      const price = purchased ? extra.price : 0;
+      changes.money -= price;
+      for (const [key, amount] of Object.entries(bonuses)) changes[key] += amount;
+      extraRecord = { id: extra.id, title: extra.title, price, bonuses, skipped: !purchased };
+    }
+    let next = { ...applyChanges(state, changes, action), rng, counts: { ...state.counts, [id]: (state.counts[id] || 0) + 1 } };
     if (action.kind === 'work') next.chains = { ...state.chains, [action.chain]: { ...state.chains[action.chain], progress: state.chains[action.chain].progress + 1 } };
     next = attachEvents(next, id);
-    return commit(state, next, { operation: 'executeAction', id, ...(investment ? { investment: investment.amount } : {}) }, { action: id, title: action.title, changes, fitnessCost: action.fitnessCost || 0, ...(investment ? { investment } : {}) }, command.commandId);
+    const cardDebtPaid = Math.min(state.cardDebt || 0, action.income || 0);
+    return commit(state, next, { operation: 'executeAction', id, ...(investment ? { investment: investment.amount } : {}), ...(extra ? { extra: extra.id } : {}) }, { action: id, title: action.title, changes, ...(extraRecord ? { extra: extraRecord } : {}), ...(cardDebtPaid ? { cardDebtPaid } : {}), fitnessCost: action.fitnessCost || 0, ...(investment ? { investment } : {}) }, command.commandId);
   }
   function getEventInvestment(state, choiceId) {
-    return state.pendingEvent ? EVENT_INVESTMENTS[state.pendingEvent.id + ':' + choiceId] || null : null;
+    if (!state.pendingEvent) return null;
+    const key = state.pendingEvent.id + ':' + choiceId;
+    return (!state.economy && key === 'graduation:photos' ? LEGACY_INVESTMENTS.events[key] : EVENT_INVESTMENTS[key]) || null;
   }
   function investmentCheck(profile, amount) {
     return Number.isSafeInteger(amount) && profile.tiers.some(tier => tier.amount === amount)
@@ -302,6 +365,7 @@
     const effect = { ...choice, [profile.resource]: amount };
     effect.time = profile.tiers.find(tier => tier.amount === amount).time;
     for (const [key, ceiling] of Object.entries(profile.rewards)) effect[key] = Math.round(ceiling * q * factor);
+    if (profile.fixedIncome) effect.income = profile.tiers.find(tier => tier.amount === amount).income;
     return effect;
   }
   // Read-only preview: slider movement and reopening a saved event never draw RNG.
@@ -325,7 +389,7 @@
       ? (ratio >= 1.2 ? 'surprise' : 'limited') : ratio >= 1.2 ? 'good' : 'steady';
     const spent = adjustedEffect && adjustedEffect[profile.resource] !== undefined ? adjustedEffect[profile.resource] : preview.amount;
     return { amount: preview.amount, spent, resource: profile.resource, fitnessCost: adjustedEffect ? (adjustedEffect.fitnessCost || 0) : 0, tier: preview.level, level: preview.level, outcome,
-      description: profile.plans[{ light: 0, steady: 1, deep: 2 }[preview.level]] + profile.outcomes[outcome] };
+      description: profile.plans[{ light: 0, steady: 1, deep: 2 }[preview.level]] + profile.outcomes[outcome] + (profile.fixedIncome ? '固定报酬 ' + adjustedEffect.income + ' 元。' : '') };
   }
   function eventAvailability(state, choiceId, instanceId, requestedAmount) {
     if (state.phase !== 'eventPending' || !state.pendingEvent) return { ok: false, reason: '当前没有待处理事件' };
@@ -388,8 +452,11 @@
     effect = fitnessAdjustedEffect(state, effect, null);
     if (profile) investment = describeInvestment(profile, investmentPreview, investmentFactor, investmentCurveData.mean, effect);
     const changes = previewChanges(state, effect);
-    const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, outcome: outcome.title || null, changes, fitnessCost: effect.fitnessCost || 0, ...(investment ? { investment } : {}) };
-    let next = { ...applyChanges(state, changes), rng, pendingEvent: null, phase: 'playing', eventFlags: { ...state.eventFlags, [pending.instanceId]: true }, eventHistory: [...state.eventHistory, entry] };
+    const cardDebtAdded = choice.restitution ? Math.max(0, choice.money - (effect.money || 0)) : 0;
+    const cardDebtPaid = Math.min(state.cardDebt || 0, effect.income || 0);
+    const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, outcome: outcome.title || null, changes, ...(cardDebtAdded ? { cardDebtAdded } : {}), ...(cardDebtPaid ? { cardDebtPaid } : {}), fitnessCost: effect.fitnessCost || 0, ...(investment ? { investment } : {}) };
+    let next = { ...applyChanges(state, changes, effect), rng, pendingEvent: null, phase: 'playing', eventFlags: { ...state.eventFlags, [pending.instanceId]: true }, eventHistory: [...state.eventHistory, entry] };
+    if (cardDebtAdded) next.cardDebt = (next.cardDebt || 0) + cardDebtAdded;
     if (event.chain) {
       const chain = { ...state.chains[event.chain] };
       if (choice.chainEffect === 'accept') Object.assign(chain, { status: 'active', startedTerm: state.term, deadline: Math.min(8, state.term + 1), progress: 0, reviewAfter: state.term });
@@ -440,8 +507,9 @@
     const graded = selectedCoursesOf(state).length > 0;
     const score = graded ? (examScore === null ? (state.exam?.score ?? 0) : examScore) : null;
     const grade = graded ? gradeFor(usualScore, score) : Math.round(40 + state.preparation * 0.6);
-    const aid = Math.max(0, RULES.livingCost - state.money);
-    const summary = { term: state.term, name: TERM_NAMES[state.term - 1], preparation: state.preparation, grade, passed: grade >= 60, livingCost: RULES.livingCost, aid, moneyAfter: state.money + aid - 300, unusedTime: state.time, counts: { ...state.counts }, attributes: { social: state.social, fitness: state.fitness, mood: state.mood }, notices: settlementChains(state).notices };
+    const budget = budgetFor(state);
+    const aid = budget ? 0 : Math.max(0, RULES.livingCost - state.money);
+    const summary = { term: state.term, name: TERM_NAMES[state.term - 1], preparation: state.preparation, grade, passed: grade >= 60, livingCost: budget ? budget.grant.livingCost : RULES.livingCost, aid, moneyAfter: budget ? state.money : state.money + aid - RULES.livingCost, unusedTime: state.time, counts: { ...state.counts }, attributes: { social: state.social, fitness: state.fitness, mood: state.mood }, notices: settlementChains(state).notices, ...(budget ? { economyVersion: 1, budget: clone(budget.grant), familyId: budget.family.id } : {}) };
     if (graded) Object.assign(summary, { usualScore, examScore: score, rating: ratingFor(grade), courseIds: [...selectedCoursesOf(state)], courseNames: selectedCoursesOf(state).map((id) => courseById(id)?.name || id) });
     return summary;
   }
@@ -555,9 +623,10 @@
     const command = commandCheck(state, options, 'continueGame');
     if (!command.ok) return command;
     if (state.phase !== 'summary') return { ok: false, reason: '当前没有待确认的学期总结', state };
+    const followingTerm = { ...state, term: state.term + 1, phase: 'playing', time: 12, energy: 80, preparation: 0, counts: {}, summary: null, selectedCourses: [], exam: null, npcChats: {} };
     const next = state.term === 8
       ? { ...state, phase: 'endingChoice', endingOptions: evaluateEndings(state), selectedCourses: [], exam: null }
-      : attachEvents({ ...state, term: state.term + 1, phase: 'playing', time: 12, energy: 80, preparation: 0, counts: {}, summary: null, selectedCourses: [], exam: null, npcChats: {} }, 'newTerm');
+      : attachEvents(!state.economy && followingTerm.term < (options.economyStartTerm || 1) ? followingTerm : startEconomyTerm(followingTerm), 'newTerm');
     return commit(state, next, { operation: 'continueGame' }, { action: 'continueGame', title: state.term === 8 ? '评估毕业方向' : '进入下一学期' }, command.commandId);
   }
   function chooseEnding(state, id, options = {}) {
@@ -616,10 +685,10 @@
     const validator = typeof module !== 'undefined' && module.exports ? require('./state-validation.js') : root.CampusStateValidation;
     return validator.validate(state, api, random);
   }
-  function replay({ nickname, seed, commands }) {
-    let state = createGame({ nickname, seed });
+  function replay({ nickname, seed, commands, legacyEconomy = false, economyStartTerm = legacyEconomy ? 2 : 1 }) {
+    let state = createGame({ nickname, seed, legacyEconomy: legacyEconomy || economyStartTerm > 1 });
     for (const [index, command] of commands.entries()) {
-      const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment };
+      const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment, extra: command.extra, economyStartTerm };
       const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), cheatExam: () => cheatExam(state, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args) };
       if (!own(handlers, command.operation)) return { ok: false, reason: '第 ' + (index + 1) + ' 步操作未知', state };
       const result = handlers[command.operation]();
@@ -628,7 +697,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

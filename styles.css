@@ -147,6 +147,8 @@ h1 { margin: 0; font-family: serif; font-size: clamp(25px, 3.5vw, 40px); line-he
 .history-button { background: transparent; color: var(--deep); }
 .session-note { margin: 12px 0 0; color: #65716a; font-size: 10px; line-height: 1.5; }
 button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
+.wallet-details { border: 0; background: transparent; color: #215f46; padding: 4px 0; font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.wallet-budget { margin: 12px 0; padding: 12px; border: 1px solid #cbd1bb; border-radius: 8px; background: #f8f6ec; }
 .place-screen { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .place-content { width: min(1040px, calc(100% - 64px)); margin: 0 auto; padding: 30px 0 50px; padding: 30px 0 calc(50px + env(safe-area-inset-bottom, 0px)); min-height: 100%; }
 .place-kicker { margin-top: 28px; }
