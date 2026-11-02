@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function validate(state, game, random) {
-    const { RULES, ACTIONS, EVENTS, EVENT_INVESTMENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, TERMINAL_ENDINGS, gradeFor, ratingFor, NPC_CHAT } = game;
+    const { RULES, ACTIONS, EVENTS, EVENT_INVESTMENTS, BASKETBALL, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, TERMINAL_ENDINGS, gradeFor, ratingFor, NPC_CHAT } = game;
     const fail = (reason) => ({ ok: false, reason: '存档状态无效：' + reason });
     const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
     const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -91,8 +91,13 @@
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
+        if (!['executeAction', 'completeBasketball', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');
+        if (command.operation === 'completeBasketball') {
+          if (!integer(command.hits, 0, BASKETBALL.maxHits) || entry.action !== 'basketball') return fail('历史篮球');
+          const reward = game.basketballReward(command.hits);
+          if (entry.hits !== command.hits || entry.score !== reward.score || entry.tier !== reward.id) return fail('历史篮球结果');
+        }
         const syntheticExit = command.id === 'sickLeave' && entry.choice === 'sickLeave';
         if (command.operation === 'submitEventChoice' && (!own(EVENTS, entry.event) || (!syntheticExit && !EVENTS[entry.event].choices.some((choice) => choice.id === command.id)) || command.eventInstanceId !== entry.instanceId)) return fail('历史事件');
         if (command.operation === 'selectCourses' && (!Array.isArray(command.id) || command.id.length !== 3 || new Set(command.id).size !== 3 || !command.id.every((id) => COURSES.some((course) => course.id === id)))) return fail('历史选课');

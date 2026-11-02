@@ -197,6 +197,19 @@
       <div class="place-stamp" aria-hidden="true">CAMPUS<br><span>北交人生</span></div>
     </section>
 
+    <dialog class="basketball-dialog" id="basketballDialog" aria-label="投篮小游戏">
+      <div class="basketball-shell">
+        <div class="basketball-hud">
+          <div class="basketball-stat"><span>时间</span><b id="basketballTime">60</b></div>
+          <div class="basketball-stat"><span>得分</span><b id="basketballScore">0</b></div>
+          <div class="basketball-stat"><span>命中</span><b id="basketballHits">0</b></div>
+          <button type="button" class="basketball-quit" id="basketballQuit">结束本局</button>
+        </div>
+        <canvas id="basketballCanvas" tabindex="0" aria-label="从三分线后拖拽篮球投篮，松手出手；键盘方向键调整，空格出手"></canvas>
+        <p class="basketball-help">从三分线后拖拽投篮，松手出手；篮筐会缓慢移动。</p>
+      </div>
+    </dialog>
+
     <dialog class="term-dialog" id="termDialog" aria-labelledby="dialogTitle">
       <div class="dialog-kicker">北交人生 · 学期回顾</div>
       <button type="button" class="dialog-save utility-button" id="dialogSave" hidden>保存当前进度</button>
@@ -216,6 +229,8 @@
   <script src="audio.js"></script>
   <script src="sms.js"></script>
   <script src="npc.js"></script>
+  <script src="vendor/planck.min.js"></script>
+  <script src="basketball.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
