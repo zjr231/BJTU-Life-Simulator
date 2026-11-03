@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="北交人生">
   <meta name="format-detection" content="telephone=no">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261103-8">
 </head>
 <body>
   <main class="game-shell" aria-label="北交人生校园地图">
@@ -115,7 +115,8 @@
         <nav class="app-menu" id="appMenu" aria-label="功能导航">
           <button type="button" class="app-menu-button" data-panel="status" aria-expanded="false">角色</button>
           <button type="button" class="app-menu-button" data-panel="term" aria-expanded="false">学业</button>
-          <button type="button" class="app-menu-button" data-panel="goals" aria-expanded="false">发展</button>
+          <button type="button" class="app-menu-button" data-panel="goals" aria-expanded="false">手头的事<span class="menu-badge" id="advisoryBadge" hidden></span></button>
+          <button type="button" class="app-menu-button" data-panel="resume" aria-expanded="false">简历</button>
           <button type="button" class="app-menu-button" data-panel="records" aria-expanded="false">记录</button>
           <button type="button" class="app-menu-button" data-panel="saves" aria-expanded="false">存档</button>
           <button type="button" class="app-menu-button" data-panel="settings" aria-expanded="false">设置</button>
@@ -142,15 +143,27 @@
           <button class="end-term-button" id="endTermButton" type="button">结束学期</button>
         </section>
 
-        <section class="app-panel" id="panelGoals" data-panel-name="goals" hidden aria-label="发展与事件链">
-          <h3 class="app-panel-title">发展与事件链</h3>
-          <div class="panel-list" id="directionBrief"></div>
-          <p class="app-panel-note">事件链进度与毕业条件详见「记录」。</p>
+        <section class="app-panel" id="panelGoals" data-panel-name="goals" hidden aria-label="手头的事">
+          <header class="advisory-header">
+            <h3 class="app-panel-title">手头的事</h3>
+            <button type="button" class="advisory-close" id="advisoryClose" aria-label="收起手头的事">✕</button>
+          </header>
+          <div class="advisory-board" id="advisoryList"></div>
+          <p class="app-panel-note">红色为紧急事项；角标只数待办，了结的事收在「有了下落的」。</p>
+        </section>
+
+        <section class="app-panel" id="panelResume" data-panel-name="resume" hidden aria-label="简历">
+          <header class="advisory-header">
+            <h3 class="app-panel-title">我的简历</h3>
+            <button type="button" class="advisory-close" id="resumeClose" aria-label="收起简历">✕</button>
+          </header>
+          <div class="resume-body" id="resumeBody"></div>
+          <p class="app-panel-note">简历只记实习、项目、竞赛、社团四类核心经历，其他经历收进附注。</p>
         </section>
 
         <section class="app-panel" id="panelRecords" data-panel-name="records" hidden aria-label="成长记录">
           <h3 class="app-panel-title">成长记录</h3>
-          <p class="app-panel-note">八个学期的成绩、校园经历、事件链进度与毕业条件。</p>
+          <p class="app-panel-note">投入与收获、八学期成绩与钱包流水，都在这份记录里。</p>
           <button class="history-button" id="historyButton" type="button">查看成长记录</button>
         </section>
 
@@ -174,6 +187,7 @@
           <div id="debugPanel" hidden><p id="debugSummary"></p><button type="button" class="utility-button" id="exportLogButton">导出复现日志</button></div>
         </section>
       </div>
+      <div class="drawer-scrim" aria-hidden="true"></div>
 
       <div class="map-caption">
         <span class="caption-line"></span>
@@ -207,15 +221,15 @@
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </main>
-  <script src="config.js"></script>
-  <script src="courses.js"></script>
-  <script src="rng.js"></script>
-  <script src="state-validation.js"></script>
-  <script src="game.js"></script>
-  <script src="save.js"></script>
-  <script src="audio.js"></script>
-  <script src="sms.js"></script>
-  <script src="npc.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js?v=20261103-8"></script>
+  <script src="courses.js?v=20261103-8"></script>
+  <script src="rng.js?v=20261103-8"></script>
+  <script src="state-validation.js?v=20261103-8"></script>
+  <script src="game.js?v=20261103-8"></script>
+  <script src="save.js?v=20261103-8"></script>
+  <script src="audio.js?v=20261103-8"></script>
+  <script src="sms.js?v=20261103-8"></script>
+  <script src="npc.js?v=20261103-8"></script>
+  <script src="app.js?v=20261103-8"></script>
 </body>
 </html>

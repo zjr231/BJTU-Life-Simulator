@@ -9,7 +9,7 @@ function actionableState(id) {
   state.term = 5;
   if (action.sickOnly) state.fitness = 24;
   state.preparation = action.minPreparation || 0;
-  if (action.minAverage) state.courses = [{ grade: 80 }];
+  if (action.minAverage || id === 'applyInternship') state.courses = [{ grade: 80 }];
   if (action.kind === 'work') state.chains[action.chain] = { status: 'active', progress: 0, startedTerm: 4, deadline: 6, nextEligibleTerm: 1, reviewAfter: 4 };
   return state;
 }
@@ -45,13 +45,14 @@ test('每个行动的资源边界：刚好满足可执行，任一资源不足�
     const initial = actionableState(id);
     const action = game.getAction(initial, id);
     const state = { ...initial, time: action.time, energy: action.energy, money: action.money };
-    assert.equal(game.executeAction(state, id).ok, true, id);
+    const options = id === 'applyInternship' ? { positionId: 'qiandu_testdev' } : {};
+    assert.equal(game.executeAction(state, id, options).ok, true, id);
     for (const [key, cost] of [['time', action.time], ['energy', action.energy], ['money', action.money]]) {
       if (!cost) continue;
       if (key === 'money' && action.emergencyMoney) continue;
       const insufficient = { ...state, [key]: cost - 1 };
       const before = structuredClone(insufficient);
-      const result = game.executeAction(insufficient, id);
+      const result = game.executeAction(insufficient, id, options);
       assert.equal(result.ok, false, `${id}: ${key}`);
       assert.strictEqual(result.state, insufficient);
       assert.deepEqual(insufficient, before);

@@ -9,7 +9,7 @@ function actionableState(id) {
   const action = game.ACTIONS[id];
   state.term = 5;
   state.preparation = action.minPreparation || 0;
-  if (action.minAverage) state.courses = [{ grade: 80 }];
+  if (action.minAverage || id === 'applyInternship') state.courses = [{ grade: 80 }];
   if (action.kind === 'work') state.chains[action.chain] = { status: 'active', progress: 0, startedTerm: 4, deadline: 6, nextEligibleTerm: 1, reviewAfter: 4 };
   return state;
 }
@@ -56,7 +56,7 @@ test('每个事件选项都显式声明体能消耗，按有效精力分档，�
       assert.equal(choice.fitnessCost, band(energy), id + ':' + choice.id);
     }
   }
-  assert.equal(total, 113);
+  assert.equal(total, 115);
   assert.equal(game.EVENTS.military1.choices.find(choice => choice.id === 'join').fitnessCost, 4);
   assert.equal(game.EVENTS.night.choices.find(choice => choice.id === 'join').fitnessCost, 1);
   assert.equal(game.EVENTS.military2.choices.every(choice => choice.fitnessCost === 0), true);
@@ -66,7 +66,7 @@ test('执行行动按声明扣除体能；锻炼、体检、休息、散步的�
   const plain = ['study', 'tutoring', 'selfStudy', 'furtherStudy', 'work', 'jobPreparation', 'chat', 'applyProject', 'projectWork', 'applyClub', 'clubWork', 'applyInternship', 'internshipWork', 'sickVisit', 'alumniVolunteer', 'show'];
   for (const id of plain) {
     const state = { ...actionableState(id), fitness: 50 };
-    const result = game.executeAction(state, id);
+    const result = game.executeAction(state, id, id === 'applyInternship' ? { positionId: 'qiandu_testdev' } : {});
     assert.equal(result.ok, true, id + ': ' + result.reason);
     assert.equal(result.changes.fitness, -game.getAction(state, id).fitnessCost, id);
   }

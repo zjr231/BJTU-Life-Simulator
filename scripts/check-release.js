@@ -24,7 +24,7 @@ async function main() {
   const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   for (const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) localReference(match[1], 'index.html');
   for (const match of css.matchAll(/url\(\s*["']?([^\s"')]+)["']?\s*\)/g)) localReference(match[1], 'styles.css');
-  const loaded = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/g)].map(match => match[1]);
+  const loaded = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/g)].map(match => match[1].split(/[?#]/)[0]);
   if (JSON.stringify(loaded) !== JSON.stringify(scripts)) throw new Error('运行脚本的加载顺序与接口约定不一致');
   for (const file of files) {
     let directory = root;

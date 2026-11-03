@@ -933,16 +933,18 @@ test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当�
   assert.match(ui.element('#dialogNotice').textContent, /标签页/);
 });
 
-test('新增校园经历从存档恢复后显示中文名称，成长记录不出现 undefined', () => {
+test('新增校园经历从存档恢复后显示中文名称，简历面板不出现 undefined', () => {
   const state = game.createGame({ nickname: '经历显示' });
   state.experiences = ['military', 'singer', 'trip', 'contest'].map(type => ({ type, term: 1 }));
   const storage = memory();
   assert.equal(saves.createSlotService(storage).save(state, 2).ok, true);
   const ui = app(storage);
   ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
-  ui.click('#historyButton');
-  const html = ui.element('#dialogBody').innerHTML;
+  ui.click('.app-menu-button[data-panel="resume"]');
+  const html = ui.element('#resumeBody').innerHTML;
   for (const name of ['军训', '歌手大赛', '返乡', '竞赛']) assert.ok(html.includes(name), name);
+  for (const title of ['实习经历', '项目经历', '竞赛经历', '社团经历']) assert.ok(html.includes(title), title);
+  assert.ok(html.includes('resume-req'), '简历要件 chips 应渲染');
   assert.doesNotMatch(html, /undefined/);
 });
 
@@ -1234,3 +1236,81 @@ test('校园卡追查事件先确认再进入终局，安全归还可继续游�
   assert.equal(safe.evaluate('state.eventFlags.cardPocketed'), undefined);
 });
 
+
+test('南门岗位库：浏览、锁定意向、带岗位申请与存档往返', () => {
+  const state = game.createGame({ nickname: '岗位测试', seed: 'positions-test', legacyEconomy: true });
+  state.term = 3;
+  const makeCourse = (term, preparation) => {
+    const grade = Math.round(40 + preparation * 0.6);
+    return { term, name: game.TERM_NAMES[term - 1], preparation, grade, passed: grade >= 60, moneyAfter: 900, unusedTime: 12, counts: {}, notices: [], attributes: { social: state.social, fitness: state.fitness, mood: state.mood }, livingCost: game.RULES.livingCost, aid: 0 };
+  };
+  state.courses = [makeCourse(1, 67), makeCourse(2, 67)];
+  const storage = memory();
+  assert.equal(saves.createSlotService(storage).save(state, 2).ok, true);
+  const ui = app(storage);
+  ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  ui.evaluate('dialog.close(); activePlace = "gate"; renderActions()');
+  ui.click('#actionList', { action: 'applyInternship', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'positionPicker');
+  const html = ui.element('#dialogBody').innerHTML;
+  assert.equal((html.match(/position-card/g) || []).length, 16, '十六张岗位卡');
+  assert.match(html, /音符跳动/);
+  assert.match(html, /后端开发实习生/);
+  // 锁定意向：写入存档字段，对话框出现「取消意向」
+  const revision = String(ui.evaluate('state.revision'));
+  ui.click('#dialogBody', { positionLock: 'qiandu_testdev', revision });
+  ui.flush();
+  assert.equal(ui.evaluate('state.targetPosition'), 'qiandu_testdev');
+  assert.match(ui.element('#dialogBody').innerHTML, /取消意向/);
+  // 返回南门：关闭岗位库
+  ui.click('#dialogButtons', { dialogAction: 'positionClose' });
+  assert.equal(ui.evaluate('dialog.open'), false);
+  // 再次进入岗位库继续申请
+  ui.click('#actionList', { action: 'applyInternship', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'positionPicker');
+  // 带岗位申请：链挂岗位、邀请入队、命令记录 positionId
+  const revision2 = String(ui.evaluate('state.revision'));
+  ui.click('#dialogBody', { positionApply: 'qiandu_testdev', revision: revision2 });
+  assert.equal(ui.evaluate('state.chains.internship.positionId'), 'qiandu_testdev');
+  assert.equal(ui.evaluate('state.pendingEvent && state.pendingEvent.id'), 'internshipOffer');
+  assert.equal(ui.evaluate('state.history.at(-1).command.positionId'), 'qiandu_testdev');
+  // 存档往返：意向与链岗位字段保留
+  ui.evaluate('saveCurrent(true)');
+  const loaded = saves.createSlotService(storage).load(2);
+  assert.equal(loaded.ok, true);
+  assert.equal(loaded.state.targetPosition, 'qiandu_testdev');
+  assert.equal(loaded.state.chains.internship.positionId, 'qiandu_testdev');
+});
+
+test('岗位门槛不达标时申请按钮禁用并显示原因', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('dialog.close(); activePlace = "gate"; renderActions()');
+  ui.click('#actionList', { action: 'applyInternship', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'positionPicker');
+  const html = ui.element('#dialogBody').innerHTML;
+  // 第 1 学期：全部岗位未达标（窗口未开），申请按钮全部禁用且原因可见
+  assert.equal((html.match(/disabled>申请这个岗位/g) || []).length, 16);
+  assert.match(html, /第 3 学期开始开放/);
+});
+
+test('实习投入卡显示累计进度，达标后出现「办理实习证明」', () => {
+  const ui = app();
+  ui.start();
+  // 进行中未达标：有进度行、无办证明按钮
+  ui.evaluate('state = CampusGame.createGame({ nickname: "岗位测试", seed: "positions-test", legacyEconomy: true }); state.term = 5; state.chains.internship = { status: "active", progress: 0, startedTerm: 5, deadline: 6, nextEligibleTerm: 1, reviewAfter: 5, positionId: "qiandu_testdev", workTime: 2, workEnergy: 15, milestoneSeen: false }; dialog.close(); activePlace = "gate"; renderActions()');
+  const incomplete = ui.element('#actionList').innerHTML;
+  assert.match(incomplete, /累计投入：时间 2 \/ 4/);
+  assert.match(incomplete, /维护回归用例集/, '三档按钮来自岗位 workPlans');
+  assert.doesNotMatch(incomplete, /办理实习证明/);
+  // 达标：出现按钮
+  ui.evaluate('state = { ...state, chains: { ...state.chains, internship: { ...state.chains.internship, workTime: 4, workEnergy: 30 } } }; renderActions()');
+  const ready = ui.element('#actionList').innerHTML;
+  assert.match(ready, /门槛已达标/);
+  assert.match(ready, /办理实习证明/);
+  // 点击结算：链转 completed、经历入档、反馈含岗位段收入
+  ui.click('#actionList', { settleInternship: '1', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.chains.internship.status'), 'completed');
+  assert.equal(ui.evaluate('state.experiences.filter((e) => e.type === "internship").length'), 1);
+  assert.equal(ui.evaluate('state.experiences.find((e) => e.type === "internship").positionId'), 'qiandu_testdev');
+});

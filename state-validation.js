@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function validate(state, game, random) {
-    const { RULES, ACTIONS, EVENTS, EVENT_INVESTMENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, TERMINAL_ENDINGS, gradeFor, ratingFor, NPC_CHAT } = game;
+    const { RULES, ACTIONS, EVENTS, EVENT_INVESTMENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, TERMINAL_ENDINGS, gradeFor, ratingFor, NPC_CHAT, POSITIONS } = game;
     const fail = (reason) => ({ ok: false, reason: '存档状态无效：' + reason });
     const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
     const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -31,6 +31,8 @@
       if (!integer(state.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished', 'ended'].includes(state.phase) || !integer(state.revision, 0, 2000)) return fail('学期、阶段或状态版本');
       for (const [key, max] of [['time', 12], ['energy', 100], ['money', 1000000], ['social', 100], ['fitness', 100], ['mood', 100], ['preparation', 100], ['furtherStudy', 100], ['jobPreparation', 100]]) if (!integer(state[key], 0, max)) return fail(key);
       if (state.cardDebt !== undefined && !integer(state.cardDebt, 0, 1000000)) return fail('校园卡待还款');
+      // 求职意向是可选字段（旧档没有）：存在时必须指向岗位库中的岗位；null 表示明确取消。
+      if (state.targetPosition !== undefined && state.targetPosition !== null && !own(POSITIONS, state.targetPosition)) return fail('求职意向');
       if (state.economy !== undefined) {
         const e = state.economy;
         if (!object(e) || ![1, 2].includes(e.version) || e.familyId !== game.familyForSeed(state.rng.seed).id || !integer(e.startTerm, 1, state.term) || !Array.isArray(e.grants) || e.grants.length !== state.term - e.startTerm + 1) return fail('家庭与学期预算');
@@ -91,6 +93,18 @@
         if (!same(selectedCourses, backgroundReplay.state.selectedCourses)) return fail('选课记录');
         // v2 试卷可精确重放；旧版试卷由上面的题库内容比对保护，避免生成算法升级后无法读取。
         if (exam !== null && exam.generator === 'v2' && !same(exam, backgroundReplay.state.exam)) return fail('试卷内容');
+        // 意向与实习链岗位的防篡改闭环：重放必须得到相同取值（?? undefined 归一 null/缺省，旧档两侧同为缺省恒过）。
+        if ((state.targetPosition ?? undefined) !== (backgroundReplay.state.targetPosition ?? undefined)) return fail('求职意向');
+        if ((state.chains.internship.positionId ?? undefined) !== (backgroundReplay.state.chains.internship.positionId ?? undefined)) return fail('实习链岗位');
+        // 旧档经历没有岗位字段：只比对新增的岗位部分；缺省（undefined 与 null 归一）两侧一致即可。
+        const positionOf = (items) => items.filter((item) => item.type === 'internship').map((item) => [item.term, item.positionId ?? null]);
+        const positions = positionOf(state.experiences);
+        const replayedPositions = positionOf(backgroundReplay.state.experiences);
+        if (positions.length === replayedPositions.length && !same(positions, replayedPositions)) return fail('实习经历岗位');
+        // 三期累计投入同样闭环：投入档位记在命令 investment 里，重放可精确重导出；篡改必被识破。
+        for (const key of ['workTime', 'workEnergy', 'milestoneSeen']) {
+          if ((state.chains.internship[key] ?? null) !== (backgroundReplay.state.chains.internship[key] ?? null)) return fail('实习累计投入');
+        }
       }
       for (const key of ['courses', 'history', 'eventQueue', 'eventHistory', 'experiences', 'processedCommands']) if (!Array.isArray(state[key]) || state[key].length > 2000) return fail(key);
       if (!object(state.counts) || !object(state.eventFlags) || !object(state.chains)) return fail('次数、事件标记或事件链');
@@ -116,8 +130,13 @@
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'chooseBudget', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
+        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'chooseBudget', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc', 'setTargetPosition', 'settleInternship'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');
+        // 岗位化实习：command 带 positionId 时必须指向岗位库、只用于申请实习，且 entry.position 与之一致；
+        // 旧档的申请命令没有 positionId（两字段皆缺省），不做强制。
+        if (command.operation === 'executeAction' && command.positionId !== undefined
+          && (!own(POSITIONS, command.positionId) || command.id !== 'applyInternship' || entry.position?.id !== command.positionId)) return fail('历史岗位');
+        if (command.operation === 'setTargetPosition' && !(command.id === null || own(POSITIONS, command.id))) return fail('历史意向');
         if (command.extra !== undefined || entry.extra !== undefined) {
           const extra = game.getActionExtra(command.id);
           const record = entry.extra;
@@ -185,22 +204,56 @@
         if (!object(chain) || !['idle', 'active', 'deferred', 'completed', 'missed'].includes(chain.status) || !integer(chain.progress, 0, 2) || !integer(chain.startedTerm, 0, state.term) || !integer(chain.deadline, 0, 8) || !integer(chain.nextEligibleTerm, 1, 9) || !integer(chain.reviewAfter, 0, 8)) return fail('事件链字段');
         if (['active', 'completed', 'missed'].includes(chain.status) && (!chain.startedTerm || chain.deadline < chain.startedTerm)) return fail('事件链时序');
         if (['idle', 'deferred'].includes(chain.status) && (chain.progress || chain.startedTerm || chain.deadline)) return fail('未加入事件链有投入');
-        if (chain.status === 'completed' && chain.progress !== 2) return fail('完成事件链缺少投入');
+        if (['idle', 'deferred'].includes(chain.status) && (chain.workTime !== undefined || chain.milestoneSeen !== undefined)) return fail('未加入事件链有投入');
+        // 三期：实习链改用累计投入（workTime/workEnergy）与里程碑标记；progress 退役（恒 0）但仍兼容旧档 ≤2。
+        if (id === 'internship') {
+          if (chain.workTime !== undefined && !integer(chain.workTime, 0, 200)) return fail('事件链字段');
+          if (chain.workEnergy !== undefined && !integer(chain.workEnergy, 0, 200)) return fail('事件链字段');
+          if ((chain.workTime === undefined) !== (chain.workEnergy === undefined)) return fail('事件链字段');
+          if (chain.workTime !== undefined && !own(POSITIONS, chain.positionId || '')) return fail('实习链岗位');
+          if (chain.milestoneSeen !== undefined && typeof chain.milestoneSeen !== 'boolean') return fail('事件链字段');
+        } else {
+          if (chain.workTime !== undefined || chain.workEnergy !== undefined || chain.milestoneSeen !== undefined) return fail('事件链字段');
+          if (chain.status === 'completed' && chain.progress !== 2) return fail('完成事件链缺少投入');
+        }
+        if (id === 'internship' && chain.status === 'completed' && !game.internshipRequirementMet({ ...state, chains: { ...state.chains, internship: { ...chain, status: 'active' } } })) return fail('完成事件链缺少投入');
+        // 实习链可携带岗位标记（多段实习）：只允许出现在 internship 链上，且必须是岗位库中的岗位。
+        if (id !== 'internship' && chain.positionId !== undefined) return fail('实习链岗位');
+        if (chain.positionId !== undefined && !own(POSITIONS, chain.positionId)) return fail('实习链岗位');
       }
       if (Object.keys(state.chains).length !== 3) return fail('未知事件链');
       const experienceIds = new Set();
       for (const item of state.experiences) {
         if (!object(item) || !integer(item.term, 1, state.term) || !['fitnessTest', 'project', 'club', 'internship', 'military', 'singer', 'trip', 'contest', 'sportsMeet', 'transfer'].includes(item.type)) return fail('经历');
-        // 体测与运动会每个学年都可能留下经历，按学期区分；其余经历全局唯一。
-        const key = ['fitnessTest', 'sportsMeet'].includes(item.type) ? item.type + ':' + item.term : item.type;
+        // 体测与运动会每个学年都可能留下经历，按学期区分；实习多段进行，同样按学期区分；其余经历全局唯一。
+        const key = item.type === 'internship'
+          ? item.type + ':' + item.term + ':' + (item.positionId || 'none')
+          : ['fitnessTest', 'sportsMeet'].includes(item.type) ? item.type + ':' + item.term : item.type;
         if (experienceIds.has(key)) return fail('重复经历');
         experienceIds.add(key);
         if (item.type === 'fitnessTest' && !integer(item.fitness, 60, 100)) return fail('体测经历');
+        // 实习经历可携带岗位（二期岗位化）：只允许出现在实习经历上，且必须是岗位库中的岗位。
+        // 岗位字段只允许落在实习经历上，且必须指向岗位库；旧档无此字段。
+        if (item.positionId !== undefined && !own(POSITIONS, item.positionId)) return fail('经历岗位');
       }
-      for (const id of Object.keys(CHAIN_NAMES)) if ((state.chains[id].status === 'completed') !== experienceIds.has(id)) return fail('事件链与经历不一致');
+      // 链完成与经历的核对按类型集合：实习多段按学期区分经历，但链状态只看类型。
+      const experienceTypes = new Set(state.experiences.map(item => item.type));
+      for (const id of Object.keys(CHAIN_NAMES)) if ((state.chains[id].status === 'completed') !== experienceTypes.has(id)) return fail('事件链与经历不一致');
+      // 多段实习：链 completed 且距上一段满一学年、仍在申请窗口内时，允许待处理的实习 Offer（新一段的邀请）。
+      const internshipTerms = state.experiences.filter(item => item.type === 'internship').map(item => item.term);
+      const internshipReapplyReady = state.chains.internship.status === 'completed'
+        && internshipTerms.length > 0 && Math.max(...internshipTerms) + (game.REAPPLY_GAP || 0) <= state.term
+        && state.term <= ACTIONS.applyInternship.maxTerm;
       for (const instance of instances) {
         const event = EVENTS[instance.id];
-        if (event.chain && (instance.id.endsWith('Offer') ? !['idle', 'deferred'].includes(state.chains[event.chain].status) : state.chains[event.chain].status !== 'active' || state.chains[event.chain].progress !== 2)) return fail('事件与事件链不一致');
+        if (!event.chain) continue;
+        const chain = state.chains[event.chain];
+        const offerOk = ['idle', 'deferred'].includes(chain.status)
+          || (event.chain === 'internship' && instance.id === 'internshipOffer' && internshipReapplyReady);
+        if (instance.id.endsWith('Offer')) { if (!offerOk) return fail('事件与事件链不一致'); }
+        else if (instance.id === 'internshipMilestone') {
+          if (chain.status !== 'active' || !game.internshipRequirementMet(state) || chain.milestoneSeen) return fail('事件与事件链不一致');
+        } else if (chain.status !== 'active' || chain.progress !== 2) return fail('事件与事件链不一致');
       }
       if (['endingChoice', 'finished'].includes(state.phase)) {
         if (state.term !== 8 || !same(state.endingOptions, game.evaluateEndings(state))) return fail('毕业条件快照');

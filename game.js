@@ -3,9 +3,15 @@
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
   const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
-  const { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
+  const { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS } = config;
   const { COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
+  const REQUIREMENT_LABELS = { project: '项目', contest: '竞赛', internship: '前段实习', club: '社团' };
+  // 多段实习的间隔：上一段结束后再等几个学期才能申下一段。
+  // 取 1（下一学期即可再申）：事件按学期去重，同一学期无法再弹一次实习邀请；
+  // 且一学期做完两段实习在时间上也不现实。
+  const REAPPLY_GAP = 1;
+  const TIER_LABELS = { 1: 'T1 起步', 2: 'T2 进阶', 3: 'T3 顶配' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const clamp = (value, max) => Math.max(0, Math.min(max, value));
@@ -169,6 +175,11 @@
       action.social = (action.social || 0) + (background.socialBonus || 0);
       action.backgroundBonus = background.bonus;
     }
+    // 岗位体能偏移：仅实习投入且当前链挂了带 costs 的岗位时生效（如运维 +2/次）。
+    if (id === 'internshipWork' && own(POSITIONS, state.chains?.internship?.positionId || '')) {
+      const positionCosts = POSITIONS[state.chains.internship.positionId].costs;
+      if (positionCosts && positionCosts.fitness) action.fitnessCost = (action.fitnessCost || 0) + positionCosts.fitness;
+    }
     return action;
   }
   function averageGrade(state) { return state.courses.length ? state.courses.reduce((sum, item) => sum + item.grade, 0) / state.courses.length : 0; }
@@ -197,6 +208,9 @@
     const original = !state.economy && ['work', 'internshipWork'].includes(id) ? LEGACY_INVESTMENTS.actions[id] : ACTION_INVESTMENTS[id];
     const profile = { ...original, rewards: { ...original.rewards }, tiers: original.tiers.map(tier => ({ ...tier })) };
     if (!state.economy) delete profile.fixedIncome;
+    // 岗位化实习内容：三档按钮名与日薪按岗位显示（三期）；无岗位的旧链保持通用文案与默认日薪。
+    const position = id === 'internshipWork' && own(POSITIONS, state.chains?.internship?.positionId || '') ? POSITIONS[state.chains.internship.positionId] : null;
+    if (position) profile.tiers = profile.tiers.map((tier, index) => ({ ...tier, label: position.workPlans[index], income: position.wages[index] }));
     const action = getAction(state, id);
     const discount = original.resource === 'energy' ? ACTIONS[id].energy - action.energy : 0;
     if (discount) {
@@ -223,7 +237,7 @@
     const effect = id === 'chat' ? applyHousingActionEffect(state, id, adjusted) : adjusted;
     return { ok: true, amount, effect, level: investmentLevel(profile, amount) };
   }
-  function availability(state, id, requestedAmount) {
+  function availability(state, id, requestedAmount, positionId) {
     if (!own(ACTIONS, id)) return { ok: false, reason: '未知行动' };
     if (activeMilitary(state)) return { ok: false, reason: '请先完成军训汇演，再安排其他行动' };
     if (state.phase === 'eventPending') return { ok: false, reason: '请先处理当前事件' };
@@ -244,10 +258,28 @@
     if (action.minAverage && averageGrade(state) < action.minAverage) return { ok: false, reason: '已结算平均成绩需要达到 ' + action.minAverage };
     if (action.chain) {
       const chain = state.chains[action.chain];
-      if (action.kind === 'apply' && !['idle', 'deferred'].includes(chain.status)) return { ok: false, reason: chain.status === 'completed' ? '这条事件链已完成' : '当前不能再次申请' };
-      if (action.kind === 'apply' && state.term < chain.nextEligibleTerm) return { ok: false, reason: '第 ' + chain.nextEligibleTerm + ' 学期可再次申请' };
+      if (action.kind === 'apply') {
+        // 多段实习：completed 后隔一学年可再申（nextEligibleTerm 只服务 idle/deferred 路径）。
+        const reapply = action.chain === 'internship' && chain.status === 'completed'
+          && state.term >= lastExperienceTerm(state, 'internship') + REAPPLY_GAP;
+        if (!['idle', 'deferred'].includes(chain.status) && !reapply) {
+          // 实习完成后的重复申请给出台阶提示（精确到可再申的学期），而不是笼统的"这条事件链已完成"。
+          if (action.chain === 'internship' && chain.status === 'completed') {
+            if (positionId !== undefined) return positionAvailability(state, positionId);
+            return { ok: false, reason: '第 ' + (lastExperienceTerm(state, 'internship') + REAPPLY_GAP) + ' 学期可再次申请下一段实习' };
+          }
+          return { ok: false, reason: chain.status === 'completed' ? '这条事件链已完成' : '当前不能再次申请' };
+        }
+        if (reapply && state.term > action.maxTerm) return { ok: false, reason: '这一轮的申请时间已经过了' };
+        if (!reapply && state.term < chain.nextEligibleTerm) return { ok: false, reason: '第 ' + chain.nextEligibleTerm + ' 学期可再次申请' };
+      }
       if (action.kind === 'work' && chain.status !== 'active') return { ok: false, reason: '请先申请并接受邀请' };
-      if (action.kind === 'work' && chain.progress >= 2) return { ok: false, reason: '两次投入都完成了，等成果确认' };
+      // 实习按累计投入判定，达标后仍可继续投入（拿日薪，每学期 limit 2 管阀门）；项目/社团仍是两次投入。
+      if (action.kind === 'work' && action.chain !== 'internship' && chain.progress >= 2) return { ok: false, reason: '两次投入都完成了，等成果确认' };
+    }
+    if (action.kind === 'apply' && id === 'applyInternship' && positionId !== undefined) {
+      const position = positionAvailability(state, positionId);
+      if (!position.ok) return position;
     }
     if (action.preparation && !action.chain && state.preparation >= 100) return { ok: false, reason: '本学期学习进度已满' };
     const check = resourceCheck(state, action);
@@ -343,7 +375,12 @@
     if (next.mood < RULES.lowMood) enqueue('roommateCare');
     for (const [id, chain] of Object.entries(next.chains)) {
       if (triggerAction === 'apply' + id[0].toUpperCase() + id.slice(1)) enqueue(id + 'Offer');
-      if (chain.status === 'active' && chain.progress === 2 && next.term >= chain.reviewAfter && (id === 'internship' || id === 'club' || next.term > chain.startedTerm)) enqueue(id + 'Review');
+      // 实习：累计投入达到岗位门槛时弹「十字路口」（只弹一次，continue 后 milestoneSeen 挡住）。
+      if (id === 'internship') {
+        if (next.chains.internship.status === 'active' && !chain.milestoneSeen && internshipRequirementMet(next)) enqueue('internshipMilestone');
+      } else if (chain.status === 'active' && chain.progress === 2 && next.term >= chain.reviewAfter && (id === 'club' || next.term > chain.startedTerm)) {
+        enqueue(id + 'Review');
+      }
     }
     if (next.term >= 2 && next.courses.length && next.courses.at(-1).term === next.term - 1 && !next.courses.at(-1).passed) enqueue('retake');
     // Choosing an event option never starts another optional campus event.
@@ -388,8 +425,9 @@
   function executeAction(state, id, options = {}) {
     const command = commandCheck(state, options, 'action:' + id);
     if (!command.ok) return command;
-    const check = availability(state, id, options.investment);
+    const check = availability(state, id, options.investment, options.positionId);
     if (!check.ok) return { ...check, state };
+    if (id === 'applyInternship' && !own(POSITIONS, options.positionId || '')) return { ok: false, reason: '请先在岗位库中选择一个岗位', state };
     let extra;
     if (options.extra !== undefined) {
       const extraCheck = actionExtraAvailability(state, id, options.investment, options.extra);
@@ -424,10 +462,19 @@
       extraRecord = { id: extra.id, title: extra.title, price, bonuses, skipped: !purchased };
     }
     let next = { ...applyChanges(state, changes, action), rng, counts: { ...state.counts, [id]: (state.counts[id] || 0) + 1 } };
-    if (action.kind === 'work') next.chains = { ...state.chains, [action.chain]: { ...state.chains[action.chain], progress: state.chains[action.chain].progress + 1 } };
+    if (action.kind === 'work') {
+      const previous = state.chains[action.chain];
+      // 实习累计「档位名义投入」（时间取档位固定耗时、精力取玩家选择的档位量）。
+      // 不用缩放后的实际扣减：体能越好扣得越少，会导致投入越多反而越难达标，语义反了。
+      const spentEnergy = investment ? investment.amount : (action.energy || 0);
+      next.chains = action.chain === 'internship'
+        ? { ...state.chains, internship: { ...previous, workTime: (previous.workTime || 0) + (action.time || 0), workEnergy: (previous.workEnergy || 0) + spentEnergy } }
+        : { ...state.chains, [action.chain]: { ...previous, progress: previous.progress + 1 } };
+    }
+    if (action.kind === 'apply' && id === 'applyInternship') next.chains = { ...next.chains, internship: { ...next.chains.internship, positionId: options.positionId } };
     next = attachEvents(next, id);
     const cardDebtPaid = Math.min(state.cardDebt || 0, action.income || 0);
-    return commit(state, next, { operation: 'executeAction', id, ...(investment ? { investment: investment.amount } : {}), ...(extra ? { extra: extra.id } : {}) }, { action: id, title: action.title, changes, ...(extraRecord ? { extra: extraRecord } : {}), ...(cardDebtPaid ? { cardDebtPaid } : {}), fitnessCost: action.fitnessCost || 0, ...(investment ? { investment } : {}) }, command.commandId);
+    return commit(state, next, { operation: 'executeAction', id, ...(investment ? { investment: investment.amount } : {}), ...(extra ? { extra: extra.id } : {}), ...(id === 'applyInternship' && options.positionId ? { positionId: options.positionId } : {}) }, { action: id, title: action.title, changes, ...(extraRecord ? { extra: extraRecord } : {}), ...(cardDebtPaid ? { cardDebtPaid } : {}), fitnessCost: action.fitnessCost || 0, ...(investment ? { investment } : {}), ...(id === 'applyInternship' && options.positionId ? { position: { id: options.positionId, title: POSITIONS[options.positionId].title } } : {}) }, command.commandId);
   }
   function getEventInvestment(state, choiceId) {
     if (!state.pendingEvent) return null;
@@ -538,16 +585,31 @@
       effect[key] = (baseEffect[key] || 0) + (outcome[key] || 0);
     }
     effect = applyDormEventBonus(state, pending.id, fitnessAdjustedEffect(state, effect, null));
+    // 岗位段收入在办证明时一次性结算（不受体能挡位缩放）；无岗位的旧链照旧，仅 mood + 经历。
+    // 达标前置：里程碑/旧答辩事件都必须累计投入达标才能结算（旧档 progress≥2 的 grandfather 恒过）。
+    let positionReward = null;
+    if (event.chain === 'internship' && choice.chainEffect === 'complete') {
+      if (!internshipRequirementMet(state)) return { ok: false, reason: '实习投入还没达到证明门槛', state };
+      positionReward = internshipCompletionReward(state);
+      if (positionReward) {
+        effect.income = (effect.income || 0) + positionReward.income;
+        effect.jobPreparation = (effect.jobPreparation || 0) + positionReward.jobPreparation;
+      }
+    }
     if (profile) investment = describeInvestment(profile, investmentPreview, investmentFactor, investmentCurveData.mean, effect);
     const changes = previewChanges(state, effect);
     const cardDebtAdded = choice.restitution ? Math.max(0, choice.money - (effect.money || 0)) : 0;
     const cardDebtPaid = Math.min(state.cardDebt || 0, effect.income || 0);
-    const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, outcome: outcome.title || null, changes, ...(cardDebtAdded ? { cardDebtAdded } : {}), ...(cardDebtPaid ? { cardDebtPaid } : {}), fitnessCost: effect.fitnessCost || 0, ...(investment ? { investment } : {}) };
+    const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, outcome: outcome.title || null, changes, ...(cardDebtAdded ? { cardDebtAdded } : {}), ...(cardDebtPaid ? { cardDebtPaid } : {}), fitnessCost: effect.fitnessCost || 0, ...(investment ? { investment } : {}), ...(positionReward ? { positionReward } : {}) };
     let next = { ...applyChanges(state, changes, effect), rng, pendingEvent: null, phase: 'playing', eventFlags: { ...state.eventFlags, [pending.instanceId]: true }, eventHistory: [...state.eventHistory, entry] };
     if (cardDebtAdded) next.cardDebt = (next.cardDebt || 0) + cardDebtAdded;
     if (event.chain) {
       const chain = { ...state.chains[event.chain] };
-      if (choice.chainEffect === 'accept') Object.assign(chain, { status: 'active', startedTerm: state.term, deadline: Math.min(8, state.term + 1), progress: 0, reviewAfter: state.term });
+      // 里程碑事件选「继续实习」：记下已处理，之后不再重复弹；随时可在实习投入卡手动办证明。
+      if (pending.id === 'internshipMilestone') chain.milestoneSeen = true;
+      // 新一段实习从零累计：workTime/workEnergy/milestoneSeen 必须重置，否则会继承上一段的进度。
+      // 这三个字段只属于实习链（project/club 仍走 progress）。
+      if (choice.chainEffect === 'accept') Object.assign(chain, { status: 'active', startedTerm: state.term, deadline: Math.min(8, state.term + 1), progress: 0, reviewAfter: state.term, ...(event.chain === 'internship' ? { workTime: 0, workEnergy: 0, milestoneSeen: false } : {}) });
       if (choice.chainEffect === 'defer') Object.assign(chain, { status: 'deferred', nextEligibleTerm: state.term + 1 });
       if (choice.chainEffect === 'postpone') Object.assign(chain, { reviewAfter: state.term + 1, deadline: Math.min(8, state.term + 1) });
       if (choice.chainEffect === 'complete') chain.status = 'completed';
@@ -555,7 +617,13 @@
       next.chains = { ...state.chains, [event.chain]: chain };
     }
     const experience = outcome.experience || choice.experience;
-    if (experience) next.experiences = [...state.experiences, { term: state.term, type: experience, ...(experience === 'fitnessTest' ? { fitness: state.fitness } : {}) }];
+    if (experience) next.experiences = [...state.experiences, {
+      term: state.term,
+      type: experience,
+      ...(experience === 'fitnessTest' ? { fitness: state.fitness } : {}),
+      // 实习经历记下岗位，简历与后续判定才有"在哪家公司、做什么岗位"可言（旧档无此字段，可选）。
+      ...(experience === 'internship' && own(POSITIONS, state.chains.internship.positionId || '') ? { positionId: state.chains.internship.positionId } : {})
+    }];
     const flag = outcome.flag || choice.flag;
     const clearFlag = outcome.clearFlag || choice.clearFlag;
     if (flag || clearFlag) {
@@ -589,13 +657,34 @@
   function settlementChains(state) {
     const chains = clone(state.chains);
     const notices = [];
+    // 毕业保底：第 8 学期结算时，已达标的实习不判未完成，而是自动收尾并结算段收入。
+    let payout = null;
     for (const [id, chain] of Object.entries(chains)) {
       if (chain.status === 'active' && state.term >= chain.deadline) {
-        if (state.term === 8) { chain.status = 'missed'; notices.push(CHAIN_NAMES[id] + '未完成，已有的 ' + chain.progress + '/2 次投入保留在档案里。'); }
-        else { chain.deadline = state.term + 1; notices.push(CHAIN_NAMES[id] + '延期到第 ' + chain.deadline + ' 学期，已有的 ' + chain.progress + '/2 次投入保留。'); }
+        // 实习按累计投入描述进度，项目/社团仍按 x/2 次投入。
+        const progressNote = id === 'internship'
+          ? '已累计投入 时间 ' + (chain.workTime || 0) + ' · 精力 ' + (chain.workEnergy || 0)
+          : '已有的 ' + chain.progress + '/2 次投入';
+        if (state.term === 8 && id === 'internship' && internshipRequirementMet(state)) {
+          const reward = internshipCompletionReward(state);
+          chain.status = 'completed';
+          chain.milestoneSeen = true;
+          if (reward) {
+            payout = reward;
+            notices.push(CHAIN_NAMES[id] + '已在毕业前自动收尾：' + reward.title + ' 段收入 ' + reward.income + ' 元、求职准备 +' + reward.jobPreparation + ' 已结算。');
+          } else {
+            notices.push(CHAIN_NAMES[id] + '已在毕业前自动收尾，经历写入档案。');
+          }
+        } else if (state.term === 8) {
+          chain.status = 'missed';
+          notices.push(CHAIN_NAMES[id] + '未完成，' + progressNote + '保留在档案里。');
+        } else {
+          chain.deadline = state.term + 1;
+          notices.push(CHAIN_NAMES[id] + '延期到第 ' + chain.deadline + ' 学期，' + progressNote + '保留。');
+        }
       }
     }
-    return { chains, notices };
+    return { chains, notices, payout };
   }
   function previewSettlement(state, examScore = null) {
     const usualScore = state.preparation;
@@ -604,7 +693,10 @@
     const grade = graded ? gradeFor(usualScore, score) : Math.round(40 + state.preparation * 0.6);
     const budget = budgetFor(state);
     const aid = budget ? 0 : Math.max(0, RULES.livingCost - state.money);
-    const summary = { term: state.term, name: TERM_NAMES[state.term - 1], preparation: state.preparation, grade, passed: grade >= 60, livingCost: budget ? budget.grant.livingCost : RULES.livingCost, aid, moneyAfter: budget ? state.money : state.money + aid - RULES.livingCost, unusedTime: state.time, counts: { ...state.counts }, attributes: { social: state.social, fitness: state.fitness, mood: state.mood }, notices: settlementChains(state).notices, ...(budget ? { economyVersion: budget.grant.budget ? 2 : 1, budget: clone(budget.grant), familyId: budget.family.id } : {}) };
+    const settled = settlementChains(state);
+    // 毕业前自动收尾的实习段收入计入本学期结余。
+    const settledMoney = (budget ? state.money : state.money + aid - RULES.livingCost) + (settled.payout ? settled.payout.income : 0);
+    const summary = { term: state.term, name: TERM_NAMES[state.term - 1], preparation: state.preparation, grade, passed: grade >= 60, livingCost: budget ? budget.grant.livingCost : RULES.livingCost, aid, moneyAfter: settledMoney, unusedTime: state.time, counts: { ...state.counts }, attributes: { social: state.social, fitness: state.fitness, mood: state.mood }, notices: settled.notices, ...(budget ? { economyVersion: budget.grant.budget ? 2 : 1, budget: clone(budget.grant), familyId: budget.family.id } : {}) };
     if (graded) Object.assign(summary, { usualScore, examScore: score, rating: ratingFor(grade), courseIds: [...selectedCoursesOf(state)], courseNames: selectedCoursesOf(state).map((id) => courseById(id)?.name || id) });
     return summary;
   }
@@ -616,7 +708,17 @@
     if (state.phase !== 'playing') return { ok: false, reason: '本学期已经结算或流程已经结束', state };
     if (selectedCoursesOf(state).length) return { ok: false, reason: '请先参加本学期期末考试', state };
     const summary = previewSettlement(state);
-    const next = { ...state, phase: 'summary', money: summary.moneyAfter, chains: settlementChains(state).chains, courses: [...state.courses, summary], summary };
+    const settled = settlementChains(state);
+    let next = { ...state, phase: 'summary', money: summary.moneyAfter, chains: settled.chains, courses: [...state.courses, summary], summary };
+    // 毕业前自动收尾的实习：补写经历、求职准备与校园卡还款，与手动办证明同一口径。
+    if (settled.payout) {
+      next = {
+        ...next,
+        jobPreparation: clamp(next.jobPreparation + settled.payout.jobPreparation, 100),
+        experiences: [...next.experiences, { term: state.term, type: 'internship', positionId: settled.payout.positionId }],
+        ...(state.cardDebt ? { cardDebt: Math.max(0, state.cardDebt - settled.payout.income) } : {})
+      };
+    }
     return commit(state, next, { operation: 'endTerm' }, { action: 'endTerm', title: '学期结算' }, command.commandId);
   }
   function chooseBudget(state, selection, options = {}) {
@@ -708,6 +810,42 @@
     const next = finishTerminal(state, 'cheatNote', reason);
     return commit(state, next, { operation: 'cheatExam' }, { action: 'cheatExam', title: '小抄的第一行' }, command.commandId);
   }
+  // 实习段结算的唯一取数源：事件路径（里程碑/旧答辩）与 settleInternship 命令共用。
+  function internshipCompletionReward(state) {
+    const chain = state.chains.internship;
+    if (chain.status !== 'active' || !own(POSITIONS, chain.positionId || '')) return null;
+    const rewards = POSITIONS[chain.positionId].rewards;
+    return { positionId: chain.positionId, title: POSITIONS[chain.positionId].title, income: rewards.income, jobPreparation: rewards.jobPreparation };
+  }
+  // 手动办实习证明：与里程碑事件的「马上办证明」共用同一结算，达标后才能调用。
+  function settleInternship(state, options = {}) {
+    const command = commandCheck(state, options, 'settleInternship');
+    if (!command.ok) return command;
+    if (state.phase !== 'playing') return { ok: false, reason: '现在不能办理实习证明', state };
+    const chain = state.chains.internship;
+    if (chain.status !== 'active') return { ok: false, reason: '当前没有进行中的实习', state };
+    if (!own(POSITIONS, chain.positionId || '')) return { ok: false, reason: '这段实习没有关联岗位', state };
+    if (!internshipRequirementMet(state)) return { ok: false, reason: '实习投入还没达到证明门槛', state };
+    const reward = internshipCompletionReward(state);
+    const effect = { mood: 5, income: reward.income, jobPreparation: reward.jobPreparation };
+    const changes = previewChanges(state, effect);
+    const cardDebtPaid = Math.min(state.cardDebt || 0, effect.income);
+    let next = { ...applyChanges(state, changes, effect), chains: { ...state.chains, internship: { ...chain, status: 'completed', milestoneSeen: true } } };
+    next.experiences = [...state.experiences, { term: state.term, type: 'internship', positionId: chain.positionId }];
+    next = attachEvents(next, 'settleInternship');
+    const entry = { term: state.term, action: 'settleInternship', title: '办理实习证明', changes, ...(cardDebtPaid ? { cardDebtPaid } : {}), fitnessCost: 0, positionReward: reward };
+    return commit(state, next, { operation: 'settleInternship', id: null }, entry, command.commandId);
+  }
+  // 意向锁定：玩家的主观选择，走命令通道（幂等/revision/history/replay 全继承）；null 为取消。
+  function setTargetPosition(state, positionId, options = {}) {
+    const command = commandCheck(state, options, 'setTargetPosition:' + (positionId === null ? 'null' : positionId));
+    if (!command.ok) return command;
+    if (!(positionId === null || own(POSITIONS, positionId))) return { ok: false, reason: '未知岗位', state };
+    if (state.phase !== 'playing') return { ok: false, reason: '现在不能调整求职意向', state };
+    if (state.targetPosition === positionId || (state.targetPosition === undefined && positionId === null)) return { ok: false, reason: '求职意向没有变化', state };
+    const next = { ...state, targetPosition: positionId };
+    return commit(state, next, { operation: 'setTargetPosition', id: positionId }, { action: 'setTargetPosition', title: positionId ? '锁定求职意向：' + POSITIONS[positionId].title : '取消求职意向', changes: {} }, command.commandId);
+  }
   function evaluateEndings(state) {
     const average = averageGrade(state);
     const passed = state.courses.filter((item) => item.passed).length;
@@ -738,6 +876,207 @@
       options.push({ id: 'delayed', title: '延毕练习生', available: state.courses.length === 8, requirements: base });
     }
     return { average, passed, graduated, options };
+  }
+  // 「手头的事」：只读推导，供界面渲染进行中事件链、待办义务、开放窗口与毕业方向差距。
+  // 不消耗随机数、不写状态；门槛数值一律取自 ACTIONS 字段，与行动按钮同一口径。
+  function fill(text, values) {
+    return text.replace(/\{(\w+)\}/g, (token, key) => (own(values, key) ? String(values[key]) : token));
+  }
+  function advisories(state) {
+    if (['ended', 'finished'].includes(state.phase)) return { groups: [], total: 0, urgentCount: 0 };
+    const formatValue = (value) => typeof value === 'number'
+      ? (Number.isInteger(value) ? String(value) : value.toFixed(1))
+      : (own(ADVISORIES.statusLabels, value) ? ADVISORIES.statusLabels[value] : String(value));
+    // 统一条目形状：{ id, title, detail, tag, tagTone, urgent, detailList }
+    const entry = (id, template, values, urgent) => ({
+      id,
+      title: fill(template.title, values),
+      detail: fill(template.detail, values),
+      tag: fill(template.tag, values),
+      tagTone: template.tagTone,
+      urgent,
+      detailList: []
+    });
+    const makeGroup = (id) => ({ id, title: ADVISORIES.groupTitles[id], items: [] });
+    const chains = makeGroup('chains');
+    const duties = makeGroup('duties');
+    const windows = makeGroup('windows');
+    const directions = makeGroup('directions');
+    const settled = makeGroup('settled');
+    for (const id of ['project', 'club', 'internship']) {
+      const chain = state.chains[id];
+      const action = ACTIONS['apply' + id[0].toUpperCase() + id.slice(1)];
+      if (chain.status === 'active') {
+        const urgent = chain.deadline === 8;
+        // 实习链挂岗位时，标题用「公司 · 岗位」，让进行中的实习有身份。
+        const position = own(POSITIONS, chain.positionId || '') ? POSITIONS[chain.positionId] : null;
+        const name = position ? COMPANIES[position.company].name + ' · ' + position.title : CHAIN_NAMES[id];
+        if (id === 'internship') {
+          // 实习按累计投入与岗位门槛展示（三期）：达标后提示可办证明。
+          const progress = internshipProgress(state);
+          const template = progress.met ? ADVISORIES.chains.internshipSettleReady : ADVISORIES.chains.internshipActive;
+          chains.items.push(entry('chain:' + id, template, { name, workTime: progress.workTime, workEnergy: progress.workEnergy, reqTime: progress.reqTime, reqEnergy: progress.reqEnergy, deadline: chain.deadline }, urgent));
+        } else {
+          const template = chain.progress >= 2 ? ADVISORIES.chains.reviewReady : ADVISORIES.chains.active;
+          chains.items.push(entry('chain:' + id, template, { name, progress: chain.progress, deadline: chain.deadline }, urgent));
+        }
+      } else if (chain.status === 'idle' && state.term <= action.maxTerm) {
+        const nextAutumn = state.term % 2 === 1 ? state.term : state.term + 1;
+        if (action.autumnOnly && nextAutumn > action.maxTerm) continue;
+        chains.items.push(entry('chain:' + id, ADVISORIES.chains.idle[id], action, false));
+      } else if (chain.status === 'deferred') {
+        const stale = chain.nextEligibleTerm > action.maxTerm;
+        chains.items.push(entry('chain:' + id, stale ? ADVISORIES.chains.deferredStale : ADVISORIES.chains.deferred, { nextTerm: chain.nextEligibleTerm, maxTerm: action.maxTerm }, false));
+      }
+      if (chain.status === 'completed' || chain.status === 'missed') {
+        // 了结的实习同样保留公司岗位身份（从最后一段经历读，链上的 positionId 可能已被下一段覆盖）。
+        const lastRecord = state.experiences.filter((item) => item.type === 'internship' && own(POSITIONS, item.positionId || '')).at(-1);
+        const settledPosition = id === 'internship' && lastRecord ? POSITIONS[lastRecord.positionId] : null;
+        const settledName = settledPosition ? COMPANIES[settledPosition.company].name + ' · ' + settledPosition.title : CHAIN_NAMES[id];
+        settled.items.push(entry('settled:' + id, chain.status === 'completed' ? ADVISORIES.chains.completed : ADVISORIES.chains.missed, { name: settledName }, false));
+      }
+      // 关闭预警：只对仍来得及申请的链提示（active/已完成的不提示）。
+      const lastAutumn = action.autumnOnly ? (action.maxTerm % 2 === 1 ? action.maxTerm : action.maxTerm - 1) : action.maxTerm;
+      const applicable = (chain.status === 'idle' && state.term <= action.maxTerm && (!action.autumnOnly || state.term % 2 === 1 || state.term + 1 <= action.maxTerm))
+        || (chain.status === 'deferred' && chain.nextEligibleTerm <= action.maxTerm);
+      if (applicable && state.term === lastAutumn) windows.items.push(entry('window:' + id + ':closing', ADVISORIES.windows.closingNow, { name: CHAIN_NAMES[id] }, true));
+      else if (applicable && !action.autumnOnly && state.term === lastAutumn - 1) windows.items.push(entry('window:' + id + ':closing', ADVISORIES.windows.closingNext, { name: CHAIN_NAMES[id] }, false));
+    }
+    if (isSick(state)) duties.items.push({ id: 'duty:sick', title: ILLNESS_REASON, detail: '', tag: '紧急', tagTone: 'hot', urgent: true, detailList: [] });
+    if (state.eventFlags.fitnessRetest) duties.items.push(entry('duty:fitnessRetest', ADVISORIES.duties.fitnessRetest, {}, false));
+    const lastCourse = state.courses.at(-1);
+    if (state.term >= 2 && lastCourse && lastCourse.term === state.term - 1 && !lastCourse.passed) duties.items.push(entry('duty:retake', ADVISORIES.duties.retake, {}, false));
+    if ((state.cardDebt || 0) > 0) duties.items.push(entry('duty:cardDebt', ADVISORIES.duties.cardDebt, { debt: state.cardDebt }, false));
+    if (state.term === ACTIONS.jobPreparation.minTerm - 1) windows.items.push(entry('window:opening', ADVISORIES.windows.opening, { minTerm: ACTIONS.jobPreparation.minTerm }, false));
+    for (const option of evaluateEndings(state).options) {
+      if (['notQualified', 'delayed'].includes(option.id)) continue;
+      const unmet = option.requirements.filter((item) => !item.met);
+      directions.items.push({
+        id: 'direction:' + option.id,
+        title: option.title,
+        detail: unmet.length ? '' : ADVISORIES.directions.allMet,
+        tag: fill(unmet.length ? ADVISORIES.directions.tagUnmet : ADVISORIES.directions.tagMet, { count: unmet.length }),
+        tagTone: unmet.length ? ADVISORIES.directions.tagToneUnmet : ADVISORIES.directions.tagToneMet,
+        urgent: false,
+        detailList: unmet.map((requirement) => fill(ADVISORIES.directions.unmet, { label: requirement.label, value: formatValue(requirement.value) }))
+      });
+    }
+    // 意向锁定后的目标差距卡：插在四方向之前；gaps 由 positionAvailability 填充。
+    if (own(POSITIONS, state.targetPosition || '')) {
+      const position = POSITIONS[state.targetPosition];
+      const check = positionAvailability(state, state.targetPosition);
+      directions.items.unshift({
+        id: 'direction:target',
+        title: fill(ADVISORIES.targetPosition.title, { title: position.title }),
+        detail: check.ok ? ADVISORIES.targetPosition.readyDetail : '',
+        tag: check.ok ? ADVISORIES.targetPosition.tagReady : fill(ADVISORIES.targetPosition.tagGap, { count: check.gaps.length }),
+        tagTone: check.ok ? ADVISORIES.targetPosition.tagToneReady : ADVISORIES.targetPosition.tagToneGap,
+        urgent: false,
+        detailList: check.gaps
+      });
+    }
+    const groups = [chains, duties, windows, directions, settled].filter((group) => group.items.length);
+    for (const group of groups) group.items.sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0));
+    // 角标语义 = 待办 + 方向差距；settled（有了下落的）不计入 total 与 urgentCount。
+    const countable = groups.filter((group) => group.id !== 'settled');
+    return { groups, total: countable.reduce((sum, group) => sum + group.items.length, 0), urgentCount: countable.reduce((sum, group) => sum + group.items.filter((item) => item.urgent).length, 0) };
+  }
+  // 我的简历：experiences 的结构化档案视图（只认档案、不认链状态），供「记录」渲染与后续岗位门槛判定。
+  // 纯只读；多段就绪——两条同类型经历就是两项，未来多段实习零存档成本。
+  function resume(state) {
+    const sectionDefs = RESUME.sections;
+    const sections = sectionDefs.map((section) => ({ id: section.id, title: section.title, items: [] }));
+    const others = [];
+    for (const item of state.experiences) {
+      const position = own(POSITIONS, item.positionId || '') ? POSITIONS[item.positionId] : null;
+      const entry = {
+        term: item.term,
+        type: item.type,
+        ...(position ? { positionId: item.positionId, company: COMPANIES[position.company].name, title: position.title, tier: position.tier } : {})
+      };
+      const section = sections.find((candidate) => candidate.id === item.type);
+      if (section) section.items.push(entry);
+      else others.push(entry);
+    }
+    const count = (id) => sections.find((section) => section.id === id).items.length;
+    const requirements = { hasInternship: count('internship') > 0, hasProject: count('project') > 0, hasContest: count('contest') > 0, hasClub: count('club') > 0 };
+    return { sections, others, requirements };
+  }
+  const lastExperienceTerm = (state, type) => state.experiences
+    .filter((item) => item.type === type).reduce((max, item) => Math.max(max, item.term), 0);
+  // 实习完成门槛（三期）：累计实际投入达到岗位的 workRequirement 才算完成。
+  // 旧档兼容：progress ≥ 2 的旧链一律视为已达标（grandfather），之后继续投入也不改变结论。
+  function internshipRequirementMet(state) {
+    const chain = state.chains.internship;
+    if (chain.status !== 'active') return false;
+    if (chain.progress >= 2) return true;
+    const position = own(POSITIONS, chain.positionId || '') ? POSITIONS[chain.positionId] : null;
+    if (!position || chain.workTime === undefined || chain.workEnergy === undefined) return false;
+    return chain.workTime >= position.workRequirement.time && chain.workEnergy >= position.workRequirement.energy;
+  }
+  // 累计投入进度：供投入卡与「手头的事」共用；非进行中的实习返回 null。
+  function internshipProgress(state) {
+    if (state.chains.internship.status !== 'active') return null;
+    const chain = state.chains.internship;
+    const position = own(POSITIONS, chain.positionId || '') ? POSITIONS[chain.positionId] : null;
+    const requirement = position ? position.workRequirement : null;
+    return {
+      workTime: chain.workTime || 0,
+      workEnergy: chain.workEnergy || 0,
+      reqTime: requirement ? requirement.time : 0,
+      reqEnergy: requirement ? requirement.energy : 0,
+      met: internshipRequirementMet(state)
+    };
+  }
+  // 岗位门槛唯一口径：南门岗位对话框与 executeAction 共用同一判定。纯只读，零随机数。
+  // gaps 是填充后的未达标行（供「往哪走」目标差距卡的 detailList），reason 是单句摘要（供 toast/禁用提示）。
+  function positionAvailability(state, positionId) {
+    if (!own(POSITIONS, positionId)) return { ok: false, reason: '未知岗位', gaps: [] };
+    const position = POSITIONS[positionId];
+    const rows = ADVISORIES.targetPosition.rows;
+    const chain = state.chains.internship;
+    if (chain.status === 'active') return { ok: false, reason: rows.chainActive, gaps: [rows.chainActive] };
+    if (chain.status === 'missed') return { ok: false, reason: rows.chainMissed, gaps: [rows.chainMissed] };
+    if (chain.status === 'completed') {
+      const nextTerm = lastExperienceTerm(state, 'internship') + REAPPLY_GAP;
+      if (state.term < nextTerm) {
+        const gap = fill(rows.reapply, { term: nextTerm });
+        return { ok: false, reason: gap, gaps: [gap] };
+      }
+    }
+    if (state.term < position.window[0]) return { ok: false, reason: '第 ' + position.window[0] + ' 学期开始开放', gaps: [fill(rows.windowEarly, { min: position.window[0], term: state.term })] };
+    if (state.term > position.window[1]) return { ok: false, reason: '这个岗位的招聘窗口已过', gaps: [fill(rows.windowLate, { max: position.window[1] })] };
+    const gaps = [];
+    const matched = position.affinity && position.affinity.majors.includes(state.background.major);
+    const discounted = matched && position.affinity.gradeDiscount ? position.affinity.gradeDiscount : 0;
+    if (position.requires.grade !== undefined) {
+      const effectiveGrade = position.requires.grade - discounted;
+      const average = averageGrade(state);
+      if (average < effectiveGrade) {
+        gaps.push(fill(rows.grade, { grade: effectiveGrade, delta: Math.ceil(effectiveGrade - average) }));
+        if (discounted) gaps.push(fill(rows.gradeDiscount, { discounted: effectiveGrade }));
+        return { ok: false, reason: '平均成绩需达到 ' + effectiveGrade + (discounted ? '（你的专业对口，已降至 ' + effectiveGrade + '）' : ''), gaps };
+      }
+    }
+    const requirementKeys = position.requires.resumeAll || position.requires.resumeAny || [];
+    if (requirementKeys.length) {
+      const requirements = resume(state).requirements;
+      const met = (key) => requirements['has' + key[0].toUpperCase() + key.slice(1)];
+      const satisfied = position.requires.resumeAll
+        ? (matched && position.affinity.relaxToAny ? requirementKeys.some(met) : requirementKeys.every(met))
+        : requirementKeys.some(met);
+      if (!satisfied) {
+        const labels = requirementKeys.map((key) => REQUIREMENT_LABELS[key]);
+        if (position.requires.resumeAny || (matched && position.affinity.relaxToAny)) {
+          gaps.push(fill(rows.resumeAny, { labels: labels.join(' / ') }));
+          return { ok: false, reason: (position.requires.resumeAll ? '对口专业放宽为：' : '还缺简历要件：') + labels.join(position.requires.resumeAll ? ' 或 ' : ' / ') + '，至少其一', gaps };
+        }
+        const missing = requirementKeys.filter((key) => !met(key));
+        for (const key of missing) gaps.push(fill(rows.resumeMissing, { label: REQUIREMENT_LABELS[key] }));
+        return { ok: false, reason: '需要简历要件：' + missing.map((key) => REQUIREMENT_LABELS[key]).join(' 且 '), gaps };
+      }
+    }
+    return { ok: true, reason: '', gaps: [] };
   }
   function continueGame(state, options = {}) {
     const command = commandCheck(state, options, 'continueGame');
@@ -808,8 +1147,8 @@
   function replay({ nickname, seed, commands, legacyEconomy = false, economyStartTerm = legacyEconomy ? 2 : 1 }) {
     let state = createGame({ nickname, seed, legacyEconomy: legacyEconomy || economyStartTerm > 1 });
     for (const [index, command] of commands.entries()) {
-      const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment, extra: command.extra, economyStartTerm };
-      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), chooseBudget: () => chooseBudget(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), cheatExam: () => cheatExam(state, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args) };
+      const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment, extra: command.extra, positionId: command.positionId, economyStartTerm };
+      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), chooseBudget: () => chooseBudget(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), cheatExam: () => cheatExam(state, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args), setTargetPosition: () => setTargetPosition(state, command.id, args), settleInternship: () => settleInternship(state, args) };
       if (!own(handlers, command.operation)) return { ok: false, reason: '第 ' + (index + 1) + ' 步操作未知', state };
       const result = handlers[command.operation]();
       if (!result.ok) return { ...result, reason: '第 ' + (index + 1) + ' 步：' + result.reason };
@@ -817,7 +1156,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, budgetPlan, currentGrant, activeBudget, housingFor, placeFor, placeDescription, applyDormEventBonus, eventChoiceEffect, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, chooseBudget, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, budgetPlan, currentGrant, activeBudget, housingFor, placeFor, placeDescription, applyDormEventBonus, eventChoiceEffect, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, chooseBudget, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, advisories, ADVISORIES, resume, RESUME, COMPANIES, POSITIONS, positionAvailability, REAPPLY_GAP, internshipRequirementMet, internshipProgress, settleInternship, setTargetPosition, REQUIREMENT_LABELS, TIER_LABELS, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

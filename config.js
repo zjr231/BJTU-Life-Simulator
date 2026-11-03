@@ -41,6 +41,45 @@
     dorm: { title: '宿舍', kicker: '生活与休息', description: '上铺的帘子拉着，桌上摊着半袋零食。熄灯前半小时，是这里一天中最像家的时间。' },
     hotel: { title: '红果园宾馆', kicker: '接待与交流', description: '前台偶尔有人办入住，多是返校的校友。行李箱的轮子在地砖上轻轻响。' }
   };
+  // 公司库/岗位库（二期岗位化实习，设计稿 docs/公司库与岗位库-20261103.md；信息线打样，全部虚构）。
+  // tierClass: major 大厂 / mid 中厂 / startup 初创 / soe 央企——仅文案风味与三期结局细分用，不参与门槛。
+  const COMPANIES = {
+    yinfu: { id: 'yinfu', name: '音符跳动', tierClass: 'major', line: 'information' },
+    jingxi: { id: 'jingxi', name: '京西', tierClass: 'major', line: 'information' },
+    sishi: { id: 'sishi', name: '四十大盗', tierClass: 'major', line: 'information' },
+    qiandu: { id: 'qiandu', name: '千度', tierClass: 'mid', line: 'information' },
+    nanpo: { id: 'nanpo', name: '南坡网络', tierClass: 'major', line: 'information' },
+    pinxi: { id: 'pinxi', name: '拼夕夕', tierClass: 'mid', line: 'information' },
+    weituan: { id: 'weituan', name: '味团', tierClass: 'major', line: 'information' },
+    dami: { id: 'dami', name: '大米数码', tierClass: 'mid', line: 'information' },
+    liangmian: { id: 'liangmian', name: '日之亮面', tierClass: 'startup', line: 'information' },
+    qiushuo: { id: 'qiushuo', name: '浅度求索', tierClass: 'startup', line: 'information' },
+    jinggui: { id: 'jinggui', name: '京轨通号', tierClass: 'soe', line: 'engineering' }
+  };
+  // 岗位库：门槛唯一口径是 game.positionAvailability；requires.grade 平均成绩线（affinity.majors 内折扣），
+  // resumeAll 需全部要件、resumeAny 需其一；affinity.relaxToAny 只对 T3 生效（对口专业 且→或）。
+  // costs.fitness 是该岗位实习投入的额外体能消耗/次。数值为打样初稿，随试用窗口平衡。
+  // 三期：workPlans 三档实习内容按钮名、wages 三档日薪、workRequirement 完成门槛（累计时间/精力）——
+  // 投入卡按钮/日薪按岗位显示，累计达标后可办证明结束一段实习（见 docs/公司库与岗位库-20261103.md §6.5-6.7）。
+  const POSITIONS = {
+    qiushuo_fullstack: { id: 'qiushuo_fullstack', company: 'qiushuo', title: '全栈实习生', tier: 1, window: [3, 7], requires: { grade: 50 }, rewards: { income: 300, jobPreparation: 10 }, flavor: '一个人干三个人的活，成长也快三倍。', workPlans: ['修几个上游没人管的 Bug', '独立交付一个小功能', '负责一个模块从设计到上线'], wages: [50, 100, 150], workRequirement: { time: 4, energy: 24 } },
+    qiushuo_aiapp: { id: 'qiushuo_aiapp', company: 'qiushuo', title: 'AI 应用开发实习生', tier: 1, window: [3, 7], requires: { grade: 50 }, rewards: { income: 350, jobPreparation: 10 }, flavor: '今天接模型，明天写页面。', workPlans: ['给 Demo 换提示词调参数', '接一个新模型的 API', '调通一条端到端的应用链路'], wages: [50, 100, 150], workRequirement: { time: 4, energy: 24 } },
+    dami_hwtest: { id: 'dami_hwtest', company: 'dami', title: '智能硬件测试实习生', tier: 1, window: [3, 7], requires: { grade: 60 }, rewards: { income: 400, jobPreparation: 10 }, flavor: '拿到一部原型机，摔不坏的那种。', workPlans: ['执行基础功能用例', '复现并记录一个偶发故障', '写一份完整的测试报告'], wages: [50, 100, 150], workRequirement: { time: 4, energy: 24 } },
+    qiandu_testdev: { id: 'qiandu_testdev', company: 'qiandu', title: '测试开发实习生', tier: 1, window: [3, 7], requires: { grade: 60 }, rewards: { income: 400, jobPreparation: 10 }, flavor: '写代码测代码，套娃但踏实。', workPlans: ['维护回归用例集', '补齐一个核心模块的自动化', '搭一条持续集成流水线'], wages: [50, 100, 150], workRequirement: { time: 4, energy: 24 } },
+    jingxi_ops: { id: 'jingxi_ops', company: 'jingxi', title: '运维实习生', tier: 1, window: [3, 7], requires: { grade: 60 }, costs: { fitness: 2 }, rewards: { income: 400, jobPreparation: 10 }, flavor: '半夜告警电话是你的了。', workPlans: ['处理工单和告警值守', '完成一次机房巡检扩容', '独立处置一次线上故障'], wages: [50, 100, 150], workRequirement: { time: 4, energy: 24 } },
+    sishi_cloudops: { id: 'sishi_cloudops', company: 'sishi', title: '云运维实习生', tier: 1, window: [3, 7], requires: { grade: 60 }, costs: { fitness: 2 }, rewards: { income: 400, jobPreparation: 10 }, flavor: '控制台后面是全球机房。', workPlans: ['熟悉控制台与工单流', '给集群做一次容量巡检', '跟进一次大促保障'], wages: [50, 100, 150], workRequirement: { time: 4, energy: 24 } },
+    pinxi_frontend: { id: 'pinxi_frontend', company: 'pinxi', title: '前端实习生', tier: 1, window: [3, 7], requires: { grade: 60 }, rewards: { income: 450, jobPreparation: 10 }, flavor: '砍一刀的页面就差你了。', workPlans: ['修页面样式与兼容问题', '独立还原一个活动页', '负责一个营销页从开发到上线'], wages: [50, 100, 150], workRequirement: { time: 4, energy: 24 } },
+    sishi_sre: { id: 'sishi_sre', company: 'sishi', title: 'SRE 实习生', tier: 2, window: [5, 7], requires: { grade: 60, resumeAny: ['project', 'contest', 'internship'] }, affinity: { majors: ['计算机科学与技术', '通信工程', '软件工程', '人工智能'], gradeDiscount: 10 }, rewards: { income: 650, jobPreparation: 20 }, flavor: '可用性四个九，人只能三个。', workPlans: ['读值班手册和拓扑图', '完成一次预案演练', '独立顶一个晚班值守'], wages: [80, 160, 240], workRequirement: { time: 6, energy: 40 } },
+    jingxi_data: { id: 'jingxi_data', company: 'jingxi', title: '数据开发实习生', tier: 2, window: [5, 7], requires: { grade: 60, resumeAny: ['project', 'contest', 'internship'] }, affinity: { majors: ['计算机科学与技术', '通信工程', '软件工程', '人工智能'], gradeDiscount: 10 }, rewards: { income: 600, jobPreparation: 20 }, flavor: '仓库里的表比图书馆的书还多。', workPlans: ['清洗和核对几张核心表', '上线一个报表任务', '重构一个慢任务的执行链路'], wages: [80, 160, 240], workRequirement: { time: 6, energy: 40 } },
+    pinxi_client: { id: 'pinxi_client', company: 'pinxi', title: '客户端开发实习生', tier: 2, window: [5, 7], requires: { grade: 60, resumeAny: ['project', 'contest', 'internship'] }, affinity: { majors: ['计算机科学与技术', '通信工程', '软件工程', '人工智能'], gradeDiscount: 10 }, rewards: { income: 600, jobPreparation: 20 }, flavor: '包越来越小，需求越来越多。', workPlans: ['修崩溃和兼容问题', '独立交付一个业务组件', '跟一个版本从提测到发布'], wages: [80, 160, 240], workRequirement: { time: 6, energy: 40 } },
+    nanpo_gameserver: { id: 'nanpo_gameserver', company: 'nanpo', title: '游戏服务端实习生', tier: 2, window: [4, 7], requires: { grade: 60, resumeAny: ['project', 'contest', 'internship'] }, affinity: { majors: ['计算机科学与技术', '通信工程', '软件工程', '人工智能'], gradeDiscount: 10 }, rewards: { income: 550, jobPreparation: 20 }, flavor: '你的代码撑着百万人的副本。', workPlans: ['写活动玩法的配置表', '实现一个小玩法的接口', '负责一次线上活动扩容'], wages: [80, 160, 240], workRequirement: { time: 6, energy: 40 } },
+    qiandu_search: { id: 'qiandu_search', company: 'qiandu', title: '搜索研发助理', tier: 2, window: [5, 7], requires: { grade: 60, resumeAny: ['project', 'contest', 'internship'] }, affinity: { majors: ['计算机科学与技术'], gradeDiscount: 10 }, rewards: { income: 700, jobPreparation: 20 }, flavor: '十年前的提问，三毫秒后 answered。', workPlans: ['标注和评估 bad case', '优化一个排序特征', '跟进一次策略实验全流程'], wages: [80, 160, 240], workRequirement: { time: 6, energy: 40 } },
+    yinfu_backend: { id: 'yinfu_backend', company: 'yinfu', title: '后端开发实习生', tier: 2, window: [5, 7], requires: { grade: 60, resumeAny: ['project', 'contest', 'internship'] }, affinity: { majors: ['计算机科学与技术', '通信工程', '软件工程', '人工智能'], gradeDiscount: 10 }, rewards: { income: 700, jobPreparation: 20 }, flavor: '面试官让你讲项目里最难的技术点。', workPlans: ['接手几个日常迭代需求', '负责一个中量级需求的设计与实现', '主导一次稳定性专项改造'], wages: [80, 160, 240], workRequirement: { time: 6, energy: 40 } },
+    jinggui_signal: { id: 'jinggui_signal', company: 'jinggui', title: '信号软件工程师助理', tier: 2, window: [5, 7], requires: { grade: 60, resumeAny: ['project', 'contest', 'internship'] }, affinity: { majors: ['通信工程'], gradeDiscount: 10 }, rewards: { income: 650, jobPreparation: 20 }, flavor: '安全计算机代码，一行都不能错。', workPlans: ['读规范和既有代码', '补齐一个功能模块的单测', '参与一次实验室联试'], wages: [80, 160, 240], workRequirement: { time: 6, energy: 40 } },
+    yinfu_algo: { id: 'yinfu_algo', company: 'yinfu', title: '算法实习生', tier: 3, window: [6, 7], requires: { resumeAll: ['project', 'contest'] }, affinity: { majors: ['人工智能', '计算机科学与技术'], relaxToAny: true }, rewards: { income: 900, jobPreparation: 30 }, flavor: '榜单 every week，人 every night。', workPlans: ['跑通基线并复现指标', '完成一轮特征策略实验', '把一个有效改进推上线上 AB'], wages: [120, 240, 360], workRequirement: { time: 9, energy: 70 } },
+    // AI Infra 设计稿为「前段 T2 实习」，现简化为 hasInternship（resume 口径暂无岗位层级），三期按段位细分时替换判定源。
+    liangmian_aiinfra: { id: 'liangmian_aiinfra', company: 'liangmian', title: 'AI Infra 实习生', tier: 3, window: [6, 7], requires: { resumeAll: ['project', 'internship'] }, affinity: { majors: ['人工智能'], relaxToAny: true }, rewards: { income: 1000, jobPreparation: 30 }, flavor: '给训练大模型的机器搭地基。', workPlans: ['维护集群监控与日志脚本', '交付一个训练任务调度优化', '参与一次大规模训练保障'], wages: [120, 240, 360], workRequirement: { time: 9, energy: 70 } }
+  };
   // Each dimension is chosen independently; the semester budget is their sum.
   const BUDGET_DIMENSIONS = {
     clothing: {
@@ -100,8 +139,9 @@
     projectWork: { place: 'yifu', title: '项目投入', description: '例会开到晚上，方案改到第七版，白板上的箭头越画越多。', time: 2, energy: 15, fitnessCost: 3, money: 0, preparation: 10, chain: 'project', kind: 'work', limit: 2 },
     applyClub: { place: 'activity', title: '参与社团招新', description: '百团大战的摊位一眼望不到头。报名表递出去，扫码进群。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 1, maxTerm: 6, autumnOnly: true, chain: 'club', kind: 'apply' },
     clubWork: { place: 'activity', title: '社团投入', description: '搬桌子、贴海报、盯签到，忙到嗓子发干。', time: 1, energy: 8, fitnessCost: 2, money: 0, social: 8, chain: 'club', kind: 'work', limit: 2 },
-    applyInternship: { place: 'gate', title: '申请实习经历', description: '成绩单和简历装进同一个文件袋，交上去。对方说，两周内回复。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 5, maxTerm: 7, minAverage: 60, chain: 'internship', kind: 'apply' },
-    internshipWork: { place: 'gate', title: '实习投入', description: '打卡，整理材料，跑腿送文件。下班走出大楼，天刚擦黑。', time: 2, energy: 15, fitnessCost: 3, money: 0, income: 100, chain: 'internship', kind: 'work', limit: 2 },
+    applyInternship: { place: 'gate', title: '申请实习岗位', description: '南门布告栏贴满了岗位：先挑一个够得着的，把成绩单和简历装进同一个文件袋。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 3, maxTerm: 7, chain: 'internship', kind: 'apply' },
+    // 不再设每学期次数上限：时间与精力本身就是约束（重度档 3 时间/26 精力，一学期天然约 3 次）。
+    internshipWork: { place: 'gate', title: '实习投入', description: '打卡，整理材料，跑腿送文件。下班走出大楼，天刚擦黑。', time: 2, energy: 15, fitnessCost: 3, money: 0, income: 100, chain: 'internship', kind: 'work' },
     checkup: { place: 'hospital', title: '体检', description: '挂号、量血压、抽血。医生看着单子说：各项指标正常。', time: 1, energy: 5, fitnessCost: 1, money: 50, fitness: 3, mood: 2, limit: 1 },
     sickVisit: { place: 'hospital', title: '看病开药', description: '在候诊区等了半小时。校医开了药，叮嘱按时吃、别熬夜。', time: 1, energy: 3, fitnessCost: 1, money: 60, mood: 8, limit: 2 },
     treatment: { place: 'hospital', title: '校医院就诊', description: '身体已经亮红灯。先挂个号，把状态稳下来。', time: 1, energy: 0, fitnessCost: 0, money: 20, fitnessFloor: 25, sickOnly: true, emergencyMoney: true, hint: '生病时只能先来校医院；诊费 20 元，钱包不够时按现有余额支付。' },
@@ -265,10 +305,15 @@
       { id: 'accept', fitnessCost: 0, title: '接下实习', description: '回复邮件，接受。实习从下周一开始。', chainEffect: 'accept' },
       { id: 'later', fitnessCost: 0, title: '下一学期再考虑', description: '先谢过，这学期抽不开身。名额以后还会再放出来。', chainEffect: 'defer' }
     ] },
+    // legacy：三期起实习链改用累计投入 + internshipMilestone 事件，本事件不再入队，仅供旧档 pendingEvent/eventHistory 读取与收尾。
     internshipReview: { priority: 51, chain: 'internship', node: 'completion', title: '实习的最后一天', description: '最后一次打卡，工位上贴的便利贴都清空了。带教老师问，证明和评语要现在开吗？', trigger: '实习期满了，工位上的东西已经收空', choices: [
       { id: 'complete', fitnessCost: 0, title: '办实习证明', description: '开好实习证明，盖上章。这段经历能写进简历了。', mood: 5, chainEffect: 'complete', experience: 'internship' },
       { id: 'later', fitnessCost: 0, title: '下学期再办', description: '先不急着办手续。除非这已经是最后一个学期。', chainEffect: 'postpone' },
       { id: 'abandon', fitnessCost: 0, title: '不开证明', description: '不办手续了。干过的活不会白干，只是简历上少了一行。', chainEffect: 'abandon' }
+    ] },
+    internshipMilestone: { priority: 52, chain: 'internship', node: 'milestone', title: '实习的十字路口', description: '带教老师看了眼你的工作量记录：该做的都做完了，证明随时能开。要现在收尾，还是再干一阵？', trigger: '你的实习投入已经达到了证明门槛', choices: [
+      { id: 'settle', fitnessCost: 0, title: '马上办证明', description: '把这段实习收尾，开好证明。经历能写进简历了。', mood: 5, chainEffect: 'complete', experience: 'internship' },
+      { id: 'continue', fitnessCost: 0, title: '继续实习', description: '先不办。继续投入还能拿日薪，之后随时可以在南门的实习投入卡上办证明。' }
     ] },
     campusDiscussion: { priority: 60, title: '图书馆里的偶遇', description: '旁边一桌压着声音讨论作业，你发现是同一门课。其中一个人抬头看见你，招了招手。', trigger: '你抬头，正好对上那桌人的目光', choices: [
       { id: 'discuss', title: '加入讨论', description: '拉开椅子坐过去。聊着聊着，卡住的点通了几处。', time: 1, energy: 5, fitnessCost: 1, preparation: 5, social: 3 },
@@ -402,7 +447,7 @@
       { id: 'later', fitnessCost: 0, title: '看个海报就好', description: '你拍下剧名，想着下次早点买票。' }
     ] },
     alumniStory: { priority: 79, title: '校友分享会', description: '红果园宾馆的宴会厅在办校友返校会。一个学长端着杯子，讲他毕业后的第一份工作。', trigger: '宴会厅里传来掌声', choices: [
-      { id: 'listen', title: '坐下来听', description: '散场前，学长留了联系方式，说欢迎去他那实习。', time: 1, energy: 2, fitnessCost: 1, social: 4, mood: 3 },
+      { id: 'listen', title: '坐下来听', description: '散场前，学长留了联系方式，说欢迎去他那实习。', time: 1, energy: 2, fitnessCost: 1, social: 4, mood: 3, jobPreparation: 3 },
       { id: 'later', fitnessCost: 0, title: '不打扰他们', description: '你穿过大堂，去办自己的事。' }
     ] },
     frontDesk: { priority: 80, title: '周末帮工', description: '宾馆前台贴着招周末帮工的启事。时薪还行，就是得早起。', trigger: '前台贴着招工启事', choices: [
@@ -426,7 +471,7 @@
       { id: 'later', fitnessCost: 0, title: '不掺和', description: '你低头翻书。反正被点到的又不是你。' }
     ] },
     jobFair: { priority: 85, title: '招聘会海报', description: '南门布告栏贴出大型招聘会海报：上百家企业进校，时间就定在下周。路过的大四学长正对着海报拍照。', trigger: '布告栏前围了不少人', choices: [
-      { id: 'browse', title: '凑近看岗位', description: '扫了几个二维码，把感兴趣的展位记下来。', time: 1, energy: 2, fitnessCost: 1, social: 2, mood: 2 },
+      { id: 'browse', title: '凑近看岗位', description: '扫了几个二维码，把感兴趣的展位记下来。', time: 1, energy: 2, fitnessCost: 1, social: 2, mood: 2, jobPreparation: 4 },
       { id: 'later', fitnessCost: 0, title: '离毕业还早', description: '你摆摆手。海报上的字，以后再看。' }
     ] },
     medicalInsurance: { priority: 86, title: '医保办理', description: '校医院的宣传栏贴出通知：大学生医保参保登记开始，基础参保费用已由家里另行承担，来核对资料即可。', trigger: '宣传栏贴出医保通知', choices: [
@@ -725,7 +770,76 @@
     qualityEffects: { 0: {}, 1: { social: 1, mood: 2 }, 2: { social: 2, mood: 4 } },
     academicPrep: { 1: 3, 2: 5 }
   };
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT };
+  // 「手头的事」抽屉：advisories(state) 只读推导用的全部玩家可见文案（game.js 填 {token}，模板内不写死数值）。
+  // 每条模板 = { title, detail, tag, tagTone }；tagTone 对应界面胶囊配色（go/todo/hot/gap/done/calm）。
+  const ADVISORIES = {
+    groupTitles: { chains: '挂着的链', duties: '欠着的事', windows: '快开的窗', directions: '往哪走', settled: '有了下落的' },
+    emptyNote: '暂时没有挂着的事，往哪走由你定。',
+    statusLabels: { idle: '未申请', active: '进行中', deferred: '暂缓申请', completed: '已完成', missed: '未完成', checked: '已核查' },
+    chains: {
+      reviewReady: { title: '{name} · 投入已满', detail: '第 {deadline} 学期开学答辩', tag: '待答辩', tagTone: 'go' },
+      active: { title: '{name} · 进行中', detail: '进度 {progress}/2 · 第 {deadline} 学期出结果', tag: '进行中', tagTone: 'go' },
+      // 实习链改用累计投入口径（三期）：progress 退役，按岗位门槛判定
+      internshipActive: { title: '{name} · 进行中', detail: '累计投入 时间 {workTime}/{reqTime} · 精力 {workEnergy}/{reqEnergy} · 第 {deadline} 学期结算不办会延期', tag: '进行中', tagTone: 'go' },
+      internshipSettleReady: { title: '{name} · 门槛已达标', detail: '累计投入 时间 {workTime}/{reqTime} · 精力 {workEnergy}/{reqEnergy} · 南门实习卡可办证明', tag: '可办证明', tagTone: 'go' },
+      idle: {
+        project: { title: '校园项目未申请', detail: '第 {minTerm}–{maxTerm} 学期可申请 · 门槛：本学期学习进度 ≥ {minPreparation}', tag: '可申请', tagTone: 'go' },
+        club: { title: '社团招新未申请', detail: '只在秋季学期开放（第 {minTerm}–{maxTerm} 学期内）', tag: '秋季限定', tagTone: 'go' },
+        internship: { title: '实习未申请', detail: '南门岗位库已开放 · 第 {minTerm}–{maxTerm} 学期可申请 · 先挑岗位再投简历', tag: '可申请', tagTone: 'go' }
+      },
+      deferred: { title: '{name}暂缓中', detail: '第 {nextTerm} 学期可再次申请', tag: '暂缓', tagTone: 'calm' },
+      deferredStale: { title: '{name}暂缓中', detail: '申请窗口已过（第 {maxTerm} 学期截止）', tag: '已过期', tagTone: 'calm' },
+      completed: { title: '{name}·已完成', detail: '经历已写入校园档案', tag: '已完成', tagTone: 'done' },
+      missed: { title: '{name}·未完成', detail: '已有的投入保留在档案里', tag: '未完成', tagTone: 'calm' }
+    },
+    duties: {
+      // 生病条目的 title 复用 game.js 的 ILLNESS_REASON，不在此重复
+      fitnessRetest: { title: '体测补测待参加', detail: '春季学期安排行动后触发', tag: '待办', tagTone: 'todo' },
+      retake: { title: '上学期有课程未达标', detail: '本学期开学补考', tag: '待办', tagTone: 'todo' },
+      cardDebt: { title: '校园卡欠款 {debt} 元', detail: '后续收入优先偿还', tag: '待还', tagTone: 'todo' }
+    },
+    windows: {
+      opening: { title: '新窗口即将开启', detail: '第 {minTerm} 学期起开放：求职准备、深造准备', tag: '预告', tagTone: 'todo' },
+      closingNext: { title: '{name}申请窗口', detail: '下学期截止，这是最后准备期', tag: '下学期截止', tagTone: 'todo' },
+      closingNow: { title: '{name}申请窗口', detail: '本学期截止，错过就关死', tag: '本学期截止', tagTone: 'hot' }
+    },
+    directions: {
+      // 方向名复用 evaluateEndings 的 option.title（'继续深造'/'进入就业'），不在此重复
+      unmet: '{label}（当前 {value}）',
+      allMet: '条件已全部满足',
+      tagUnmet: '还差 {count} 项', tagToneUnmet: 'gap',
+      tagMet: '条件已齐', tagToneMet: 'done'
+    },
+    // 意向锁定后的目标差距卡：positionAvailability 的 gaps 已是填充后的行，rows 供其内部填充。
+    targetPosition: {
+      title: '目标：{title}',
+      tagGap: '还差 {count} 项', tagToneGap: 'gap',
+      tagReady: '可申请', tagToneReady: 'go',
+      readyDetail: '门槛已齐，南门可以投递了',
+      rows: {
+        windowEarly: '第 {min} 学期起开放（现在第 {term} 学期）',
+        windowLate: '招聘窗口已过（第 {max} 学期截止）',
+        grade: '平均成绩 ≥ {grade}，还差 {delta} 分',
+        gradeDiscount: '你的专业对口，成绩线降至 {discounted}',
+        resumeAny: '简历要件至少其一：{labels}（均缺）',
+        resumeMissing: '缺简历要件：{label}',
+        chainActive: '当前实习仍在进行中',
+        chainMissed: '这条实习链已标记未完成，不能再次申请',
+        reapply: '上一段实习后要隔一学年，第 {term} 学期起可再申'
+      }
+    }
+  };
+  // 我的简历：resume(state) 的四栏标题与其他经历的折叠文案（docs/公司库与岗位库-20261103.md 一期）。
+  const RESUME = {
+    sections: [
+      { id: 'internship', title: '实习经历' },
+      { id: 'project', title: '项目经历' },
+      { id: 'contest', title: '竞赛经历' },
+      { id: 'club', title: '社团经历' }
+    ],
+    othersNote: '另有：{list}，共 {count} 项校园经历。'
+  };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

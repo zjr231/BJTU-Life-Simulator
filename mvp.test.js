@@ -7,16 +7,18 @@ const save = require('./save.js');
 function resolve(state, mode = 'accept') {
   while (state.pendingEvent) {
     const id = state.pendingEvent.id;
-    const choice = id.endsWith('Offer') ? mode : id.endsWith('Review') ? 'complete' : 'later';
+    const choice = id.endsWith('Offer') ? mode
+      : id === 'internshipMilestone' ? 'settle'
+      : id.endsWith('Review') ? 'complete' : 'later';
     const result = game.submitEventChoice(state, choice);
     assert.equal(result.ok, true, id + ': ' + result.reason);
     state = result.state;
   }
   return state;
 }
-function act(state, id, investment) {
+function act(state, id, investment, positionId) {
   state = resolve(state);
-  const result = game.executeAction(state, id, { investment });
+  const result = game.executeAction(state, id, { investment, positionId });
   assert.equal(result.ok, true, 'term ' + state.term + ' ' + id + ': ' + result.reason);
   const next = resolve(result.state);
   assert.equal(game.validateState(next).ok, true, JSON.stringify(game.validateState(next)));
@@ -38,7 +40,7 @@ function nextTerm(state) {
 }
 function route(kind) {
   let state = game.createGame({ nickname: '路线测试', seed: 'routes' });
-  const perform = (id, investment) => {
+  const perform = (id, investment, positionId) => {
     state = resolve(state);
     if (game.isSick(state)) state = act(state, 'treatment');
     const preview = game.previewActionInvestment(state, id, investment);
@@ -52,7 +54,7 @@ function route(kind) {
       else if (state.fitness < 30 && game.availability(state, 'walk', 1).ok) state = act(state, 'walk', 1);
       else break;
     }
-    state = act(state, id, investment);
+    state = act(state, id, investment, positionId);
   };
   for (let term = 1; term <= 8; term++) {
     state = resolve(state);
@@ -64,7 +66,7 @@ function route(kind) {
     // 事件链投入先做，避免学习消耗完时间后无法完成。
     if (term === 3 && ['deep', 'both', 'turn'].includes(kind)) { perform('projectWork', 15); perform('projectWork', 15); }
     if (['employment', 'both', 'turn'].includes(kind)) {
-      if (term === 5) { perform('applyInternship'); perform('internshipWork', 15); }
+      if (term === 5) { perform('applyInternship', undefined, 'qiandu_testdev'); perform('internshipWork', 15); }
       if (term === 6) perform('internshipWork', 15);
     }
     while (state.preparation < target && (state.counts.study || 0) < 4) perform('study', 15);
