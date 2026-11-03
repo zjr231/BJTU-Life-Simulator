@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 'use strict';
 // 提交后把本次工作总结推送到飞书群自定义机器人。
-// 由 .git/hooks/post-commit 在后台调用，失败只写日志，绝不影响提交结果。
+// 由 .githooks/post-commit 在后台调用，失败只写日志，绝不影响提交结果。
 //
-// 配置：在仓库的 .git/feishu-webhook 里写两行（该文件不会被 git 跟踪）
+// 配置：在仓库的 .git/feishu-webhook 里写三行（该文件不会被 git 跟踪）
 //   第 1 行：群机器人 webhook 地址，形如 https://open.feishu.cn/open-apis/bot/v2/hook/xxxx
 //   第 2 行（可选）：机器人「签名校验」的密钥，没开签名就留空
+//   第 3 行（可选）：DeepSeek API Key；也可改用环境变量 DEEPSEEK_API_KEY
 //
 // 调试：
 //   FEISHU_NOTIFY_DRY_RUN=1 node scripts/feishu-notify.js   # 只打印消息，不发送
@@ -19,6 +20,7 @@ const TAG = 'feishu-notify';
 const AI_TIMEOUT_MS = 120000;
 const SEND_TIMEOUT_MS = 10000;
 const MAX_DIFF = 12000;
+const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 
 function log(message) { process.stderr.write('[' + TAG + '] ' + message + '\n'); }
 
@@ -32,7 +34,11 @@ function readConfig(root) {
   const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/).map((line) => line.trim());
   const webhook = lines[0] || '';
   if (!/^https?:\/\//.test(webhook)) return null;
-  return { webhook, secret: lines[1] || '' };
+  return {
+    webhook,
+    secret: lines[1] || '',
+    deepseekKey: process.env.DEEPSEEK_API_KEY || lines[2] || ''
+  };
 }
 
 function commitInfo() {
@@ -64,24 +70,45 @@ function commitInfo() {
   return info;
 }
 
-// 让本机 claude 命令读 diff 写两三句总结；不可用或超时就退回结构化信息。
-function claudeSummary(root, info) {
+// 调用 DeepSeek 读取 diff 写两三句总结；未配置密钥、不可用或超时就退回结构化信息。
+async function deepseekSummary(info, apiKey) {
   if (process.env.FEISHU_NOTIFY_NO_AI === '1' || !info.diff) return '';
+  if (!apiKey) {
+    log('未配置 DeepSeek API Key，跳过 AI 总结；可在 .git/feishu-webhook 第 3 行或 DEEPSEEK_API_KEY 环境变量中配置');
+    return '';
+  }
   const prompt = '请用中文写 2~3 句话总结这次代码提交做了什么、影响哪些功能，150 字以内。'
     + '不要列表、不要客套、不要署名、不要重复提交说明原文。\n\n'
     + '提交说明：' + info.subject + '\n\n改动 diff（可能截断）：\n' + info.diff;
   try {
-    // Windows 下 claude 是 .cmd 包装脚本，Node 不能直接执行，需要经 cmd.exe；
-    // 提示词走 stdin，避免引号与换行在命令行里转义出错。
-    const windows = process.platform === 'win32';
-    const command = windows ? (process.env.ComSpec || 'cmd.exe') : 'claude';
-    const args = windows ? ['/d', '/s', '/c', 'claude -p --output-format text'] : ['-p', '--output-format', 'text'];
-    const output = execFileSync(command, args, {
-      cwd: root, input: prompt, encoding: 'utf8', timeout: AI_TIMEOUT_MS, stdio: ['pipe', 'pipe', 'ignore']
+    const response = await fetch(DEEPSEEK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + apiKey
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: '你是中文代码提交摘要助手，只输出简洁、准确的中文总结。' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 300,
+        temperature: 0.3,
+        stream: false
+      }),
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS)
     });
-    return output.trim().replace(/\s+/g, ' ').slice(0, 400);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error('DeepSeek 返回 ' + response.status + ' ' + JSON.stringify(data).slice(0, 200));
+    }
+    const content = data && data.choices && data.choices[0] && data.choices[0].message
+      ? data.choices[0].message.content
+      : '';
+    return String(content || '').trim().replace(/\s+/g, ' ').slice(0, 400);
   } catch (error) {
-    log('生成 AI 总结失败，改发结构化信息：' + error.message);
+    log('生成 DeepSeek 总结失败，改发结构化信息：' + error.message);
     return '';
   }
 }
@@ -128,7 +155,7 @@ async function send(config, text) {
     return;
   }
   const info = commitInfo();
-  const text = buildText(path.basename(root), info, claudeSummary(root, info));
+  const text = buildText(path.basename(root), info, await deepseekSummary(info, config.deepseekKey));
   if (process.env.FEISHU_NOTIFY_DRY_RUN === '1') {
     process.stdout.write(text + '\n');
     return;

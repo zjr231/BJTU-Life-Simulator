@@ -13,6 +13,9 @@ function actionableState(id) {
   if (action.kind === 'work') state.chains[action.chain] = { status: 'active', progress: 0, startedTerm: 4, deadline: 6, nextEligibleTerm: 1, reviewAfter: 4 };
   return state;
 }
+function performAction(state, id, options) {
+  return id === 'basketball' ? game.completeBasketball(state, 0, options) : game.executeAction(state, id, options);
+}
 test('未知行动不会修改状态，包括对象原型上的名字', () => {
   const state = game.createGame();
   const before = structuredClone(state);
@@ -45,13 +48,13 @@ test('每个行动的资源边界：刚好满足可执行，任一资源不足�
     const initial = actionableState(id);
     const action = game.getAction(initial, id);
     const state = { ...initial, time: action.time, energy: action.energy, money: action.money };
-    assert.equal(game.executeAction(state, id).ok, true, id);
+    assert.equal(performAction(state, id).ok, true, id);
     for (const [key, cost] of [['time', action.time], ['energy', action.energy], ['money', action.money]]) {
       if (!cost) continue;
       if (key === 'money' && action.emergencyMoney) continue;
       const insufficient = { ...state, [key]: cost - 1 };
       const before = structuredClone(insufficient);
-      const result = game.executeAction(insufficient, id);
+      const result = performAction(insufficient, id);
       assert.equal(result.ok, false, `${id}: ${key}`);
       assert.strictEqual(result.state, insufficient);
       assert.deepEqual(insufficient, before);
@@ -80,10 +83,10 @@ test('各行动次数限制阻止刷取，学期切换后清空', () => {
   for (const [id, action] of Object.entries(game.ACTIONS)) {
     if (!action.limit) continue;
     const state = { ...actionableState(id), counts: { [id]: action.limit } };
-    assert.equal(game.executeAction(state, id).ok, false);
+    assert.equal(performAction(state, id).ok, false);
     let next = game.continueGame(game.endTerm(state).state).state;
     while (next.pendingEvent) next = game.submitEventChoice(next, 'later').state;
-    assert.equal(game.executeAction(next, id).ok, true);
+    assert.equal(performAction(next, id).ok, true);
   }
 });
 test('结算预览不修改状态，成绩不跨学期累加，资源仅扣一次', () => {

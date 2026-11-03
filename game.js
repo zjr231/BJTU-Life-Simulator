@@ -3,7 +3,7 @@
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
   const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
-  const { RULES, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
+  const { RULES, FITNESS_TIERS, BASKETBALL, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
   const { COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const own = (object, key) => typeof key === 'string' && Object.hasOwn(object, key);
@@ -11,7 +11,7 @@
   const clamp = (value, max) => Math.max(0, Math.min(max, value));
   const selectedCoursesOf = (state) => Array.isArray(state.selectedCourses) ? state.selectedCourses : [];
   // Health actions are exempt from fitness-tier scaling; sickness is derived from fitness.
-  const HEALTH_ACTIONS = new Set(['exercise', 'gym', 'teamSport', 'soloSport', 'walk', 'rest', 'checkup', 'sickVisit', 'treatment']);
+  const HEALTH_ACTIONS = new Set(['exercise', 'gym', 'teamSport', 'soloSport', 'basketball', 'walk', 'rest', 'checkup', 'sickVisit', 'treatment']);
   const ILLNESS_REASON = '身体不适，先去校医院就诊';
   const SICK_LEAVE_ID = 'sickLeave';
   const REWARD_KEYS = ['preparation', 'social', 'mood', 'fitness', 'furtherStudy', 'jobPreparation'];
@@ -72,6 +72,11 @@
     return action;
   }
   function averageGrade(state) { return state.courses.length ? state.courses.reduce((sum, item) => sum + item.grade, 0) / state.courses.length : 0; }
+  function basketballReward(hits) {
+    let tier = BASKETBALL.rewards[0];
+    for (const item of BASKETBALL.rewards) if (hits >= item.minHits) tier = item;
+    return { ...tier, hits, score: hits * BASKETBALL.pointsPerHit };
+  }
   function previewChanges(state, effect) {
     const fitnessBase = state.fitness + (effect.fitness || 0) - (effect.fitnessCost || 0);
     const fitnessTarget = effect.fitnessFloor === undefined ? fitnessBase : Math.max(fitnessBase, effect.fitnessFloor);
@@ -145,7 +150,7 @@
     if (action.preparation && !action.chain && state.preparation >= 100) return { ok: false, reason: '本学期学习进度已满' };
     const check = resourceCheck(state, action);
     if (!check.ok) return check;
-    if (!action.chain && !Object.values(previewChanges(state, action)).some((value) => value > 0)) return { ok: false, reason: '这项行动的收益已经到头了' };
+    if (!action.chain && !action.minigame && !Object.values(previewChanges(state, action)).some((value) => value > 0)) return { ok: false, reason: '这项行动的收益已经到头了' };
     return { ok: true, reason: '' };
   }
   function applyChanges(state, changes) {
@@ -261,6 +266,7 @@
     if (!command.ok) return command;
     const check = availability(state, id, options.investment);
     if (!check.ok) return { ...check, state };
+    if (getAction(state, id).minigame) return { ok: false, reason: '这项行动需要先完成小游戏', state };
     const profile = getActionInvestment(state, id);
     let action = getAction(state, id);
     let rng = state.rng;
@@ -281,6 +287,19 @@
     if (action.kind === 'work') next.chains = { ...state.chains, [action.chain]: { ...state.chains[action.chain], progress: state.chains[action.chain].progress + 1 } };
     next = attachEvents(next, id);
     return commit(state, next, { operation: 'executeAction', id, ...(investment ? { investment: investment.amount } : {}) }, { action: id, title: action.title, changes, fitnessCost: action.fitnessCost || 0, ...(investment ? { investment } : {}) }, command.commandId);
+  }
+  function completeBasketball(state, hits, options = {}) {
+    const command = commandCheck(state, options, 'basketball');
+    if (!command.ok) return command;
+    if (!Number.isSafeInteger(hits) || hits < 0 || hits > BASKETBALL.maxHits) return { ok: false, reason: '投篮结果无效', state };
+    const check = availability(state, 'basketball');
+    if (!check.ok) return { ...check, state };
+    const base = getAction(state, 'basketball');
+    const reward = basketballReward(hits);
+    const changes = previewChanges(state, fitnessAdjustedEffect(state, { ...base, ...reward }, 'basketball'));
+    let next = { ...applyChanges(state, changes), counts: { ...state.counts, basketball: (state.counts.basketball || 0) + 1 } };
+    next = attachEvents(next, 'basketball');
+    return commit(state, next, { operation: 'completeBasketball', hits }, { action: 'basketball', title: base.title, hits, score: reward.score, tier: reward.id, tierLabel: reward.label, changes, fitnessCost: base.fitnessCost || 0 }, command.commandId);
   }
   function getEventInvestment(state, choiceId) {
     return state.pendingEvent ? EVENT_INVESTMENTS[state.pendingEvent.id + ':' + choiceId] || null : null;
@@ -620,7 +639,7 @@
     let state = createGame({ nickname, seed });
     for (const [index, command] of commands.entries()) {
       const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment };
-      const handlers = { executeAction: () => executeAction(state, command.id, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), cheatExam: () => cheatExam(state, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args) };
+      const handlers = { executeAction: () => executeAction(state, command.id, args), completeBasketball: () => completeBasketball(state, command.hits, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), cheatExam: () => cheatExam(state, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args) };
       if (!own(handlers, command.operation)) return { ok: false, reason: '第 ' + (index + 1) + ' 步操作未知', state };
       const result = handlers[command.operation]();
       if (!result.ok) return { ...result, reason: '第 ' + (index + 1) + ' 步：' + result.reason };
@@ -628,7 +647,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, RANDOM_POOL, CAMPUS_SCHEDULE, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
+  const api = { RULES, FITNESS_TIERS, BASKETBALL, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, RANDOM_POOL, CAMPUS_SCHEDULE, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, basketballReward, availability, previewChanges, executeAction, completeBasketball, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -15,9 +15,11 @@ const mathText = (value) => {
 };
 const hotspots = [...document.querySelectorAll('.map-hotspot')];
 const audio = typeof CampusAudio !== 'undefined' ? CampusAudio : null;
+const basketballGame = typeof CampusBasketball !== 'undefined' ? CampusBasketball : null;
 const PLACE_SOUNDS = { think: 'study', library: 'study', yifu: 'study', dorm: 'relax', ginkgo: 'relax', track: 'sport', activity: 'opportunity', gate: 'opportunity', hospital: 'info', auditorium: 'info', hotel: 'info' };
-const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport', treatment: 'success' };
+const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport', basketball: 'sport', treatment: 'success' };
 const dialog = $('#termDialog');
+const basketballDialog = $('#basketballDialog');
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
 try { storage = window.localStorage; } catch (_) { /* Play remains available without storage. */ }
@@ -59,6 +61,7 @@ let saveNotice = '';
 const eventDrafts = new Map();
 const actionDrafts = new Map();
 let acknowledgedResultRevision = -1;
+let basketballSession = null;
 const failures = [];
 const sessionId = Date.now().toString(36);
 function showToast(message) {
@@ -81,6 +84,7 @@ const ACTION_FLAVOR = {
   exercise: '你在跑道边撑着膝盖喘气，心里却踏实。',
   gym: '器械归位，汗水把衣服贴在背上，整个人轻了一截。',
   teamSport: '球场上的热闹散了，你还站在原地喘气，嘴角没压住。',
+  basketball: '球从指尖离手，篮网翻了一下。你捡起球，听见自己还在喘。',
   soloSport: '耳机里的歌放到最后一段，你放慢速度，慢慢走回去。',
   walk: '一圈走下来，步子轻了些。',
   applyProject: '申请递出去了，接下来等回复。',
@@ -603,8 +607,70 @@ function renderActions() {
     const amount = actionDraft(id);
     const preview = profile && game.previewActionInvestment(state, id, amount);
     const check = game.availability(state, id, amount);
-    return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div><p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>确认' + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
+    return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div><p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>' + (action.minigame ? '开始' : '确认') + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
   }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
+}
+function renderBasketballHud(info) {
+  const time = Math.max(0, Math.ceil((info.timeLeft || 0) / 1000));
+  const timeNode = $('#basketballTime');
+  const scoreNode = $('#basketballScore');
+  const hitsNode = $('#basketballHits');
+  if (timeNode) timeNode.textContent = String(time);
+  if (scoreNode) scoreNode.textContent = String(info.score || 0);
+  if (hitsNode) hitsNode.textContent = String(info.hits || 0);
+}
+function closeBasketballDialog() {
+  if (basketballDialog && basketballDialog.open) {
+    try { basketballDialog.close(); } catch (_) { basketballDialog.removeAttribute('open'); }
+  }
+}
+function cancelBasketball() {
+  basketballSession?.destroy();
+  basketballSession = null;
+  closeBasketballDialog();
+}
+function startBasketball() {
+  if (!state || state.phase !== 'playing' || activePlace !== 'track' || dialog.open || basketballSession) return;
+  const check = game.availability(state, 'basketball');
+  if (!check.ok) { showToast(check.reason); return; }
+  if (!basketballGame) { showToast('当前浏览器不支持投篮小游戏'); return; }
+  try {
+    basketballSession = basketballGame.createSession({
+      canvas: $('#basketballCanvas'),
+      durationMs: game.BASKETBALL.durationMs,
+      maxHits: game.BASKETBALL.maxHits,
+      pointsPerHit: game.BASKETBALL.pointsPerHit,
+      onTick: renderBasketballHud,
+      onScore: () => audio?.play('success'),
+      onFinish: finishBasketball
+    });
+    if (basketballDialog && !basketballDialog.open) basketballDialog.showModal();
+    basketballSession.start();
+    renderBasketballHud({ hits: 0, score: 0, timeLeft: game.BASKETBALL.durationMs });
+    $('#basketballCanvas')?.focus();
+    audio?.play('sport');
+  } catch (error) {
+    basketballSession?.destroy();
+    basketballSession = null;
+    closeBasketballDialog();
+    showToast(error?.message || '投篮小游戏启动失败');
+  }
+}
+function finishBasketball(result) {
+  if (!basketballSession) return;
+  const session = basketballSession;
+  basketballSession = null;
+  session.destroy();
+  closeBasketballDialog();
+  const commandResult = runCommand('completeBasketball', result.hits, state.revision);
+  if (!commandResult) return;
+  audio?.play('success');
+  $('#actionFeedback').textContent = '本局命中 ' + result.hits + ' 球，得分 ' + result.score + '。' + changeText(commandResult.changes);
+  showBasketballResult(commandResult.entry);
+}
+function showBasketballResult(entry) {
+  const tier = entry.tierLabel || game.BASKETBALL.rewards.find((item) => item.id === entry.tier)?.label || '投篮结算';
+  showDialog('basketballResult', '球场结算', '<div class="basketball-result"><p class="basketball-result-score"><b>' + entry.score + '</b> 分</p><p>命中 <b>' + entry.hits + '</b> 球 · ' + h(tier) + '</p><div class="basketball-result-change">' + h(changeText(entry.changes)) + '</div><p class="dialog-note">本局结果已记入成长记录，下一球从零开始。</p></div>', [{ id: 'basketballContinue', text: '继续安排' }]);
 }
 // 地点插画：按建筑名取 assets/places 下对应的矢量图；锚点与地图热点坐标一致。
 const PLACE_ART = {
@@ -674,7 +740,7 @@ function unlockBodyScroll() {
   } catch (_) {}
 }
 function openPlace(key, hotspot) {
-  if (!state) return;
+  if (!state || basketballSession) return;
   closePanel();
   closePopovers();
   if (state.phase !== 'playing') { resumePhase(); return; }
@@ -946,7 +1012,7 @@ function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
   stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', npc: '校园偶遇' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', eventResult: '生活回顾', basketballResult: '球场结算', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', npc: '校园偶遇' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
@@ -974,7 +1040,7 @@ function lockUi() {
 function runCommand(operation, id, expectedRevision, eventInstanceId, investment) {
   if (!state || uiLocked) return null;
   const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId, investment };
-  const result = ['executeAction', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'updateExamAnswers', 'submitExam', 'chatWithNpc'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const result = ['executeAction', 'completeBasketball', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'updateExamAnswers', 'submitExam', 'chatWithNpc'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');
@@ -1584,6 +1650,7 @@ function showLoad() {
 function loadGame(slotId, source = 'primary') {
   const result = saves.load(slotId, source);
   if (!result.ok) { showToast(result.reason); return; }
+  cancelBasketball();
   closePlace();
   state = game.resumeRequiredEvents(result.state);
   activeSaveSlot = slotId;
@@ -1641,6 +1708,7 @@ $('#actionList').addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (button?.dataset.actionInvestmentPreset) { updateActionInvestment(button.dataset.actionInvestmentPreset, Number(button.dataset.amount)); return; }
   if (!button || game.ACTIONS[button.dataset.action]?.place !== activePlace || dialog.open) return;
+  if (game.ACTIONS[button.dataset.action]?.minigame === 'basketball') { startBasketball(); return; }
   const result = runCommand('executeAction', button.dataset.action, button.dataset.revision, undefined, actionDraft(button.dataset.action));
   if (!result) return;
   audio?.play(ACTION_SOUNDS[button.dataset.action] || 'success');
@@ -1692,6 +1760,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
   const id = button.dataset.dialogAction;
   if (id === 'resume') { if (['finished', 'ended'].includes(dialogMode)) dialog.close(); else if (dialogMode === 'enrollment') showTutorial(); else resumePhase(); }
   else if (id === 'eventContinue' && dialogMode === 'eventResult') { acknowledgedResultRevision = state.revision; resumePhase(); }
+  else if (id === 'basketballContinue' && dialogMode === 'basketballResult') { resumePhase(); }
   else if (id === 'admission') showAdmission();
   else if (id === 'loginPrompt') { loginSkipped = false; try { storage?.removeItem(LOGIN_SKIP_KEY); } catch (_) {} showLogin(); }
   else if (id === 'switchAccount') {
@@ -1726,6 +1795,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
   else if (id === 'backToEvent' && dialogMode === 'confirmEnding') { terminalChoice = null; showEvent(); }
   else if (id === 'restart') askRestart();
   else if (id === 'confirmRestart') {
+    cancelBasketball();
     closePlace();
     resetNpcSystem();
     audio?.stopBgm();
@@ -1752,6 +1822,8 @@ if (npc && npcLayer) {
   npcTick();
 }
 $('#backButton').addEventListener('click', closePlace);
+$('#basketballQuit')?.addEventListener('click', () => basketballSession?.finish());
+basketballDialog?.addEventListener('cancel', (event) => { if (basketballSession) event.preventDefault(); });
 $('#endTermButton').addEventListener('click', requestEndTerm);
 $('#saveButton').addEventListener('click', showSave);
 $('#dialogSave').addEventListener('click', showSave);

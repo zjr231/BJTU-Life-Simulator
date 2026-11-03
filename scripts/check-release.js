@@ -6,8 +6,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 const root = path.resolve(__dirname, '..');
-const scripts = ['config.js', 'courses.js', 'rng.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'npc.js', 'app.js'];
-const files = new Set(['index.html', 'styles.css', '.nojekyll', ...scripts]);
+const scripts = ['config.js', 'courses.js', 'rng.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'npc.js', 'vendor/planck.min.js', 'basketball.js', 'app.js'];
+const files = new Set(['index.html', 'styles.css', '.nojekyll', 'vendor/planck.LICENSE.txt', ...scripts]);
 
 function localReference(reference, from) {
   if (!reference || /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(reference)) return;
