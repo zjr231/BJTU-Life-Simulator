@@ -70,41 +70,42 @@
           <button class="avatar" id="playerAvatar" type="button" aria-label="更换头像" title="点击更换头像">北</button>
           <input id="avatarInput" type="file" accept="image/*" hidden>
           <div class="player-meta">
-            <b class="player-name" id="playerName">等待入学</b>
+            <button class="player-name" id="playerName" type="button" title="修改昵称">等待入学</button>
             <span class="player-sub" id="playerLabel">北交人生 · 等待入学</span>
           </div>
           <div class="player-chips">
             <span class="term-chip"><span class="term-dot"></span><span id="termLabel">大一上 · 第 1 学期</span></span>
-            <span class="resource-chip" id="timeLabel">时间 12 / 12</span>
+            <span class="resource-chip is-clickable" id="timeLabel" data-attr="time" role="button" tabindex="0">时间 12 / 12</span>
+            <span class="resource-chip is-clickable" id="moneyLabel" data-attr="money" role="button" tabindex="0">钱包 1000 元</span>
           </div>
         </div>
 
         <div class="vitals" aria-label="角色状态条">
-          <div class="vital" data-vital="energy">
+          <div class="vital" data-vital="energy" data-attr="energy" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">⚡</span>
             <span class="vital-label">精力</span>
             <span class="vital-track"><i id="barEnergy" style="width:80%"></i></span>
             <b class="vital-value" id="valueEnergy">80</b>
           </div>
-          <div class="vital" data-vital="mood">
+          <div class="vital" data-vital="mood" data-attr="mood" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">☀</span>
             <span class="vital-label">心情</span>
             <span class="vital-track"><i id="barMood" style="width:70%"></i></span>
             <b class="vital-value" id="valueMood">70</b>
           </div>
-          <div class="vital" data-vital="fitness">
+          <div class="vital" data-vital="fitness" data-attr="fitness" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">◎</span>
             <span class="vital-label">体能</span>
             <span class="vital-track"><i id="barFitness" style="width:50%"></i></span>
             <b class="vital-value" id="valueFitness">50</b>
           </div>
-          <div class="vital" data-vital="social">
+          <div class="vital" data-vital="social" data-attr="social" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">☺</span>
             <span class="vital-label">社交</span>
             <span class="vital-track"><i id="barSocial" style="width:20%"></i></span>
             <b class="vital-value" id="valueSocial">20</b>
           </div>
-          <div class="vital vital-learning" data-vital="learning">
+          <div class="vital vital-learning" data-vital="learning" data-attr="learning" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">✎</span>
             <span class="vital-label">学习</span>
             <span class="vital-track"><i id="barPreparation" style="width:0%"></i></span>
@@ -112,7 +113,9 @@
           </div>
         </div>
 
-        <nav class="app-menu" id="appMenu" aria-label="功能导航">
+        
+
+<nav class="app-menu" id="appMenu" aria-label="功能导航">
           <button type="button" class="app-menu-button" data-panel="status" aria-expanded="false">角色</button>
           <button type="button" class="app-menu-button" data-panel="term" aria-expanded="false">学业</button>
           <button type="button" class="app-menu-button" data-panel="goals" aria-expanded="false">发展</button>
@@ -122,17 +125,55 @@
         </nav>
       </header>
 
+<div class="profile-popover" id="avatarPopover" hidden aria-label="头像">
+          <div class="profile-popover-head">
+            <span class="avatar avatar-large" id="avatarPopoverImage" aria-hidden="true">北</span>
+            <div class="profile-popover-meta">
+              <b id="popoverName">张三</b>
+              <span id="popoverMajor">信息类学院 · 计算机科学与技术</span>
+            </div>
+          </div>
+          <div class="profile-popover-actions">
+            <button class="utility-button" id="popoverChangeAvatar" type="button">更换头像</button>
+            <button class="utility-button" id="popoverResetAvatar" type="button">恢复默认</button>
+          </div>
+        </div>
+
+        <div class="profile-popover attr-popover" id="attrPopover" hidden aria-label="属性说明">
+          <div class="attr-popover-head"><b id="attrTitle">精力</b><span class="attr-popover-value" id="attrValue">80 / 100</span></div>
+          <p class="attr-popover-status" id="attrStatus"></p>
+          <div class="attr-popover-section"><h4>获得方法</h4><p id="attrHow"></p></div>
+          <div class="attr-popover-section"><h4>具体用途</h4><p id="attrWhy"></p></div>
+        </div>
+        <div class="profile-popover name-popover" id="namePopover" hidden aria-label="修改昵称">
+          <label for="nameInput">修改昵称</label>
+          <input id="nameInput" maxlength="24" autocomplete="off" placeholder="2～12 个字符">
+          <p class="name-popover-hint" id="nameError" role="alert"></p>
+          <div class="profile-popover-actions">
+            <button class="utility-button" id="nameSaveButton" type="button">保存</button>
+            <button class="utility-button" id="nameCancelButton" type="button">取消</button>
+          </div>
+        </div>
+
+        
+
       <div class="app-panels" id="appPanels">
-        <section class="app-panel" id="panelStatus" data-panel-name="status" hidden aria-label="角色状态">
-          <h3 class="app-panel-title">角色状态</h3>
-          <p class="app-panel-note" id="energyLabel">精力 80 / 100</p>
-          <div class="status-grid" id="mapStats"></div>
+        <section class="app-panel" id="panelStatus" data-panel-name="status" hidden aria-label="角色">
+          <h3 class="app-panel-title">角色</h3>
+          <div class="profile-card">
+            <span class="avatar avatar-large" id="profileAvatar" aria-hidden="true">北</span>
+            <div class="profile-card-meta">
+              <b id="profileCardName">等待入学</b>
+              <span id="profileCardMajor">北交人生 · 等待入学</span>
+            </div>
+          </div>
+          <div class="panel-list" id="profileBrief"></div>
+          <p class="app-panel-note">点击顶部状态条可以查看每项属性的获取方式和作用。</p>
           <p class="fitness-warning" id="fitnessWarning" hidden></p>
-          <div class="preparation-row"><label for="preparationMeter">本学期学习进度 <b id="preparationValue">0 / 100</b></label><progress id="preparationMeter" max="100" value="0"></progress><span>期末成绩来源</span></div>
-          <div class="panel-grid-2">
-            <button class="utility-button" id="changeAvatarButton" type="button">更换头像</button>
+          <div class="panel-actions">
             <button class="utility-button" id="backgroundButton" type="button">入学背景</button>
           </div>
+          <div id="mapStats" hidden aria-hidden="true"></div>
         </section>
 
         <section class="app-panel" id="panelTerm" data-panel-name="term" hidden aria-label="学业">
@@ -150,8 +191,23 @@
 
         <section class="app-panel" id="panelRecords" data-panel-name="records" hidden aria-label="成长记录">
           <h3 class="app-panel-title">成长记录</h3>
-          <p class="app-panel-note">八个学期的成绩、校园经历、事件链进度与毕业条件。</p>
-          <button class="history-button" id="historyButton" type="button">查看成长记录</button>
+          <div class="record-summary" id="recordSummary"></div>
+          <p class="app-panel-note record-legend">按学期归档：日常行动；基础事件由学期、成绩或状态条件触发；突发事件在日常行动中随机出现；事件链记录项目 / 社团 / 实习的申请、投入与成果确认；学业节点记录选课、考试与结算。</p>
+          <div class="record-chains" id="recordChains"></div>
+          <div class="record-toolbar">
+            <span class="record-toolbar-title">时间线</span>
+            <div class="record-filters" id="recordFilters" role="tablist" aria-label="记录类型筛选">
+              <button type="button" class="record-filter is-active" data-record-filter="all" role="tab" aria-selected="true">全部</button>
+              <button type="button" class="record-filter" data-record-filter="action" role="tab" aria-selected="false">行动</button>
+              <button type="button" class="record-filter" data-record-filter="basic" role="tab" aria-selected="false">基础</button>
+              <button type="button" class="record-filter" data-record-filter="random" role="tab" aria-selected="false">突发</button>
+              <button type="button" class="record-filter" data-record-filter="chain" role="tab" aria-selected="false">事件链</button>
+              <button type="button" class="record-filter" data-record-filter="main" role="tab" aria-selected="false">主线</button>
+              <button type="button" class="record-filter" data-record-filter="academic" role="tab" aria-selected="false">学业</button>
+            </div>
+          </div>
+          <div class="record-timeline" id="recordTimeline"></div>
+          <button class="history-button" id="historyButton" type="button">查看完整成长记录</button>
         </section>
 
         <section class="app-panel" id="panelSaves" data-panel-name="saves" hidden aria-label="存档">
@@ -168,9 +224,13 @@
           <h3 class="app-panel-title">设置</h3>
           <div class="status-controls">
             <button class="utility-button" id="soundButton" type="button">声音:开</button>
+            <button class="utility-button" id="motionButton" type="button" aria-pressed="false">动画效果:开</button>
+            <button class="utility-button" id="hotspotButton" type="button" aria-pressed="false">热点提示:开</button>
+            <button class="utility-button" id="resetAvatarButton" type="button">恢复默认头像</button>
             <button class="utility-button" id="helpButton" type="button">玩法说明</button>
             <button class="utility-button" id="restartButton" type="button">重新开始</button>
           </div>
+          <p class="app-panel-note" id="versionNote">版本信息</p>
           <div id="debugPanel" hidden><p id="debugSummary"></p><button type="button" class="utility-button" id="exportLogButton">导出复现日志</button></div>
         </section>
       </div>

@@ -809,6 +809,76 @@ test('事件只预览成本，确认后显示具体结果；保存、读档和�
   assert.match(ui.element('#dialogBody').innerHTML, /投入与收获/);
 });
 
+test('记录面板按类型归档行动与事件，并显示事件链进度', () => {
+  let state = game.createGame({ nickname: '记录面板' });
+  state = game.executeAction(state, 'study', { commandId: 'record-1' }).state;
+  state = game.executeAction(state, 'study', { commandId: 'record-2' }).state;
+  assert.equal(state.pendingEvent.id, 'military1');
+  state = game.submitEventChoice(state, 'join', { commandId: 'record-3', eventInstanceId: state.pendingEvent.instanceId }).state;
+  assert.equal(state.pendingEvent.id, 'military2');
+  state = game.submitEventChoice(state, 'perform', { commandId: 'record-4', eventInstanceId: state.pendingEvent.instanceId }).state;
+  state = game.executeAction(state, 'applyClub', { commandId: 'record-5' }).state;
+  assert.equal(state.pendingEvent.id, 'clubOffer');
+  state = game.submitEventChoice(state, 'accept', { commandId: 'record-6', eventInstanceId: state.pendingEvent.instanceId }).state;
+  state = game.executeAction(state, 'clubWork', { commandId: 'record-7' }).state;
+  assert.equal(state.chains.club.progress, 1);
+
+  const ui = app();
+  ui.evaluate('state = ' + JSON.stringify(state) + '; renderState();');
+  const timeline = ui.element('#recordTimeline').innerHTML;
+  assert.match(timeline, /日常行动/);
+  assert.match(timeline, /课程学习/);
+  assert.match(timeline, /主线事件/);
+  assert.match(timeline, /军训开训/);
+  assert.match(timeline, /事件链 · 社团/);
+  assert.match(timeline, /百团大战/);
+  assert.doesNotMatch(timeline, /undefined/);
+
+  const chains = ui.element('#recordChains').innerHTML;
+  assert.match(chains, /社团/);
+  assert.match(chains, /进行中 · 已投入 1\/2/);
+  assert.match(chains, /最近：第 1 学期 · 社团投入/);
+  assert.match(chains, /项目/);
+  assert.match(chains, /申请条件：第 2～6 学期 · 学习进度 ≥ 40/);
+  assert.match(chains, /实习/);
+  assert.match(chains, /申请条件：第 5～7 学期 · 平均成绩 ≥ 60/);
+
+  assert.equal(ui.evaluate("recordEventCategory('cat')"), 'random');
+  assert.equal(ui.evaluate("recordEventCategory('military1')"), 'main');
+  assert.equal(ui.evaluate("recordEventCategory('projectOffer')"), 'chain');
+  assert.equal(ui.evaluate("recordEventCategory('fitnessTest')"), 'basic');
+
+  ui.click('#historyButton');
+  const dialog = ui.element('#dialogBody').innerHTML;
+  assert.match(dialog, /行动与事件时间线/);
+  assert.match(dialog, /军训汇演/);
+  assert.match(dialog, /记录概览/);
+});
+
+test('读取存档后成长记录完整恢复对应角色', () => {
+  let state = game.createGame({ nickname: '存档记录' });
+  state = game.executeAction(state, 'study', { commandId: 'save-r1' }).state;
+  state = game.executeAction(state, 'study', { commandId: 'save-r2' }).state;
+  state = game.submitEventChoice(state, 'join', { commandId: 'save-r3', eventInstanceId: state.pendingEvent.instanceId }).state;
+  state = game.submitEventChoice(state, 'perform', { commandId: 'save-r4', eventInstanceId: state.pendingEvent.instanceId }).state;
+  state = game.executeAction(state, 'applyClub', { commandId: 'save-r5' }).state;
+  state = game.submitEventChoice(state, 'accept', { commandId: 'save-r6', eventInstanceId: state.pendingEvent.instanceId }).state;
+  state = game.executeAction(state, 'clubWork', { commandId: 'save-r7' }).state;
+  state = game.submitEventChoice(state, 'later', { commandId: 'save-r8', eventInstanceId: state.pendingEvent.instanceId }).state;
+  const expected = state.history.length;
+
+  const storage = memory();
+  assert.equal(saves.createSlotService(storage).save(state, 2).ok, true);
+  const ui = app(storage);
+  ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(ui.evaluate('state.nickname'), '存档记录');
+  assert.equal(ui.evaluate('state.history.length'), expected);
+  assert.equal(ui.evaluate('recordEntries().length'), expected);
+  const html = ui.element('#recordTimeline').innerHTML;
+  for (const title of ['课程学习', '军训开训', '军训汇演', '百团大战', '社团投入', '春运抢票']) assert.ok(html.includes(title), title);
+  assert.match(ui.element('#recordChains').innerHTML, /进行中 · 已投入 1\/2/);
+});
+
 test('档位按钮拒绝任意数字，资源不足可改选有效档位', () => {
   const ui = app(); ui.start();
   ui.evaluate("state = { ...game.executeAction(game.executeAction(state, 'study').state, 'study').state, fitness: 50 }; showEvent()");

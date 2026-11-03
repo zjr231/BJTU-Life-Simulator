@@ -583,6 +583,86 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .app-panel .attribute.is-low { background: rgba(245, 140, 90, .18); }
 .app-panel .attribute.is-low b { color: #ffb27d; }
 .app-panel-subtitle { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(244, 234, 210, .12); }
+
+/* 成长记录：按学期归档的概览、筛选、时间线与事件链进度。 */
+.record-summary { margin-bottom: 10px; }
+.record-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.record-stat { background: rgba(255, 255, 255, .06); border: 1px solid rgba(244, 234, 210, .1); border-radius: 8px; padding: 8px 4px; text-align: center; }
+.record-stat b { display: block; font-size: 17px; line-height: 1.2; color: #f4d77c; }
+.record-stat span { font-size: 10px; color: rgba(251, 245, 223, .62); }
+.record-summary-note { margin: 8px 0 0; font-size: 11px; color: rgba(251, 245, 223, .66); }
+.record-summary-note b { color: #f4d77c; }
+.record-legend { margin-bottom: 12px; font-size: 11px; }
+.record-block-title, .record-toolbar-title { display: block; margin: 12px 0 6px; font-size: 11px; letter-spacing: .08em; color: #f4d77c; }
+.record-chain-list { display: grid; gap: 8px; align-items: start; }
+.chain-card { padding: 9px 10px; border-radius: 9px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(244, 234, 210, .12); }
+.chain-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; }
+.chain-card-head b { color: #fbf5df; }
+.chain-state { font-size: 10px; color: #9fd6b5; white-space: nowrap; }
+.chain-card.is-completed .chain-state { color: #f4d77c; }
+.chain-card.is-missed .chain-state, .chain-card.is-deferred .chain-state { color: #ffb27d; }
+.chain-progress { display: flex; gap: 4px; margin: 7px 0 5px; }
+.chain-seg { flex: 1; height: 5px; border-radius: 999px; background: rgba(251, 245, 223, .16); }
+.chain-seg.is-on { background: #7fc39b; }
+.chain-card.is-missed .chain-seg.is-on { background: #d2905e; }
+.chain-detail, .chain-last { margin: 3px 0 0; font-size: 10px; line-height: 1.6; color: rgba(251, 245, 223, .62); }
+.chain-last { color: rgba(251, 245, 223, .48); }
+.chain-trace { margin: 6px 0 0; padding-left: 16px; font-size: 10px; line-height: 1.6; color: rgba(251, 245, 223, .7); }
+.chain-trace li::marker { color: #f4d77c; }
+.chain-trace span { margin-right: 6px; color: rgba(251, 245, 223, .48); }
+.record-toolbar { margin-top: 14px; }
+.record-filters { display: flex; flex-wrap: wrap; gap: 5px; }
+.record-filter { cursor: pointer; border: 1px solid rgba(244, 234, 210, .2); background: transparent; color: rgba(251, 245, 223, .74); border-radius: 999px; padding: 4px 9px; font-size: 10px; }
+.record-filter.is-active { background: #f4d77c; border-color: #f4d77c; color: #1c3029; font-weight: 700; }
+.record-timeline { margin-top: 4px; max-height: 300px; overflow-y: auto; padding-right: 2px; }
+.record-term-group + .record-term-group { margin-top: 4px; }
+.record-term { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 6px; padding-top: 8px; border-top: 1px dashed rgba(244, 234, 210, .16); font-size: 10px; color: #f4d77c; }
+.record-term-group:first-of-type .record-term { border-top: 0; padding-top: 0; }
+.record-term small { color: rgba(251, 245, 223, .44); font-size: 10px; }
+.record-entry { margin-bottom: 6px; padding: 7px 9px; border-radius: 8px; background: rgba(255, 255, 255, .05); border-left: 3px solid #7fc39b; }
+.record-entry.is-basic { border-left-color: #8fa8d8; }
+.record-entry.is-random { border-left-color: #d29a6b; }
+.record-entry.is-chain { border-left-color: #b79ad8; }
+.record-entry.is-main { border-left-color: #d98c8c; }
+.record-entry.is-academic { border-left-color: #c9c07a; }
+.record-entry-head { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.record-entry-title { font-size: 12px; color: #fbf5df; }
+.record-badge { font-size: 9px; line-height: 1.5; padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+.record-badge.is-action { background: #2f5d4a; color: #d8f3e3; }
+.record-badge.is-basic { background: #35466b; color: #dbe6ff; }
+.record-badge.is-random { background: #6d4329; color: #ffe3cf; }
+.record-badge.is-chain { background: #53406e; color: #efe0ff; }
+.record-badge.is-main { background: #6d3535; color: #ffd9d9; }
+.record-badge.is-academic { background: #54512d; color: #f5f0c8; }
+.record-note, .record-changes { margin: 4px 0 0; font-size: 10px; line-height: 1.6; color: rgba(251, 245, 223, .68); }
+.record-changes { color: #9fd6b5; }
+.record-empty { margin: 8px 0; font-size: 11px; line-height: 1.7; color: rgba(251, 245, 223, .56); }
+.record-more { margin: 8px 0 0; font-size: 10px; color: rgba(251, 245, 223, .48); }
+#dialogBody .record-chain-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#dialogBody .chain-card { background: #f2ede1; border-color: #ddd4c2; }
+#dialogBody .chain-card-head b { color: #24352c; }
+#dialogBody .chain-state { color: #246249; }
+#dialogBody .chain-card.is-completed .chain-state { color: #8a6a1f; }
+#dialogBody .chain-card.is-missed .chain-state, #dialogBody .chain-card.is-deferred .chain-state { color: #986039; }
+#dialogBody .chain-seg { background: #ddd4c2; }
+#dialogBody .chain-seg.is-on { background: #4c8a6c; }
+#dialogBody .chain-detail { color: #59665d; }
+#dialogBody .chain-last { color: #7a857d; }
+#dialogBody .chain-trace { color: #59665d; }
+#dialogBody .chain-trace li::marker { color: #926c30; }
+#dialogBody .chain-trace span { color: #8a948c; }
+#dialogBody .record-block-title { color: #926c30; }
+#dialogBody .record-term { color: #926c30; border-color: #ddd4c2; }
+#dialogBody .record-term small { color: #8a948c; }
+#dialogBody .record-entry { background: #f2ede1; }
+#dialogBody .record-entry-title { color: #24352c; }
+#dialogBody .record-note { color: #59665d; }
+#dialogBody .record-changes { color: #246249; }
+#dialogBody .record-timeline { max-height: none; overflow: visible; }
+#dialogBody .record-more, #dialogBody .record-empty { color: #7a857d; }
+@media (max-width: 520px) {
+  #dialogBody .record-chain-list { grid-template-columns: 1fr; }
+}
 .panel-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .panel-actions { margin-top: 14px; display: grid; grid-template-columns: 1fr; }
 .panel-actions .utility-button { width: 100%; }
@@ -601,3 +681,45 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
   .map-screen .map-layer { width: 170vw; top: calc(50% + var(--bar-h, 120px) / 2); }
   .app-panel .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ===== 头像资料卡 / 昵称修改 / 设置偏好 ===== */
+.player-name { appearance: none; border: 0; background: none; padding: 0; color: #f4ead2; font-size: 15px; font-weight: 800; letter-spacing: .02em; text-align: left; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .player-name:hover { text-decoration: underline dotted rgba(244, 234, 210, .8); text-underline-offset: 4px; } }
+.player-name:focus-visible { outline: 2px solid rgba(244, 211, 107, .8); outline-offset: 3px; border-radius: 4px; }
+.avatar.is-open { transform: scale(1.12); box-shadow: 0 8px 20px rgba(0, 0, 0, .45), 0 0 0 3px rgba(244, 211, 107, .5); }
+
+.profile-popover { position: fixed; z-index: 18; width: 280px; padding: 14px; color: #fbf5df; background: rgba(14, 36, 30, .97); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(244, 234, 210, .16); border-radius: 16px; box-shadow: 0 20px 50px rgba(4, 14, 11, .6); animation: panel-in .18s ease both; }
+.profile-popover[hidden] { display: none; }
+.profile-popover-head { display: flex; align-items: center; gap: 12px; }
+.avatar-large { width: 64px; height: 64px; font-size: 26px; cursor: default; }
+.profile-popover-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.profile-popover-meta b { font-size: 15px; }
+.profile-popover-meta span { font-size: 11px; line-height: 1.4; color: rgba(251, 245, 223, .66); }
+.profile-popover-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.name-popover label { display: block; margin-bottom: 6px; font-size: 12px; color: #f4d77c; }
+.name-popover input { width: 100%; box-sizing: border-box; padding: 9px 10px; border-radius: 10px; border: 1px solid rgba(244, 234, 210, .3); background: rgba(255, 255, 255, .08); color: #fbf5df; font-size: 14px; }
+.name-popover input:focus { outline: none; border-color: #f4d36b; box-shadow: 0 0 0 2px rgba(244, 211, 107, .22); }
+.name-popover-hint { min-height: 16px; margin: 6px 0 0; font-size: 11px; color: #ffb27d; }
+
+.utility-button[aria-pressed="true"] { border-color: #f4d36b; color: #f4d36b; }
+body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after { animation: none !important; transition: none !important; }
+body.hide-hotspot-rings .map-hotspot::before { display: none; }
+
+/* ===== 可点击属性与说明气泡 ===== */
+.vital[data-attr], .resource-chip.is-clickable { cursor: pointer; }
+.vital[data-attr]:hover .vital-label, .vital[data-attr]:hover .vital-value { color: #f4d36b; }
+.vital[data-attr]:focus-visible, .resource-chip.is-clickable:focus-visible { outline: 2px solid rgba(244, 211, 107, .8); outline-offset: 3px; border-radius: 8px; }
+.attr-popover-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.attr-popover-head b { font-size: 15px; }
+.attr-popover-value { font-size: 13px; font-weight: 800; color: #f4d77c; }
+.attr-popover-status { margin: 8px 0 0; font-size: 11px; line-height: 1.6; color: #ffb27d; }
+.attr-popover-status[hidden] { display: none; }
+.attr-popover-section { margin-top: 10px; }
+.attr-popover-section h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: .08em; color: #f4d77c; }
+.attr-popover-section p { margin: 0; font-size: 12px; line-height: 1.7; color: rgba(251, 245, 223, .82); }
+
+/* 角色卡片 */
+.profile-card { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; background: rgba(255, 255, 255, .06); }
+.profile-card-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.profile-card-meta b { font-size: 16px; }
+.profile-card-meta span { font-size: 11px; color: rgba(251, 245, 223, .66); }
