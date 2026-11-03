@@ -9,6 +9,7 @@ const vm = require('node:vm');
 const game = require('./game.js');
 const saves = require('./save.js');
 const sms = require('./sms.js');
+const season = require('./season.js');
 
 function memory() {
   const data = new Map();
@@ -37,7 +38,7 @@ function app(storage = memory(), withSms = false, withNpc = false) {
   const window = element('window');
   window.localStorage = storage;
   window.crypto = { getRandomValues(values) { values[0] = 1; return values; } };
-  const globals = { CampusGame: game, CampusSave: saves, window,
+  const globals = { CampusGame: game, CampusSave: saves, CampusSeason: season, window,
     HTMLDialogElement: class { showModal() {} },
     document: { querySelector: element, querySelectorAll: () => [], body: { style: {} }, addEventListener() {} },
     location: { search: '' }, URLSearchParams, Uint32Array,
@@ -807,6 +808,31 @@ test('事件只预览成本，确认后显示具体结果；保存、读档和�
   ui.click('#historyButton');
   assert.ok(ui.element('#dialogBody').innerHTML.includes(story));
   assert.match(ui.element('#dialogBody').innerHTML, /投入与收获/);
+});
+
+test('季节随学期与剩余时间切换，换季给出提醒并生成天气粒子', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = { ...state, term: 1, time: 12 }; resetSeasonTracking(); renderState();');
+  assert.match(ui.element('#seasonLabel').textContent, /^秋 · /);
+  assert.equal(ui.element('#seasonOverlay').hidden, false);
+  assert.match(ui.element('#weatherParticles').innerHTML, /weather-particle/);
+  assert.equal(ui.element('#seasonNotice').innerHTML, '');
+  const rngBefore = ui.evaluate('JSON.stringify(state.rng)');
+
+  ui.evaluate('state = { ...state, time: 6 }; renderState();');
+  assert.equal(ui.evaluate('JSON.stringify(state.rng)'), rngBefore);
+  assert.match(ui.element('#seasonLabel').textContent, /^冬 · /);
+  assert.match(ui.element('#weatherParticles').innerHTML, /is-snow/);
+  assert.equal(ui.element('#seasonNotice').hidden, false);
+  assert.match(ui.element('#seasonNotice').innerHTML, /换季提醒/);
+  assert.match(ui.element('#seasonNotice').innerHTML, /秋 → 冬/);
+
+  ui.evaluate('state = { ...state, term: 2, time: 12 }; resetSeasonTracking(); renderState();');
+  assert.match(ui.element('#seasonLabel').textContent, /^春 · /);
+  ui.evaluate('state = { ...state, time: 6 }; renderState();');
+  assert.match(ui.element('#seasonLabel').textContent, /^夏 · /);
+  assert.match(ui.element('#seasonNotice').innerHTML, /春 → 夏/);
 });
 
 test('记录面板按类型归档行动与事件，并显示事件链进度', () => {

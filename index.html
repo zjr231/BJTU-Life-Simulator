@@ -63,6 +63,12 @@
           <span class="pin-ring"><span class="pin-core"></span></span>
           <span class="pin-label">红果园宾馆</span>
         </button>
+
+        <div class="season-overlay" id="seasonOverlay" hidden aria-hidden="true">
+          <div class="season-tint"></div>
+          <div class="weather-particles" id="weatherParticles"></div>
+          <div class="weather-flash"></div>
+        </div>
       </div>
 
       <header class="app-bar" id="appBar">
@@ -75,6 +81,7 @@
           </div>
           <div class="player-chips">
             <span class="term-chip"><span class="term-dot"></span><span id="termLabel">大一上 · 第 1 学期</span></span>
+            <span class="season-chip" id="seasonLabel" data-season="none" title="当前季节">—</span>
             <span class="resource-chip is-clickable" id="timeLabel" data-attr="time" role="button" tabindex="0">时间 12 / 12</span>
             <span class="resource-chip is-clickable" id="moneyLabel" data-attr="money" role="button" tabindex="0">钱包 1000 元</span>
           </div>
@@ -124,6 +131,8 @@
           <button type="button" class="app-menu-button" data-panel="settings" aria-expanded="false">设置</button>
         </nav>
       </header>
+
+      <div class="season-notice" id="seasonNotice" hidden role="status" aria-live="polite"></div>
 
 <div class="profile-popover" id="avatarPopover" hidden aria-label="头像">
           <div class="profile-popover-head">
@@ -234,11 +243,6 @@
           <div id="debugPanel" hidden><p id="debugSummary"></p><button type="button" class="utility-button" id="exportLogButton">导出复现日志</button></div>
         </section>
       </div>
-
-      <div class="map-caption">
-        <span class="caption-line"></span>
-        <span>学习 · 项目 · 社团 · 实习 · 校园生活</span>
-      </div>
     </section>
 
     <section class="place-screen" id="placeScreen" aria-hidden="true" inert>
@@ -289,6 +293,7 @@
   <script src="audio.js"></script>
   <script src="sms.js"></script>
   <script src="npc.js"></script>
+  <script src="season.js"></script>
   <script src="vendor/planck.min.js"></script>
   <script src="basketball.js"></script>
   <script src="app.js"></script>
