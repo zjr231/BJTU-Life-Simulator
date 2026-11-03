@@ -141,6 +141,78 @@ function memory() {
   const data = new Map();
   return { data, getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
 }
+function growthUi() {
+  const ui = app();
+  ui.start();
+  let seed = 'growth-ui-0';
+  for (let i = 1; game.familyForSeed(seed).id !== 'ordinary'; i++) seed = 'growth-ui-' + i;
+  ui.evaluate('state = CampusGame.createGame({seed: ' + JSON.stringify(seed) + '}); state = CampusGame.chooseBudget(state, CampusGame.DEFAULT_BUDGET).state; state = CampusGame.selectCourses(state, CampusGame.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map(course => course.id)).state; uiLocked = false; dialog.close(); renderState()');
+  return ui;
+}
+
+test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可在三栏位恢复', () => {
+  const ui = growthUi();
+  ui.element('#growthToggle').emit('click', { stopPropagation() {} });
+  assert.equal(ui.evaluate('openPanelName'), 'growth');
+  assert.match(ui.element('#growthOverview').innerHTML, /1200/);
+  assert.match(ui.element('#growthNodes').innerHTML, /舒适寝具/);
+  assert.match(ui.element('#growthNodes').innerHTML, /0 \/ 3/);
+  const selectionState = ui.evaluate('JSON.stringify(state)');
+  ui.click('#growthNodes', { growthSelect: 'routine' });
+  assert.equal(ui.evaluate('selectedGrowthId'), 'routine');
+  assert.match(ui.element('#growthDetails').innerHTML, /累计休息 0 \/ 3 次/);
+  assert.match(ui.element('#growthPurchase').innerHTML, /disabled/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), selectionState);
+  ui.click('#growthNodes', { growthSelect: '__proto__' });
+  assert.equal(ui.evaluate('selectedGrowthId'), 'routine');
+  ui.click('#growthNodes', { growthSelect: 'bedding' });
+  assert.match(ui.element('#growthDetails').innerHTML, /每次休息额外恢复 3 点精力/);
+  const before = ui.evaluate('state.revision');
+  ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(before) });
+  assert.equal(ui.evaluate('state.money'), 900);
+  assert.equal(ui.element('#growthCount').textContent, '1 / 3');
+  assert.match(ui.element('#growthNodes').innerHTML, /已拥有 ✓/);
+  assert.match(ui.element('#growthNotice').textContent, /支出 300 元/);
+  assert.match(ui.evaluate('growthRecord()'), /添置舒适寝具/);
+  const purchased = ui.evaluate('JSON.stringify(state)');
+  ui.click('#growthPurchase', { growthBuy: 'hobbyCorner', revision: String(before) });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), purchased);
+  ui.flush();
+  ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), purchased);
+  ui.click('#saveButton');
+  ui.click('#dialogBody', { saveSlot: '3' });
+  ui.click('#loadButton');
+  ui.click('#dialogBody', { loadSlot: '3', saveSource: 'primary' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), purchased);
+  assert.equal(ui.element('#growthCount').textContent, '1 / 3');
+  ui.click('#growthClose');
+  ui.element('#growthToggle').emit('click', { stopPropagation() {} });
+  assert.equal(ui.evaluate('openPanelName'), 'growth');
+  assert.equal(ui.element('#growthNotice').textContent, '');
+  ui.click('#growthClose');
+  assert.equal(ui.evaluate('openPanelName'), null);
+});
+
+test('养成侧栏余额不足不能扣款，弹窗期间忽略购买，休息结果显示额外恢复', () => {
+  const ui = growthUi();
+  ui.evaluate('state.money = 100; renderState()');
+  assert.match(ui.element('#growthDetails').innerHTML, /余额不足，还差 200 元/);
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  ui.evaluate('state.money = 1200; dialog.showModal()');
+  ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.growth'), undefined);
+  ui.evaluate('dialog.close(); state.energy = 20; state.mood = 40');
+  ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(ui.evaluate('state.revision')) });
+  ui.flush();
+  ui.evaluate('openPlace("dorm")');
+  ui.click('#actionList', { action: 'rest', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.match(ui.element('#dialogBody').innerHTML, /校园养成额外恢复：精力 \+3/);
+});
+
 function app(storage = memory(), withSms = false, withNpc = false) {
   const elements = new Map();
   function element(selector) {
@@ -176,7 +248,7 @@ function app(storage = memory(), withSms = false, withNpc = false) {
   vm.runInContext(fs.readFileSync(require.resolve('./app.js'), 'utf8'), context);
   const evaluate = expression => vm.runInContext(expression, context);
   function click(selector, dataset = {}) {
-    element(selector).emit('click', { target: { closest: () => ({ dataset }) } });
+    element(selector).emit('click', { target: { closest: () => ({ dataset }) }, stopPropagation() {} });
   }
   return { storage, element, evaluate, click, window,
     start(selectCourses = true) {

@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   function validate(state, game, random) {
-    const { RULES, ACTIONS, EVENTS, EVENT_INVESTMENTS, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, TERMINAL_ENDINGS, gradeFor, ratingFor, NPC_CHAT, POSITIONS } = game;
+    const { RULES, ACTIONS, EVENTS, EVENT_INVESTMENTS, GROWTH_NODES, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, TERMINAL_ENDINGS, gradeFor, ratingFor, NPC_CHAT, POSITIONS } = game;
     const fail = (reason) => ({ ok: false, reason: '存档状态无效：' + reason });
     const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
     const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -31,6 +31,13 @@
       if (!integer(state.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished', 'ended'].includes(state.phase) || !integer(state.revision, 0, 2000)) return fail('学期、阶段或状态版本');
       for (const [key, max] of [['time', 12], ['energy', 100], ['money', 1000000], ['social', 100], ['fitness', 100], ['mood', 100], ['preparation', 100], ['furtherStudy', 100], ['jobPreparation', 100]]) if (!integer(state[key], 0, max)) return fail(key);
       if (state.cardDebt !== undefined && !integer(state.cardDebt, 0, 1000000)) return fail('校园卡待还款');
+      // Optional so older saves remain unchanged until the first purchase.
+      if (state.growth !== undefined) {
+        const growth = state.growth;
+        if (!object(growth) || growth.version !== 1 || !object(growth.purchased) || Object.keys(growth).length !== 2
+          || Object.keys(growth.purchased).length < 1 || !Object.entries(growth.purchased).every(([id, record]) => own(GROWTH_NODES, id)
+            && object(record) && Object.keys(record).length === 2 && integer(record.term, 1, state.term) && integer(record.revision, 1, state.revision))) return fail('校园养成节点');
+      }
       // 求职意向是可选字段（旧档没有）：存在时必须指向岗位库中的岗位；null 表示明确取消。
       if (state.targetPosition !== undefined && state.targetPosition !== null && !own(POSITIONS, state.targetPosition)) return fail('求职意向');
       if (state.economy !== undefined) {
@@ -81,6 +88,7 @@
       const replayNickname = game.validateNickname(state.nickname).ok ? state.nickname : '北交同学';
       const initialBackground = game.createGame({ nickname: replayNickname, seed: state.rng.seed }).background;
       const backgroundReplay = game.replay({ nickname: replayNickname, seed: state.rng.seed, legacyEconomy: !state.economy || state.economy.startTerm > 1, economyStartTerm: state.economy?.startTerm ?? 9, commands: state.history.map((entry) => entry.command) });
+      if (backgroundReplay.ok && !same(state.growth ?? null, backgroundReplay.state.growth ?? null)) return fail('校园养成购买记录');
       const transferred = state.eventHistory.some((entry) => entry.event === 'transferResult' && entry.choice === 'check') && state.experiences.some((item) => item.type === 'transfer');
       const legacyBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && (item.legacyMajors || []).includes(background.major));
       const validBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && item.majors.includes(background.major));
@@ -127,10 +135,29 @@
       if (chargedIdentities > NPC_CHAT.timeChargeCapPerTerm) return fail('NPC 聊天时间上限');
       if (state.history.length !== state.revision || state.processedCommands.length !== state.revision || new Set(state.processedCommands).size !== state.revision) return fail('操作序号');
       const extraCounts = new Map();
+      const growthPurchases = {};
+      let completedRests = 0;
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (!['executeAction', 'submitEventChoice', 'selectCourses', 'chooseBudget', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc', 'setTargetPosition', 'settleInternship'].includes(command.operation)) return fail('历史操作类型');
+        if (!['executeAction', 'purchaseGrowth', 'submitEventChoice', 'selectCourses', 'chooseBudget', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc', 'setTargetPosition', 'settleInternship'].includes(command.operation)) return fail('历史操作类型');
+        if (command.operation === 'purchaseGrowth') {
+          const node = GROWTH_NODES[command.id];
+          if (!own(GROWTH_NODES, command.id) || own(growthPurchases, command.id) || entry.action !== 'purchaseGrowth'
+            || !object(entry.changes) || !same(entry.changes, { money: -node.price })
+            || entry.before.phase !== 'playing' || entry.before.money < node.price || entry.after.money !== entry.before.money - node.price
+            || entry.after.time !== entry.before.time || entry.after.energy !== entry.before.energy || entry.after.phase !== entry.before.phase
+            || (node.requiredRests && completedRests < node.requiredRests) || (node.openingEnergy && entry.term === RULES.terms)) return fail('校园养成扣款或条件');
+          growthPurchases[command.id] = { term: entry.term, revision: entry.revision };
+        }
+        if (command.operation === 'executeAction' && command.id === 'rest') completedRests++;
+        if (entry.growthBonuses !== undefined) {
+          const bonuses = entry.growthBonuses;
+          if (command.operation !== 'executeAction' || command.id !== 'rest' || !object(bonuses) || Object.keys(bonuses).length !== 2
+            || !integer(bonuses.energy, 0, growthPurchases.bedding ? GROWTH_NODES.bedding.recovery : 0)
+            || !integer(bonuses.mood, 0, growthPurchases.hobbyCorner ? GROWTH_NODES.hobbyCorner.mood : 0)
+            || (backgroundReplay.ok && !same(bonuses, backgroundReplay.state.history[index].growthBonuses))) return fail('校园养成收益');
+        }
         if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');
         // 岗位化实习：command 带 positionId 时必须指向岗位库、只用于申请实习，且 entry.position 与之一致；
         // 旧档的申请命令没有 positionId（两字段皆缺省），不做强制。
@@ -164,6 +191,7 @@
         }
         for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished', 'ended'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !integer(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 2010)) return fail('历史状态摘要');
       }
+      if (!same(state.growth?.purchased || {}, growthPurchases)) return fail('校园养成购买记录');
       const expectedCourses = ['summary', 'endingChoice', 'finished'].includes(state.phase) ? state.term : state.term - 1;
       if (state.courses.length !== expectedCourses) return fail('课程记录数量与阶段不符');
       const validCourse = (course, index) => {
