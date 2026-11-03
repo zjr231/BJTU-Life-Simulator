@@ -14,9 +14,15 @@ jobs:
     if: github.event.head_commit != null
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout commit history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
       - name: Send Feishu message
         env:
           FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           REPOSITORY: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
           PUSHER: ${{ github.actor }}
@@ -29,8 +35,22 @@ jobs:
             echo "::error::FEISHU_WEBHOOK 未配置"
             exit 1
           fi
+          SUMMARY=""
+          if [ -n "$DEEPSEEK_API_KEY" ]; then
+            DIFF=$(git show --format= --first-parent --unified=2 HEAD | head -c 12000)
+            PROMPT=$(printf '请用中文写 2~3 句话总结这次代码提交做了什么、影响哪些功能，150 字以内。不要列表、不要客套、不要署名、不要重复提交说明原文。\n\n提交说明：%s\n\n改动 diff（可能截断）：\n%s' "$COMMIT_MESSAGE" "$DIFF")
+            BODY=$(jq -n --arg prompt "$PROMPT" '{model:"deepseek-chat",messages:[{role:"system",content:"你是中文代码提交摘要助手，只输出简洁、准确的中文总结。"},{role:"user",content:$prompt}],max_tokens:300,temperature:0.3,stream:false}')
+            RESPONSE=$(curl -sS --max-time 60 -X POST 'https://api.deepseek.com/chat/completions' \
+              -H 'Content-Type: application/json' \
+              -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+              -d "$BODY" || true)
+            SUMMARY=$(printf '%s' "$RESPONSE" | jq -r '.choices[0].message.content // empty' 2>/dev/null | tr '\n' ' ' | cut -c1-400)
+          fi
           TEXT=$(printf '【GitHub 提交通知】\n仓库：%s\n分支：%s\n提交：%s\n提交人：%s\n说明：%s\n链接：%s' \
             "$REPOSITORY" "$BRANCH" "${COMMIT_SHA:0:8}" "$PUSHER" "$COMMIT_MESSAGE" "${COMMIT_URL:-$COMPARE_URL}")
+          if [ -n "$SUMMARY" ]; then
+            TEXT="$TEXT"$'\n总结：'"$SUMMARY"
+          fi
           PAYLOAD=$(jq -n --arg text "$TEXT" '{msg_type:"text",content:{text:$text}}')
           curl --fail-with-body -sS -X POST \
             -H 'Content-Type: application/json' \

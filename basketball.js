@@ -241,7 +241,6 @@
     let finished = false;
     let dragging = false;
     let drag = { x: 0, y: 0 };
-    let lastAim = null;
     let lastShotAt = -Infinity;
     let hudKey = '';
     let keyboard = { ...DEFAULT_AIM };
@@ -357,7 +356,6 @@
       lastShotAt = elapsed / 1000;
       state.shots++;
       dragging = false;
-      drag = { x: 0, y: 0 };
     }
 
     function canShoot() {
@@ -398,13 +396,15 @@
     function onPointerDown(event) {
       if (finished || paused) return;
       event.preventDefault();
-      dragging = true;
-      drag = { x: 0, y: 0 };
-      try { canvas.setPointerCapture(event.pointerId); } catch (_) {}
+      const point = eventPoint(event);
+      drag = { x: point.x - BALL_START.x, y: point.y - BALL_START.y };
+      const length = Math.hypot(drag.x, drag.y);
+      if (length > DRAG_LIMIT) drag = { x: drag.x / length * DRAG_LIMIT, y: drag.y / length * DRAG_LIMIT };
+      if (length >= 16 && canShoot()) startShot(launchVelocity(drag));
     }
 
     function onPointerMove(event) {
-      if (!dragging || finished) return;
+      if (finished || paused) return;
       event.preventDefault();
       const point = eventPoint(event);
       drag = { x: point.x - BALL_START.x, y: point.y - BALL_START.y };
@@ -412,19 +412,17 @@
       if (length > DRAG_LIMIT) drag = { x: drag.x / length * DRAG_LIMIT, y: drag.y / length * DRAG_LIMIT };
     }
 
-    function onPointerUp(event) {
-      if (!dragging || finished) return;
-      event.preventDefault();
+    function onPointerUp() {
       dragging = false;
-      const length = Math.hypot(drag.x, drag.y);
-      if (length < 16) return;
-      lastAim = { x: drag.x, y: drag.y };
-      startShot(launchVelocity(drag));
     }
 
     function onPointerCancel() {
       dragging = false;
-      drag = { x: 0, y: 0 };
+    }
+
+    function keyboardAimDrag() {
+      const length = Math.min(DRAG_LIMIT, keyboard.power / LAUNCH_SCALE);
+      return { x: Math.cos(keyboard.angle) * length, y: Math.sin(keyboard.angle) * length };
     }
 
     function onKeyDown(event) {
@@ -432,25 +430,27 @@
       if (event.key === ' ' || event.key === 'Spacebar') {
         event.preventDefault();
         if (canShoot()) {
-          lastAim = null;
-          const speed = keyboard.power;
-          startShot({ vx: Math.cos(keyboard.angle) * speed, vy: Math.sin(keyboard.angle) * speed });
+          const length = Math.hypot(drag.x, drag.y);
+          const velocity = length >= 16
+            ? launchVelocity(drag)
+            : { vx: Math.cos(keyboard.angle) * keyboard.power, vy: Math.sin(keyboard.angle) * keyboard.power };
+          startShot(velocity);
         }
       } else if (event.key === 'ArrowLeft') {
-        lastAim = null;
         keyboard.angle -= 0.0175;
+        drag = keyboardAimDrag();
         event.preventDefault();
       } else if (event.key === 'ArrowRight') {
-        lastAim = null;
         keyboard.angle += 0.0175;
+        drag = keyboardAimDrag();
         event.preventDefault();
       } else if (event.key === 'ArrowUp') {
-        lastAim = null;
         keyboard.power = clamp(keyboard.power + 20, 620, 1100);
+        drag = keyboardAimDrag();
         event.preventDefault();
       } else if (event.key === 'ArrowDown') {
-        lastAim = null;
         keyboard.power = clamp(keyboard.power - 20, 620, 1100);
+        drag = keyboardAimDrag();
         event.preventDefault();
       }
     }
@@ -700,10 +700,9 @@
       drawBackground();
       const rimX = rimPosition(elapsed / 1000);
       drawHoop(rimX, boardFlash, rimFlash);
-      if (dragging && Math.hypot(drag.x, drag.y) >= 16) drawTrajectory(launchVelocity(drag));
+      if (Math.hypot(drag.x, drag.y) >= 16) drawTrajectory(launchVelocity(drag));
       else if (canShowAim() && !reducedMotion) {
-        const aim = lastAim ? launchVelocity(lastAim) : { vx: Math.cos(keyboard.angle) * keyboard.power, vy: Math.sin(keyboard.angle) * keyboard.power };
-        drawTrajectory(aim);
+        drawTrajectory({ vx: Math.cos(keyboard.angle) * keyboard.power, vy: Math.sin(keyboard.angle) * keyboard.power });
       }
       const activeBalls = state.balls.filter((record) => !record.done);
       if (activeBalls.length) for (const record of activeBalls) drawBall(record);
@@ -714,7 +713,7 @@
       context.fillStyle = 'rgba(255,248,223,.8)';
       context.font = '600 15px sans-serif';
       context.textAlign = 'left';
-      context.fillText('从三分线后拖拽投篮 · 松手出手 · 键盘方向键调整，空格出手', 24, HEIGHT - 12);
+      context.fillText('移动鼠标调整瞄准 · 点击直接出手 · 距离越远力度越大 · 键盘方向键调整，空格出手', 24, HEIGHT - 12);
     }
 
     function removeListeners() {
