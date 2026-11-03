@@ -16,6 +16,7 @@ const mathText = (value) => {
 const hotspots = [...document.querySelectorAll('.map-hotspot')];
 const audio = typeof CampusAudio !== 'undefined' ? CampusAudio : null;
 const basketballGame = typeof CampusBasketball !== 'undefined' ? CampusBasketball : null;
+const seasonal = typeof CampusSeason !== 'undefined' ? CampusSeason : null;
 const PLACE_SOUNDS = { think: 'study', library: 'study', yifu: 'study', dorm: 'relax', ginkgo: 'relax', track: 'sport', activity: 'opportunity', gate: 'opportunity', hospital: 'info', auditorium: 'info', hotel: 'info' };
 const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport', basketball: 'sport', treatment: 'success' };
 const dialog = $('#termDialog');
@@ -43,6 +44,10 @@ let uiLocked = false;
 let unlockTimer;
 let toastTimer;
 let placeEnterTimer;
+// 季节与天气是纯观感层：由学期、剩余时间和存档种子推导，不写入游戏状态，也不消耗随机数。
+let lastSeasonClock = null;
+let seasonVisualKey = '';
+let seasonNoticeTimer = null;
 // 校园偶遇 NPC：纯逻辑在 npc.js，渲染与点击对话在这里。
 // 聊天记录与走位仍是观感层、不进存档；playing 阶段每条消息会走规则命令 chatWithNpc 结算消耗与收益。
 const npc = typeof CampusNpc !== 'undefined' ? CampusNpc : null;
@@ -526,6 +531,112 @@ function syncBarHeight() {
     }
   } catch (_) {}
 }
+// 季节天气：秋→冬 / 春→夏，每季 6 点时间；换季给一次提醒，特殊天气按种子固定分配。
+function hideSeasonNotice() {
+  clearTimeout(seasonNoticeTimer);
+  const notice = $('#seasonNotice');
+  if (notice) { notice.hidden = true; notice.classList.remove('is-visible'); }
+}
+function resetSeasonTracking() {
+  lastSeasonClock = null;
+  seasonVisualKey = '';
+  hideSeasonNotice();
+}
+function clearSeasonEffects() {
+  resetSeasonTracking();
+  const overlay = $('#seasonOverlay');
+  if (overlay) overlay.hidden = true;
+  const particles = $('#weatherParticles');
+  if (particles) particles.innerHTML = '';
+  const chip = $('#seasonLabel');
+  if (chip) { chip.textContent = '—'; chip.setAttribute('data-season', 'none'); chip.setAttribute('title', ''); }
+  const mapLayer = $('#mapLayer');
+  if (mapLayer) mapLayer.setAttribute('data-season', 'none');
+}
+function seasonParticleMarkup(info) {
+  if (!seasonal) return '';
+  const plan = seasonal.particlePlan(info.season, info.weather.id);
+  const narrow = typeof window !== 'undefined' && Number.isFinite(window.innerWidth) && window.innerWidth < 720;
+  const scale = narrow ? 0.62 : 1;
+  return plan.map((item) => {
+    const count = Math.max(1, Math.round(item.count * scale));
+    let html = '';
+    for (let index = 0; index < count; index += 1) {
+      const seed = seasonal.hash(info.season + ':' + info.weather.id + ':' + item.type + ':' + index);
+      const x = seed % 100;
+      const delay = -(((seed >>> 7) % 140) / 10);
+      const duration = item.type === 'rain' ? 0.55 + ((seed >>> 13) % 40) / 100
+        : item.type === 'wind' ? 1.2 + ((seed >>> 13) % 80) / 100
+          : item.type === 'catkin' ? 12 + ((seed >>> 13) % 100) / 10
+            : item.type === 'mote' ? 8 + ((seed >>> 13) % 70) / 10
+              : item.type === 'cloud' ? 35 + ((seed >>> 13) % 50)
+                : item.type === 'fog' ? 22 + ((seed >>> 13) % 100) / 10
+                  : 7 + ((seed >>> 13) % 90) / 10;
+      const size = item.type === 'dust' ? 3 + ((seed >>> 3) % 10)
+        : item.type === 'mote' ? 3 + ((seed >>> 3) % 4)
+          : item.type === 'rain' ? 7 + ((seed >>> 3) % 7)
+            : item.type === 'snow' ? 5 + ((seed >>> 3) % 9)
+              : item.type === 'catkin' ? 10 + ((seed >>> 3) % 12)
+                : item.type === 'cloud' ? 60 + ((seed >>> 3) % 90)
+                  : item.type === 'fog' ? 120 + ((seed >>> 3) % 140)
+                    : 9 + ((seed >>> 3) % 10);
+      const drift = ((seed >>> 17) % 140) - 70;
+      const style = '--x:' + x + '%;--delay:' + delay + 's;--dur:' + duration + 's;--size:' + size + 'px;--drift:' + drift + 'px;';
+      html += '<span class="weather-particle is-' + item.type + '" style="' + style + '"></span>';
+    }
+    return html;
+  }).join('');
+}
+function showSeasonNotice(info) {
+  const node = $('#seasonNotice');
+  if (!node || !seasonal) return;
+  const pair = info.pair || seasonal.pairForTerm(state.term);
+  const from = seasonal.SEASONS[pair[0]];
+  const to = seasonal.SEASONS[pair[1]];
+  node.innerHTML = '<span class="season-notice-kicker">换季提醒</span><b>' + h(from.short) + ' → ' + h(to.short) + '</b><p>' + h(to.notice) + '</p>';
+  node.hidden = false;
+  node.classList.add('is-visible');
+  clearTimeout(seasonNoticeTimer);
+  seasonNoticeTimer = setTimeout(() => {
+    node.classList.remove('is-visible');
+    seasonNoticeTimer = setTimeout(() => { node.hidden = true; }, 380);
+  }, 4200);
+}
+function renderSeasonEffects() {
+  const overlay = $('#seasonOverlay');
+  const chip = $('#seasonLabel');
+  const mapLayer = $('#mapLayer');
+  if (!state || !seasonal) {
+    if (overlay) overlay.hidden = true;
+    const particles = $('#weatherParticles');
+    if (particles) particles.innerHTML = '';
+    if (chip) { chip.textContent = '—'; chip.setAttribute('data-season', 'none'); chip.setAttribute('title', ''); }
+    if (mapLayer) mapLayer.setAttribute('data-season', 'none');
+    resetSeasonTracking();
+    return;
+  }
+  const info = seasonal.weatherFor(state.rng.seed, state.term, state.time);
+  if (chip) {
+    chip.textContent = info.seasonInfo.short + ' · ' + info.weather.label;
+    chip.setAttribute('data-season', info.season);
+    chip.setAttribute('title', info.seasonInfo.name + ' · ' + info.weather.label + (info.special ? '（季节专属天气）' : ''));
+  }
+  if (mapLayer) mapLayer.setAttribute('data-season', info.season);
+  if (lastSeasonClock && lastSeasonClock.term !== state.term) hideSeasonNotice();
+  // 同一学期里时间从 6 点以上走到 6 点以下，就是换季节点。
+  if (lastSeasonClock && lastSeasonClock.term === state.term && lastSeasonClock.time > 6 && state.time <= 6) showSeasonNotice(info);
+  lastSeasonClock = { term: state.term, time: state.time };
+  if (!overlay) return;
+  overlay.hidden = false;
+  const key = info.season + ':' + info.weather.id;
+  if (key === seasonVisualKey) return;
+  seasonVisualKey = key;
+  overlay.setAttribute('data-season', info.season);
+  overlay.setAttribute('data-weather', info.weather.id);
+  overlay.setAttribute('data-tone', info.weather.tone);
+  const particles = $('#weatherParticles');
+  if (particles) particles.innerHTML = seasonParticleMarkup(info);
+}
 function renderState() {
   if (!state) return;
   $('#playerLabel').textContent = (state.background.college ? state.background.college + ' · ' : '') + state.background.major;
@@ -549,6 +660,7 @@ function renderState() {
   setVital('barPreparation', 'valuePreparation', state.preparation, 100);
   $('#termLabel').textContent = game.TERM_NAMES[state.term - 1] + (['finished', 'ended'].includes(state.phase) ? ' · 已结束' : ' · ' + game.getTermStage(state));
   $('#timeLabel').textContent = '时间 ' + state.time + ' / 12';
+  renderSeasonEffects();
   const energyLabel = $('#energyLabel');
   if (energyLabel) energyLabel.textContent = '精力 ' + state.energy + ' / 100';
   const moneyLabel = $('#moneyLabel');
@@ -589,6 +701,7 @@ function renderState() {
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
   renderRecordsPanel();
   $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'confirmCheat', 'confirmEnding'].includes(dialogMode);
+  syncBarHeight();
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
@@ -1194,6 +1307,7 @@ function startGame() {
   savedAt = '';
   saveNotice = '';
   failures.length = 0;
+  resetSeasonTracking();
   audio?.play('success');
   audio?.startBgm();
   resetNpcSystem();
@@ -1663,6 +1777,7 @@ function loadGame(slotId, source = 'primary') {
   clearTimeout(unlockTimer);
   uiLocked = false;
   failures.length = 0;
+  resetSeasonTracking();
   resetNpcSystem();
   audio?.play('load');
   audio?.startBgm();
@@ -1798,6 +1913,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
     cancelBasketball();
     closePlace();
     resetNpcSystem();
+    clearSeasonEffects();
     audio?.stopBgm();
     state = null;
     eventDrafts.clear();
