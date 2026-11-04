@@ -1,0 +1,46 @@
+{
+  "passed": true,
+  "checks": [
+    "图标选择只更新详情，不扣钱或推进游戏",
+    "真实入学、预算和选课流程",
+    "侧栏展开与三个节点",
+    "购买扣费且不即时发奖",
+    "实际休息收益与两次心情配额",
+    "三次休息解锁作息",
+    "三栏位保存与刷新恢复",
+    "手机竖屏与横屏滚动",
+    "Esc收起与焦点返回",
+    "无运行异常"
+  ],
+  "mobile": {
+    "viewport": 390,
+    "left": 6,
+    "right": 384,
+    "top": 140,
+    "bottom": 838,
+    "scrollable": true,
+    "noHorizontalOverflow": true,
+    "closeTarget": {
+      "width": 44,
+      "height": 44
+    }
+  },
+  "selectedMobile": {
+    "top": 226.375,
+    "title": "宿舍兴趣角"
+  },
+  "smallMobile": {
+    "width": 320,
+    "noHorizontalOverflow": true,
+    "closeVisible": true
+  },
+  "landscape": {
+    "left": 20,
+    "right": 824,
+    "top": 110,
+    "bottom": 372,
+    "visibleHeight": 262,
+    "scrollable": true
+  },
+  "errors": []
+}

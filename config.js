@@ -13,6 +13,11 @@
     materials: { id: 'materials', title: '配套学习资料', actions: ['study', 'selfStudy'], price: 80, limit: 2, bonuses: { preparation: 2 }, description: '为这次课程学习或自习买一份配套练习与讲义，帮助整理刚学过的内容。' },
     snacks: { id: 'snacks', title: '零食分享', actions: ['chat'], price: 40, limit: 1, bonuses: { social: 1, mood: 2 }, description: '室友交流时买点零食一起分享，让这次聊天更轻松。' }
   };
+  const GROWTH_NODES = {
+    bedding: { id: 'bedding', icon: 'bed', title: '舒适寝具', category: '生活改善', price: 300, description: '换上合适的枕头和床垫，让每一次休息都更踏实。', benefit: '每次休息额外恢复 3 点精力', recovery: 3 },
+    hobbyCorner: { id: 'hobbyCorner', icon: 'books', title: '宿舍兴趣角', category: '心情照顾', price: 200, description: '为喜欢的书、音乐和小收藏留一个角落，给忙碌的生活留一点期待。', benefit: '每学期前两次休息额外恢复 2 点心情', mood: 2, restsPerTerm: 2 },
+    routine: { id: 'routine', icon: 'alarm', title: '规律作息计划', category: '习惯养成', price: 400, description: '在尝试休息调整之后，准备一份适合自己的作息计划。', benefit: '从下一学期起，开学精力由 80 提高到 83', requiredRests: 3, openingEnergy: 3 }
+  };
   // Fitness tiers scale the costs/rewards of non-health actions and events.
   const FITNESS_TIERS = [
     { id: 'sick', label: '生病', min: 0, max: 24, reward: 0, cost: 0, ill: true },
@@ -842,7 +847,7 @@
     ],
     othersNote: '另有：{list}，共 {count} 项校园经历。'
   };
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

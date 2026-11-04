@@ -389,6 +389,63 @@ function renderResume() {
     : '';
   body.innerHTML = reqs + sections + others;
 }
+const GROWTH_ICONS = {
+  bed: '<path fill="#b99164" d="M5 19h4v21H5zm34 5h4v16h-4zM9 32h30v5H9z"/><path fill="#ead9b4" d="M9 19h11v8H9z"/><path fill="#728f87" d="M21 22h18v10H9v-5h12z"/><path fill="#aec4ab" d="M24 22h15v4H24z"/><path fill="#d4b17c" d="M5 17h4v4H5zm34 5h4v4h-4z"/>',
+  books: '<path fill="#c49061" d="M6 36h36v4H6z"/><path fill="#ab646a" d="M8 14h7v22H8z"/><path fill="#e4cc9d" d="M9 17h5v2H9zm0 12h5v2H9z"/><path fill="#7898a1" d="M17 10h7v26h-7z"/><path fill="#cad8c6" d="M18 14h5v2h-5zm0 16h5v2h-5z"/><path fill="#c7a160" d="m26 17 6-2 6 19-6 2z"/><path fill="#89a781" d="M35 8h4v13h-4zM31 9h4v6h-4zm8-4h4v8h-4z"/><path fill="#b67c63" d="M32 21h10v7H32z"/>',
+  alarm: '<path fill="#c29a64" d="M13 8h22v4H13zM9 12h30v24H9zM13 36h22v4H13zM6 15h3v18H6zm33 0h3v18h-3zM11 39h5v4h-5zm21 0h5v4h-5z"/><path fill="#dfcda9" d="M13 16h22v16H13zM17 12h14v24H17z"/><path fill="#4d5263" d="M23 16h3v11h-3zm3 8h6v3h-6zM23 30h3v3h-3z"/><path fill="#819aa2" d="M6 7h10v4H6zm26 0h10v4H32zM20 4h8v4h-8z"/>'
+};
+let selectedGrowthId = 'bedding';
+function growthIcon(node) {
+  return '<svg viewBox="0 0 48 48" aria-hidden="true" shape-rendering="crispEdges">' + (GROWTH_ICONS[node.icon] || GROWTH_ICONS.bed) + '</svg>';
+}
+function growthNodeState(node) {
+  if (node.purchased) return { type: 'owned', label: '已拥有 ✓' };
+  if (node.available) return { type: 'ready', label: '可添置' };
+  return node.reason.startsWith('余额不足') ? { type: 'short', label: '余额不足' } : { type: 'locked', label: '条件未满足' };
+}
+function growthNodeMarkup(node) {
+  const status = growthNodeState(node);
+  return '<button type="button" class="growth-node is-' + status.type + (selectedGrowthId === node.id ? ' is-selected' : '')
+    + '" data-growth-select="' + node.id + '" aria-pressed="' + (selectedGrowthId === node.id) + '" title="' + h(node.benefit + '；' + (node.purchased ? status.label : node.reason || status.label)) + '">'
+    + '<span class="growth-node-frame">' + growthIcon(node) + '<span class="growth-node-price">' + (node.purchased ? '已拥有 ✓' : node.price + ' 元') + '</span></span>'
+    + '<span class="growth-node-name">' + h(node.title) + '</span><span class="growth-node-status">' + status.label + '</span></button>';
+}
+function renderGrowth() {
+  const toggle = $('#growthToggle');
+  if (toggle) toggle.hidden = !state;
+  if (!state) return;
+  const board = game.growthStatus(state);
+  $('#growthCount').textContent = board.ownedCount + ' / ' + board.nodes.length;
+  const selected = board.nodes.find(node => node.id === selectedGrowthId) || board.nodes[0];
+  selectedGrowthId = selected.id;
+  const status = growthNodeState(selected);
+  const routine = board.nodes.find(node => node.id === 'routine');
+  const restProgress = Math.min(board.restCount, routine.requiredRests);
+  $('#growthOverview').innerHTML = '<div><span>可支配余额</span><b>' + state.money + '<small> 元</small></b></div><div><span>本局已拥有</span><b>' + board.ownedCount + '<small> / ' + board.nodes.length + ' 项</small></b></div>';
+  let detail = selected.requiredRests ? '累计休息 ' + Math.min(board.restCount, selected.requiredRests) + ' / ' + selected.requiredRests + ' 次' : '无需额外前置';
+  if (selected.purchased) {
+    detail = game.TERM_NAMES[selected.purchased.term - 1] + '已购入 · ' + (selected.openingEnergy
+      ? (state.term > selected.purchased.term ? '开学精力加成已生效' : '下学期开始生效')
+      : selected.restsPerTerm ? '本学期心情加成剩余 ' + selected.remainingRests + ' 次' : '休息加成持续生效');
+  }
+  $('#growthDetails').innerHTML = '<div class="growth-selected-icon is-' + status.type + '">' + growthIcon(selected) + '</div>'
+    + '<p class="growth-category">' + h(selected.category) + ' / 本局持续</p><h4>' + h(selected.title) + '</h4>'
+    + '<p class="growth-selection-state is-' + status.type + '">' + status.label + '</p>'
+    + '<p class="growth-description">' + h(selected.description) + '</p>'
+    + '<div class="growth-detail-block"><span>长期收益</span><p class="growth-benefit">' + h(selected.benefit) + '</p></div>'
+    + '<div class="growth-detail-block"><span>' + (selected.purchased ? '持有状态' : '解锁条件') + '</span><p class="growth-detail">' + h(detail) + '</p></div>'
+    + (!selected.purchased && !selected.available ? '<p class="growth-reason">' + h(selected.reason) + '</p>' : '');
+  $('#growthPurchase').innerHTML = '<button type="button" class="growth-buy-button" data-growth-buy="' + selected.id + '" data-revision="' + state.revision + '"'
+    + (selected.purchased || !selected.available || uiLocked || dialog.open ? ' disabled' : '') + '>'
+    + (selected.purchased ? '已拥有 · 无需重复添置' : '确认添置 <span>' + selected.price + ' 元</span>') + '</button>';
+  const lifeNodes = board.nodes.filter(node => !node.requiredRests).map(growthNodeMarkup).join('');
+  $('#growthNodes').innerHTML = '<section class="growth-branch"><h5><span>01</span>生活与空间</h5><p>生活小物 · 两项可独立添置</p><div class="growth-branch-row">' + lifeNodes + '</div></section>'
+    + '<section class="growth-branch"><h5><span>02</span>习惯养成</h5><p>完成行动 · 解锁下一步计划</p><div class="growth-branch-row">'
+    + '<div class="growth-milestone' + (restProgress >= routine.requiredRests ? ' is-complete' : '') + '"><span class="growth-milestone-frame">'
+    + '<svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 32h28M13 32V18h22v14M13 22h8v-4M9 32v6m30-6v6M26 10h10l-10 7h10"/></svg>'
+    + '<b>' + restProgress + ' / ' + routine.requiredRests + '</b></span><span class="growth-node-name">累计休息</span><span class="growth-node-status">' + (restProgress >= routine.requiredRests ? '条件已达成 ✓' : '完成 3 次休息') + '</span></div>'
+    + '<span class="growth-link' + (restProgress >= routine.requiredRests ? ' is-complete' : '') + '" aria-hidden="true"></span>' + growthNodeMarkup(routine) + '</div></section>';
+}
 // 头像：点击可上传本地图片，压缩后存本地（只影响界面，不进存档格式）。
 const AVATAR_KEY = 'bjt-life-avatar';
 function setAvatarImage(dataUrl) {
@@ -453,8 +510,17 @@ function setPanel(name) {
   document.querySelectorAll('.app-menu-button').forEach((button) => {
     button.setAttribute('aria-expanded', button.dataset.panel === name ? 'true' : 'false');
   });
+  $('#growthToggle')?.setAttribute('aria-expanded', name === 'growth' ? 'true' : 'false');
+  if (name === 'growth') {
+    $('#growthNotice').textContent = '';
+    renderGrowth();
+  }
 }
-function closePanel() { setPanel(null); }
+function closePanel() {
+  const wasGrowth = openPanelName === 'growth';
+  setPanel(null);
+  if (wasGrowth) $('#growthToggle')?.focus({ preventScroll: true });
+}
 function syncBarHeight() {
   try {
     const bar = $('#appBar');
@@ -500,6 +566,7 @@ function renderState() {
   $('#termBrief').innerHTML = '<div>本学期课程 <b>' + h(selectedNames) + '</b>' + (state.phase === 'examPending' ? ' · 考试待提交' : '') + '</div><div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div>';
   renderAdvisories();
   renderResume();
+  renderGrowth();
   $('#endTermButton').textContent = ({ eventPending: '处理当前事件', examPending: '继续期末考试', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果', ended: '查看本局结局' })[state.phase] || (selectedIds.length ? '结束学期并考试' : '结束学期');
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
   $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(dialogMode);
@@ -519,8 +586,8 @@ function positionFeedback(entry) {
   return ' ' + entry.positionReward.title + ' 段收入 +' + entry.positionReward.income + ' 元，求职准备 +' + entry.positionReward.jobPreparation + '。';
 }
 function extraFeedback(entry) {
-  if (!entry.extra) return '';
-  return entry.extra.skipped ? ' 本次基础收获已达到上限，未购买额外项目，也未扣费。' : ' 额外消费：' + entry.extra.title + ' −' + entry.extra.price + ' 元，额外收获 ' + changeText(entry.extra.bonuses) + '。';
+  const extra = entry.extra ? (entry.extra.skipped ? ' 本次基础收获已达到上限，未购买额外项目，也未扣费。' : ' 额外消费：' + entry.extra.title + ' −' + entry.extra.price + ' 元，额外收获 ' + changeText(entry.extra.bonuses) + '。') : '';
+  return extra + (entry.growthBonuses ? ' 校园养成额外恢复：' + changeText(entry.growthBonuses) + '（已计入本次收获）。' : '');
 }
 function costs(effect) {
   return [(effect.time ? '时间 −' + effect.time : ''), (effect.energy ? '精力 −' + effect.energy : ''), (effect.money ? '钱包 −' + effect.money + ' 元' : ''), (effect.mood < 0 ? '心情 −' + Math.min(state.mood, Math.abs(effect.mood)) : ''), (effect.fitnessCost ? '体能 −' + effect.fitnessCost + '（消耗）' : '')].filter(Boolean).join(' · ') || '不消耗资源';
@@ -903,6 +970,7 @@ function lockUi() {
   dialog.querySelectorAll('#examForm input, #examForm > button[type="submit"]').forEach((input) => { input.disabled = true; });
   unlockTimer = setTimeout(() => {
     uiLocked = false;
+    renderGrowth();
     if (activePlace) renderActions();
     dialog.querySelectorAll('[data-dialog-action]').forEach((button) => { button.disabled = false; });
     dialog.querySelectorAll('[data-position-apply]').forEach((button) => { button.disabled = !game.availability(state, 'applyInternship', undefined, button.dataset.positionApply).ok; });
@@ -914,7 +982,7 @@ function lockUi() {
 function runCommand(operation, id, expectedRevision, eventInstanceId, investment, extra, positionId) {
   if (!state || uiLocked) return null;
   const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId, investment, extra, positionId };
-  const result = ['executeAction', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'chooseBudget', 'updateExamAnswers', 'submitExam', 'chatWithNpc', 'setTargetPosition'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const result = ['executeAction', 'purchaseGrowth', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'chooseBudget', 'updateExamAnswers', 'submitExam', 'chatWithNpc', 'setTargetPosition'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');
@@ -1315,7 +1383,9 @@ function investmentRecord() {
 // 事件链进度与毕业条件进度已迁入「手头的事」抽屉，「我的简历」升格为独立抽屉（renderResume），这里只留档案类内容。
 // 钱包节不包总标题：walletHistory 由钱包抽屉共用，节内 h3 由 budgetMarkup 与「历次学期拨款」充当。
 function growthRecord() {
-  return investmentRecord() + courseTable() + walletHistory();
+  const purchases = state.history.filter(entry => entry.command.operation === 'purchaseGrowth');
+  const upgrades = purchases.length ? '<h3>校园养成</h3><ul>' + purchases.map(entry => '<li>' + h(game.TERM_NAMES[entry.term - 1]) + '：' + h(entry.title) + '，支出 ' + (-entry.changes.money) + ' 元。' + h(game.GROWTH_NODES[entry.command.id].benefit) + '。</li>').join('') + '</ul>' : '';
+  return upgrades + investmentRecord() + courseTable() + walletHistory();
 }
 const ENDING_TEXT = {
   ordinary: '毕业典礼的台子搭在操场边上，学士服领到手的时候还带着消毒水味。你想起大一第一次进校门，行李箱的轮子在石板路上响了一路。四年的账算下来不复杂：八张成绩单、几场活动、一次体测、几个没说出口的遗憾。有人去了远方，有人留在北京，你选了最稳的一条路。稳妥不是妥协，是你一个学期一个学期攒出来的底气。银杏大道下个秋天还会金黄，只是看它的人换了一批。行李打包完，你在宿舍门口站了会儿，把钥匙放在了宿管阿姨的窗口。出门的时候，风里有北京秋天常有的那种凉。你回头看了一眼，楼还是那栋楼。',
@@ -1571,6 +1641,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
     resetNpcSystem();
     audio?.stopBgm();
     state = null;
+    renderGrowth();
     eventDrafts.clear();
     actionDrafts.clear();
   pendingActionExtra = null;
@@ -1627,6 +1698,36 @@ document.querySelectorAll('.app-menu-button').forEach((button) => {
   });
 });
 document.querySelectorAll('.advisory-close').forEach((button) => button.addEventListener('click', closePanel));
+$('#growthToggle')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  if (!state || dialog.open) return;
+  setPanel(openPanelName === 'growth' ? null : 'growth');
+  if (openPanelName === 'growth') $('#growthTitle').focus({ preventScroll: true });
+});
+$('#growthClose')?.addEventListener('click', closePanel);
+$('#growthNodes')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-growth-select]');
+  if (!button || dialog.open || !Object.hasOwn(game.GROWTH_NODES, button.dataset.growthSelect)) return;
+  event.stopPropagation();
+  selectedGrowthId = button.dataset.growthSelect;
+  $('#growthNotice').textContent = '';
+  renderGrowth();
+  $('#growthNodes').querySelector('[data-growth-select="' + selectedGrowthId + '"]')?.focus({ preventScroll: true });
+  if (window.matchMedia?.('(max-width: 640px)').matches) {
+    $('#growthDetails').scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+});
+$('#growthPurchase')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-growth-buy]');
+  if (!button || dialog.open || uiLocked) return;
+  event.stopPropagation();
+  const result = runCommand('purchaseGrowth', button.dataset.growthBuy, button.dataset.revision);
+  if (!result) return;
+  const node = game.GROWTH_NODES[button.dataset.growthBuy];
+  $('#growthNotice').textContent = '已添置' + node.title + '，支出 ' + node.price + ' 元。' + node.benefit + '。记得保存进度。';
+  $('#growthDetails').focus({ preventScroll: true });
+  audio?.play('success');
+});
 document.addEventListener('click', (event) => {
   if (!openPanelName) return;
   const target = event.target;
