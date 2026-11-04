@@ -1192,6 +1192,7 @@ function needsCourseSelection() {
 }
 function showCourseSelection() {
   if (!state || state.phase !== 'playing') { resumePhase(); return; }
+  if (needsBudget()) { showBudget(); return; }
   if ((state.selectedCourses || []).length) { resumePhase(); return; }
   const options = game.coursesForTerm(state.term, state.background.id, state.background.major);
   const cards = options.map((course) => '<label class="course-card"><input type="checkbox" name="course" value="' + h(course.id) + '"><span class="course-main"><b>' + h(course.name) + '</b><span class="course-meta">' + h(game.SUBJECTS[course.subject]) + ' · ' + course.credits + ' 学分</span><span class="course-desc">' + h(course.description) + '</span></span></label>').join('');

@@ -46,7 +46,18 @@
             const plan = game.budgetPlan(grant.budget);
             if (!plan || !same(grant.budgetCosts, plan.costs) || grant.livingCost !== plan.costs.total) return fail('学期预算档位');
             if (grant.budgetChosen === true) {
-              if (!same(grant.budgetEffects, plan.effects) || !same(grant.budgetModifiers, plan.modifiers) || grant.budgetDelta !== plan.costs.total - RULES.termLivingCost) return fail('学期预算快照');
+              if (grant.budgetDelta !== plan.costs.total - RULES.termLivingCost) return fail('学期预算快照');
+              if (grant.budgetConfig === game.BUDGET_CONFIG_VERSION) {
+                // 当前预算表生成的快照：与配置严格比对，防篡改。
+                if (!same(grant.budgetEffects, plan.effects) || !same(grant.budgetModifiers, plan.modifiers)) return fail('学期预算快照');
+              } else {
+                // 旧预算表（无 budgetConfig 标记）的存档：只做结构校验，调表不破坏旧档；
+                // 运行时的休息/宿舍加成按当前配置即时计算，不受旧快照影响。
+                const effects = grant.budgetEffects;
+                const modifiers = grant.budgetModifiers;
+                if (!object(effects) || !['mood', 'social', 'energy', 'fitness'].every(key => integer(effects[key], -100, 100))) return fail('学期预算快照');
+                if (!object(modifiers) || !Number.isFinite(modifiers.restMultiplier) || modifiers.restMultiplier <= 0 || modifiers.restMultiplier > 3 || !integer(modifiers.dormMood, -10, 10) || !integer(modifiers.dormSocial, -10, 10)) return fail('学期预算快照');
+              }
             } else if (grant.budgetChosen === false) {
               if (!same(grant.budget, game.DEFAULT_BUDGET) || plan.costs.total !== RULES.termLivingCost || !same(grant.budgetEffects, { mood: 0, social: 0, energy: 0, fitness: 0 }) || !same(grant.budgetModifiers, { restMultiplier: 1, dormMood: 0, dormSocial: 0 }) || grant.budgetDelta !== 0) return fail('未确认预算快照');
             } else return fail('学期预算确认标记');

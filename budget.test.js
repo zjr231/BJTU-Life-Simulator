@@ -71,7 +71,7 @@ test('确认默认预算不改变金额，并记录四维档位与即时效果',
   assert.equal(result.ok, true, result.reason);
   const next = result.state;
   assert.equal(next.money, 1200);
-  assert.equal(next.mood, 68);
+  assert.equal(next.mood, 66);
   assert.equal(next.social, 21);
   assert.equal(next.energy, 84);
   assert.equal(next.fitness, 53);
@@ -79,8 +79,8 @@ test('确认默认预算不改变金额，并记录四维档位与即时效果',
   assert.equal(grant.budgetChosen, true);
   assert.deepEqual(grant.budget, game.DEFAULT_BUDGET);
   assert.deepEqual(grant.budgetCosts, { clothing: 1000, food: 2400, housing: 1000, transport: 400, total: 4800 });
-  assert.deepEqual(grant.budgetEffects, { mood: -2, social: 1, energy: 4, fitness: 3 });
-  assert.deepEqual(grant.budgetModifiers, { restMultiplier: 0.9, dormMood: -1, dormSocial: 0 });
+  assert.deepEqual(grant.budgetEffects, { mood: -4, social: 1, energy: 4, fitness: 3 });
+  assert.deepEqual(grant.budgetModifiers, { restMultiplier: 0.85, dormMood: -1, dormSocial: 0 });
   assert.equal(grant.budgetDelta, 0);
   assert.equal(grant.livingCost, 4800);
   assert.equal(next.history.at(-1).command.operation, 'chooseBudget');
@@ -98,9 +98,9 @@ test('高预算追加差额并截断属性上限，低预算退回差额且不�
   assert.equal(high.state.money, 1600);
   assert.equal(high.changes.money, -3600);
   assert.equal(high.state.mood, 100);
-  assert.equal(high.state.social, 34);
-  assert.equal(high.state.energy, 88);
-  assert.equal(high.state.fitness, 46);
+  assert.equal(high.state.social, 40);
+  assert.equal(high.state.energy, 90);
+  assert.equal(high.state.fitness, 42);
   assert.equal(game.currentGrant(high.state).budgetDelta, 3600);
 
   const capped = { ...rich, mood: 98, social: 99, energy: 99, fitness: 99 };
@@ -109,7 +109,7 @@ test('高预算追加差额并截断属性上限，低预算退回差额且不�
   assert.equal(top.state.mood, 100);
   assert.equal(top.state.social, 100);
   assert.equal(top.state.energy, 100);
-  assert.equal(top.state.fitness, 95);
+  assert.equal(top.state.fitness, 91);
 
   const ordinary = game.createGame({ seed: seedFor('ordinary') });
   const debt = { ...ordinary, cardDebt: 200 };
@@ -117,8 +117,8 @@ test('高预算追加差额并截断属性上限，低预算退回差额且不�
   assert.equal(low.ok, true, low.reason);
   assert.equal(low.state.money, 2900);
   assert.equal(low.state.cardDebt, 200);
-  assert.equal(low.state.mood, 56);
-  assert.equal(low.state.social, 18);
+  assert.equal(low.state.mood, 46);
+  assert.equal(low.state.social, 16);
   assert.equal(game.currentGrant(low.state).budgetDelta, -1700);
 
   const tight = game.createGame({ seed: seedFor('tight') });
@@ -158,9 +158,9 @@ test('预算即时效果只应用一次，不随体能档位缩放，精力按�
   const state = { ...game.createGame({ seed: seedFor('ordinary') }), fitness: 44, energy: 80, mood: 70, social: 20 };
   const result = game.chooseBudget(state, { clothing: 'ordinary', food: 'healthy', housing: 'ordinaryDorm', transport: 'basic' });
   assert.equal(result.ok, true, result.reason);
-  assert.equal(result.state.energy, 90);
-  assert.equal(result.state.fitness, 50);
-  assert.equal(result.state.mood, 64);
+  assert.equal(result.state.energy, 96);
+  assert.equal(result.state.fitness, 54);
+  assert.equal(result.state.mood, 60);
   assert.equal(result.state.social, 21);
   assert.equal(result.state.money, 600);
   assert.equal(result.state.history.filter(entry => entry.command.operation === 'chooseBudget').length, 1);
@@ -172,9 +172,9 @@ test('住宿三档改变休息恢复与体能上限，未确认预算保持中�
   assert.equal(unconfirmed.effect.recovery, 30);
   assert.equal(unconfirmed.effect.fitness, 5);
   const expected = {
-    ordinaryDorm: { recovery: 27, fitness: 5 },
+    ordinaryDorm: { recovery: 26, fitness: 4 },
     luxuryDorm: { recovery: 34, fitness: 6 },
-    offCampus: { recovery: 42, fitness: 7 }
+    offCampus: { recovery: 45, fitness: 8 }
   };
   const applied = {};
   for (const housing of Object.keys(expected)) {
@@ -204,13 +204,14 @@ test('宿舍事件按住宿档位修正正向心情/社交，负向结果与白�
     [
       { id: 'talk', fitnessCost: 0, title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 15, social: 3 },
       { id: 'talk', fitnessCost: 0, title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 14, social: 3 },
-      { id: 'talk', fitnessCost: 0, title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 17, social: 5 },
+      { id: 'talk', fitnessCost: 0, title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 18, social: 6 },
       { id: 'talk', fitnessCost: 0, title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 15, social: 3 }
     ]
   );
   const talked = game.submitEventChoice(shared, 'talk');
   assert.equal(talked.ok, true, talked.reason);
-  assert.equal(talked.changes.mood, 15);
+  // 合租即时心情已到 88，事件 +15 被 100 上限截断为 +12。
+  assert.equal(talked.changes.mood, 12);
   assert.equal(talked.changes.social, 3);
 
   const dormNegative = pending(game.chooseBudget(base, { ...game.DEFAULT_BUDGET, housing: 'offCampus' }).state, 'insomnia');
@@ -230,10 +231,10 @@ test('投入型宿舍事件的均值预览与提交都叠加住宿修正', () =>
   const neutral = game.previewEventInvestment(plain, 'join', 5);
   assert.equal(normal.ok, true, normal.reason);
   assert.equal(better.ok, true, better.reason);
-  assert.equal(better.effect.mood - normal.effect.mood, 3);
-  assert.equal(better.effect.social - normal.effect.social, 2);
-  assert.equal(better.effect.mood - neutral.effect.mood, 2);
-  assert.equal(better.effect.social - neutral.effect.social, 2);
+  assert.equal(better.effect.mood - normal.effect.mood, 4);
+  assert.equal(better.effect.social - normal.effect.social, 3);
+  assert.equal(better.effect.mood - neutral.effect.mood, 3);
+  assert.equal(better.effect.social - neutral.effect.social, 3);
   const submitted = game.submitEventChoice(luxury, 'join', { investment: 5 });
   assert.equal(submitted.ok, true, submitted.reason);
   assert.ok(submitted.entry.changes.mood >= better.effect.mood - 1);
@@ -250,8 +251,8 @@ test('宿舍内室友交流叠加住宿加成，其他地点行动不受影响',
   const offCampus = game.previewActionInvestment(shared, 'chat', 5);
   assert.equal(dorm.effect.mood - plain.effect.mood, -1);
   assert.equal(dorm.effect.social - plain.effect.social, 0);
-  assert.equal(better.effect.mood - plain.effect.mood, 2);
-  assert.equal(better.effect.social - plain.effect.social, 2);
+  assert.equal(better.effect.mood - plain.effect.mood, 3);
+  assert.equal(better.effect.social - plain.effect.social, 3);
   assert.equal(offCampus.effect.mood - plain.effect.mood, 0);
   assert.equal(offCampus.effect.social - plain.effect.social, 0);
   assert.equal(game.previewActionInvestment(shared, 'study', 5).effect.social, game.previewActionInvestment(base, 'study', 5).effect.social);
@@ -319,4 +320,47 @@ test('预算快照、命令选择、扣款与总结快照被篡改时校验拒�
   const summary = structuredClone(settled);
   summary.summary.budget.budgetDelta = 3600;
   assert.equal(game.validateState(summary).ok, false);
+});
+
+test('旧预算表的确认快照仍可读取，新存档带配置版本并严格校验', () => {
+  const state = game.chooseBudget(game.createGame({ seed: seedFor('ordinary') }), game.DEFAULT_BUDGET).state;
+  assert.equal(game.currentGrant(state).budgetConfig, game.BUDGET_CONFIG_VERSION);
+
+  // 0.7.0 初版数值表（无 budgetConfig 标记）生成的确认快照：调表后必须仍能读取。
+  const legacyValues = [
+    next => { const grant = game.currentGrant(next); grant.budgetEffects = { mood: -2, social: 1, energy: 4, fitness: 3 }; grant.budgetModifiers = { restMultiplier: 0.9, dormMood: -1, dormSocial: 0 }; },
+    next => { const grant = game.currentGrant(next); grant.budgetEffects = { mood: 8, social: 13, energy: 8, fitness: -4 }; grant.budgetModifiers = { restMultiplier: 1.4, dormMood: 0, dormSocial: 0 }; }
+  ];
+  for (const applyLegacy of legacyValues) {
+    const copy = structuredClone(state);
+    applyLegacy(copy);
+    game.currentGrant(copy).budgetConfig = undefined;
+    delete game.currentGrant(copy).budgetConfig;
+    assert.equal(game.validateState(copy).ok, true, JSON.stringify(game.validateState(copy)));
+  }
+
+  // 结构损坏的旧快照仍然拒绝。
+  const broken = [
+    next => { game.currentGrant(next).budgetEffects = { mood: '高', social: 1, energy: 4, fitness: 3 }; },
+    next => { game.currentGrant(next).budgetModifiers = { restMultiplier: -1, dormMood: 0, dormSocial: 0 }; },
+    next => { game.currentGrant(next).budgetModifiers = { restMultiplier: 5, dormMood: 0, dormSocial: 0 }; }
+  ];
+  for (const breakIt of broken) {
+    const copy = structuredClone(state);
+    breakIt(copy);
+    game.currentGrant(copy).budgetConfig = undefined;
+    delete game.currentGrant(copy).budgetConfig;
+    assert.equal(game.validateState(copy).ok, false);
+  }
+
+  // 当前配置版本的存档篡改 budgetConfig 也逃不过结构校验的下限（效果超界仍拒绝）。
+  const dodge = structuredClone(state);
+  game.currentGrant(dodge).budgetConfig = 0;
+  game.currentGrant(dodge).budgetEffects = { mood: 999, social: 1, energy: 4, fitness: 3 };
+  assert.equal(game.validateState(dodge).ok, false);
+
+  // 两学期重放保持 deep 一致（含 budgetConfig 标记）。
+  const replay = game.replay({ seed: state.rng.seed, nickname: state.nickname, commands: state.history.map(entry => ({ ...entry.command, commandId: entry.commandId })) });
+  assert.equal(replay.ok, true, replay.reason);
+  assert.deepEqual(replay.state, state);
 });

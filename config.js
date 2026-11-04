@@ -86,20 +86,20 @@
       id: 'clothing', label: '衣', title: '衣着与形象',
       description: '衣服、鞋包、饰品和日常打理，决定你在校园里的状态和与人相处时的底气。',
       tiers: [
-        { id: 'refined', label: '精致', cost: 1600, effects: { mood: 10, social: 6 }, description: '换季时认真添置，穿搭和打理都花心思。' },
-        { id: 'excellent', label: '出色', cost: 1300, effects: { mood: 6, social: 4 }, description: '几套体面的换洗搭配，重要场合不怯场。' },
+        { id: 'refined', label: '精致', cost: 1600, effects: { mood: 16, social: 10 }, description: '换季时认真添置，穿搭和打理都花心思。' },
+        { id: 'excellent', label: '出色', cost: 1300, effects: { mood: 8, social: 4 }, description: '几套体面的换洗搭配，重要场合不怯场。' },
         { id: 'ordinary', label: '普通', cost: 1000, effects: { mood: 2, social: 1 }, description: '按需添置，干净合身就好。' },
-        { id: 'minimal', label: '极简', cost: 300, effects: { mood: -4, social: -2 }, description: '能穿就不买，衣柜里只剩最必要的几件。' }
+        { id: 'minimal', label: '极简', cost: 300, effects: { mood: -8, social: -4 }, description: '能穿就不买，衣柜里只剩最必要的几件。' }
       ]
     },
     food: {
       id: 'food', label: '食', title: '三餐与饮食',
       description: '食堂、外卖、水果、补剂和偶尔下馆子。吃得怎样，直接影响精力和身体。',
       tiers: [
-        { id: 'gourmet', label: '品鉴家', cost: 3400, effects: { mood: 12, energy: 8, fitness: -4 }, description: '常去新窗口和校外小店，味蕾满足了，作息和锻炼容易落下。' },
-        { id: 'healthy', label: '健康', cost: 3000, effects: { energy: 10, fitness: 6, mood: -4 }, description: '三餐规律，水果和蛋白质跟上，口味清淡。' },
+        { id: 'gourmet', label: '品鉴家', cost: 3400, effects: { mood: 18, energy: 10, fitness: -8 }, description: '常去新窗口和校外小店，味蕾满足了，作息和锻炼容易落下。' },
+        { id: 'healthy', label: '健康', cost: 3000, effects: { energy: 16, fitness: 10, mood: -6 }, description: '三餐规律，水果和蛋白质跟上，口味清淡。' },
         { id: 'ordinary', label: '普通', cost: 2400, effects: { energy: 4, fitness: 3 }, description: '食堂为主，偶尔加餐，够吃也够用。' },
-        { id: 'minimal', label: '极简', cost: 1400, effects: { mood: -6 }, description: '能省则省，常靠面包和泡面凑合。' }
+        { id: 'minimal', label: '极简', cost: 1400, effects: { mood: -10 }, description: '能省则省，常靠面包和泡面凑合。' }
       ]
     },
     housing: {
@@ -107,9 +107,9 @@
       description: '住得怎样，决定熄灯后的睡眠、室友关系和宿舍里的日常。',
       dormEvents: ['roommateCare', 'night', 'insomnia', 'flu', 'parcel', 'wall', 'ticket3'],
       tiers: [
-        { id: 'offCampus', label: '校外合租', cost: 3000, effects: { mood: 12, social: 8 }, restMultiplier: 1.4, dormMood: 0, dormSocial: 0, placeDescription: '三人合租，带客厅和独立卫浴。晚上回来，客厅的灯还亮着，室友在厨房煮面。', description: '三个人合租，有客厅和独立卫浴，空间和作息都更自由。' },
-        { id: 'luxuryDorm', label: '豪华宿舍', cost: 2000, effects: { mood: 6, social: 4 }, restMultiplier: 1.15, dormMood: 2, dormSocial: 2, placeDescription: '六人间上床下桌，独立卫浴。桌面够摊开电脑和书，阳台能晒到太阳。', description: '六人间上床下桌，独立卫浴，舍友相处体面自在。' },
-        { id: 'ordinaryDorm', label: '普通宿舍', cost: 1000, effects: { mood: -4 }, restMultiplier: 0.9, dormMood: -1, dormSocial: 0, placeDescription: '七人间上下铺，公共水房。熄灯后有人翻身，床板吱呀响一声。', description: '七人间上下铺，公共水房，热闹但不太安静。' }
+        { id: 'offCampus', label: '校外合租', cost: 3000, effects: { mood: 16, social: 10 }, restMultiplier: 1.5, dormMood: 0, dormSocial: 0, placeDescription: '三人合租，带客厅和独立卫浴。晚上回来，客厅的灯还亮着，室友在厨房煮面。', description: '三个人合租，有客厅和独立卫浴，空间和作息都更自由。' },
+        { id: 'luxuryDorm', label: '豪华宿舍', cost: 2000, effects: { mood: 8, social: 5 }, restMultiplier: 1.15, dormMood: 3, dormSocial: 3, placeDescription: '六人间上床下桌，独立卫浴。桌面够摊开电脑和书，阳台能晒到太阳。', description: '六人间上床下桌，独立卫浴，舍友相处体面自在。' },
+        { id: 'ordinaryDorm', label: '普通宿舍', cost: 1000, effects: { mood: -6 }, restMultiplier: 0.85, dormMood: -1, dormSocial: 0, placeDescription: '七人间上下铺，公共水房。熄灯后有人翻身，床板吱呀响一声。', description: '七人间上下铺，公共水房，热闹但不太安静。' }
       ]
     },
     transport: {
@@ -121,6 +121,9 @@
     }
   };
   const DEFAULT_BUDGET = Object.freeze({ clothing: 'ordinary', food: 'ordinary', housing: 'ordinaryDorm', transport: 'basic' });
+  // 预算表版本：调档位数值/效果时 +1。存档里确认过的预算快照带此标记，
+  // 与当前版本一致才做严格比对；旧版本快照降级为结构校验，保证调表不破坏旧存档。
+  const BUDGET_CONFIG_VERSION = 2;
   const ACTIONS = {
     study: { place: 'think', title: '课程学习', description: '踩着铃声进教室，摊开今天要讲的那一章。一学期下来，笔记越写越厚。', time: 2, energy: 15, fitnessCost: 3, money: 0, preparation: 20, mood: -3, limit: 4 },
     tutoring: { place: 'think', title: '课程补习', description: '约了学长把卡住的章节讲透。两个小时，白板擦了又写。', time: 2, energy: 10, fitnessCost: 2, money: 100, preparation: 25, limit: 2 },
@@ -839,7 +842,7 @@
     ],
     othersNote: '另有：{list}，共 {count} 项校园经历。'
   };
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

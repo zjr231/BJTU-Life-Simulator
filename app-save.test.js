@@ -643,6 +643,8 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
   const ui = app();
   ui.start(false);
   assert.equal(ui.evaluate('dialogMode'), 'budget');
+  ui.evaluate('showCourseSelection()');
+  assert.equal(ui.evaluate('dialogMode'), 'budget', '预算未确认时不能从其他入口绕过到选课');
   ui.click('#dialogButtons', { dialogAction: 'budgetConfirm' });
   ui.flush();
   assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
@@ -685,7 +687,7 @@ test('开学先独立确认四维预算：默认合计、低体能警告、不�
   assert.match(body, /本学期预算合计 5800 元/);
   assert.match(body, /需追加 1000 元/);
   ui.evaluate('state = { ...state, fitness: 26 }; showBudget()');
-  assert.match(ui.element('#dialogBody').innerHTML, /预计体能 22，低于 25 会生病/);
+  assert.match(ui.element('#dialogBody').innerHTML, /预计体能 18，低于 25 会生病/);
 
   ui.click('#dialogBody', { budgetDimension: 'housing', budgetTier: 'offCampus' });
   body = ui.element('#dialogBody').innerHTML;
@@ -706,7 +708,7 @@ test('开学先独立确认四维预算：默认合计、低体能警告、不�
   assert.equal(ui.evaluate('state.economy.grants[0].budget.food'), 'gourmet');
   assert.equal(ui.evaluate('state.economy.grants[0].budget.housing'), 'ordinaryDorm');
   assert.equal(ui.evaluate('state.money'), 200);
-  assert.equal(ui.evaluate('state.fitness'), 22);
+  assert.equal(ui.evaluate('state.fitness'), 18);
 });
 
 test('开考确认显示剩余时间和平时分，打开与取消均不生成试卷或修改进度', () => {
