@@ -154,19 +154,34 @@
         if (!['executeAction', 'purchaseGrowth', 'submitEventChoice', 'selectCourses', 'chooseBudget', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc', 'setTargetPosition', 'settleInternship'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'purchaseGrowth') {
           const node = GROWTH_NODES[command.id];
+          const hasTermStart = node && node.effects.some(item => item.kind === 'termStart');
+          const restPrereq = node?.prereq?.actionCounts?.rest;
           if (!own(GROWTH_NODES, command.id) || own(growthPurchases, command.id) || entry.action !== 'purchaseGrowth'
             || !object(entry.changes) || !same(entry.changes, { money: -node.price })
             || entry.before.phase !== 'playing' || entry.before.money < node.price || entry.after.money !== entry.before.money - node.price
             || entry.after.time !== entry.before.time || entry.after.energy !== entry.before.energy || entry.after.phase !== entry.before.phase
-            || (node.requiredRests && completedRests < node.requiredRests) || (node.openingEnergy && entry.term === RULES.terms)) return fail('校园养成扣款或条件');
+            || (restPrereq && completedRests < restPrereq) || (hasTermStart && entry.term === RULES.terms)
+            || (node.prereq?.minTerm && entry.term < node.prereq.minTerm)) return fail('校园养成扣款或条件');
           growthPurchases[command.id] = { term: entry.term, revision: entry.revision };
         }
         if (command.operation === 'executeAction' && command.id === 'rest') completedRests++;
         if (entry.growthBonuses !== undefined) {
           const bonuses = entry.growthBonuses;
-          if (command.operation !== 'executeAction' || command.id !== 'rest' || !object(bonuses) || Object.keys(bonuses).length !== 2
-            || !integer(bonuses.energy, 0, growthPurchases.bedding ? GROWTH_NODES.bedding.recovery : 0)
-            || !integer(bonuses.mood, 0, growthPurchases.hobbyCorner ? GROWTH_NODES.hobbyCorner.mood : 0)
+          // 每键上限 = 已购节点中匹配本次行动的 action 加成之和（recovery 记为 energy）；
+          // 精确值由重放比对兜底，这里只做结构 + 上限防线。
+          const caps = { energy: 0, mood: 0, fitness: 0, social: 0, preparation: 0, furtherStudy: 0, jobPreparation: 0 };
+          for (const [nodeId, record] of Object.entries(growthPurchases)) {
+            if (entry.revision <= record.revision) continue;
+            for (const item of GROWTH_NODES[nodeId]?.effects || []) {
+              if (item.kind !== 'action' || !item.actions.includes(command.id)) continue;
+              for (const [key, amount] of Object.entries(item.bonuses)) caps[key === 'recovery' ? 'energy' : key] += amount;
+            }
+          }
+          const keys = Object.keys(bonuses);
+          if (command.operation !== 'executeAction' || !object(bonuses)
+            || !keys.includes('energy') || !keys.includes('mood')
+            || !keys.every(key => key in caps && integer(bonuses[key], 0, caps[key]))
+            || !Object.values(bonuses).some(value => value > 0)
             || (backgroundReplay.ok && !same(bonuses, backgroundReplay.state.history[index].growthBonuses))) return fail('校园养成收益');
         }
         if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');

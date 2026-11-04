@@ -156,8 +156,26 @@ test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可�
   assert.equal(ui.evaluate('openPanelName'), 'growth');
   assert.match(ui.element('#growthOverview').innerHTML, /1200/);
   assert.match(ui.element('#growthNodes').innerHTML, /舒适寝具/);
-  assert.match(ui.element('#growthNodes').innerHTML, /0 \/ 3/);
+  // 二期：顶部维度标签切换，默认显示住宿，只有选中维度的卡片出现在下方。
+  const tabHtml = ui.element('#growthTabs').innerHTML;
+  for (const label of ['衣', '食', '住', '行', '习惯']) assert.match(tabHtml, new RegExp('>' + label + '<'));
+  assert.equal((tabHtml.match(/data-growth-dimension=/g) || []).length, 5);
+  assert.equal(ui.evaluate('selectedGrowthDimension'), 'housing');
+  assert.match(ui.element('#growthNodes').innerHTML, /住 · 住宿与休息/);
+  assert.match(ui.element('#growthNodes').innerHTML, /舒适寝具/);
+  assert.doesNotMatch(ui.element('#growthNodes').innerHTML, /正装套装|水果篮|自行车/);
+  ui.click('#growthTabs', { growthDimension: 'clothing' });
+  assert.equal(ui.evaluate('selectedGrowthDimension'), 'clothing');
+  assert.match(ui.element('#growthNodes').innerHTML, /衣 · 衣着与形象/);
+  assert.match(ui.element('#growthNodes').innerHTML, /正装套装/);
+  assert.match(ui.element('#growthNodes').innerHTML, /轻便运动鞋/);
+  assert.doesNotMatch(ui.element('#growthNodes').innerHTML, /舒适寝具/);
+  ui.click('#growthNodes', { growthSelect: 'formalSuit' });
+  assert.match(ui.element('#growthDetails').innerHTML, /第 5 学期开始开放/);
   const selectionState = ui.evaluate('JSON.stringify(state)');
+  ui.click('#growthTabs', { growthDimension: 'habit' });
+  assert.match(ui.element('#growthNodes').innerHTML, /习惯 · 习惯养成/);
+  assert.match(ui.element('#growthNodes').innerHTML, /累计休息/);
   ui.click('#growthNodes', { growthSelect: 'routine' });
   assert.equal(ui.evaluate('selectedGrowthId'), 'routine');
   assert.match(ui.element('#growthDetails').innerHTML, /累计休息 0 \/ 3 次/);
@@ -165,12 +183,13 @@ test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可�
   assert.equal(ui.evaluate('JSON.stringify(state)'), selectionState);
   ui.click('#growthNodes', { growthSelect: '__proto__' });
   assert.equal(ui.evaluate('selectedGrowthId'), 'routine');
+  ui.click('#growthTabs', { growthDimension: 'housing' });
   ui.click('#growthNodes', { growthSelect: 'bedding' });
   assert.match(ui.element('#growthDetails').innerHTML, /每次休息额外恢复 3 点精力/);
   const before = ui.evaluate('state.revision');
   ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(before) });
   assert.equal(ui.evaluate('state.money'), 900);
-  assert.equal(ui.element('#growthCount').textContent, '1 / 3');
+  assert.equal(ui.element('#growthCount').textContent, '1 / 9');
   assert.match(ui.element('#growthNodes').innerHTML, /已拥有 ✓/);
   assert.match(ui.element('#growthNotice').textContent, /支出 300 元/);
   assert.match(ui.evaluate('growthRecord()'), /添置舒适寝具/);
@@ -185,7 +204,7 @@ test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可�
   ui.click('#loadButton');
   ui.click('#dialogBody', { loadSlot: '3', saveSource: 'primary' });
   assert.equal(ui.evaluate('JSON.stringify(state)'), purchased);
-  assert.equal(ui.element('#growthCount').textContent, '1 / 3');
+  assert.equal(ui.element('#growthCount').textContent, '1 / 9');
   ui.click('#growthClose');
   ui.element('#growthToggle').emit('click', { stopPropagation() {} });
   assert.equal(ui.evaluate('openPanelName'), 'growth');
@@ -738,7 +757,7 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
   assert.match(ui.element('#dialogBody').innerHTML, /期末考试/);
 });
 
-test('开学先独立确认四维预算：默认合计、低体能警告、不可负担禁用与行待完善', () => {
+test('开学确认基础费用与住宿档位：固定底座不可选、住宿三档、低体能警告与不可负担禁用', () => {
   const ui = app();
   ui.start(false);
   let seed = 'budget-picker-0';
@@ -746,25 +765,30 @@ test('开学先独立确认四维预算：默认合计、低体能警告、不�
   ui.evaluate('state = CampusGame.createGame({ seed: ' + JSON.stringify(seed) + ' }); budgetDraft = null; budgetDraftTerm = null; renderState(); showBudget()');
   assert.equal(ui.evaluate('dialogMode'), 'budget');
   let body = ui.element('#dialogBody').innerHTML;
-  for (const dimension of ['clothing', 'food', 'housing', 'transport']) assert.match(body, new RegExp('data-budget-dimension="' + dimension + '"'));
+  // 只有住宿渲染档位按钮；衣/食/行为固定底座行，legacy 档位不再提供。
+  assert.equal((body.match(/data-budget-dimension/g) || []).length, 3);
+  for (const dimension of ['clothing', 'food', 'transport']) assert.doesNotMatch(body, new RegExp('data-budget-dimension="' + dimension));
+  assert.equal((body.match(/data-budget-tier=/g) || []).length, 3);
+  assert.equal((body.match(/data-budget-dimension="housing"/g) || []).length, 3);
+  assert.equal((body.match(/本学期固定安排/g) || []).length, 3);
+  assert.doesNotMatch(body, /精致|出色|品鉴家|健康|极简/);
   assert.match(body, /影响待完善/);
   assert.match(body, /本学期预算合计 4800 元/);
   assert.match(body, /与默认预留持平/);
-  assert.equal((body.match(/aria-pressed="true"/g) || []).length, 4);
-  assert.doesNotMatch(body, /普通档组合/);
+  assert.equal((body.match(/aria-pressed="true"/g) || []).length, 1);
   assert.doesNotMatch(ui.element('#dialogButtons').innerHTML, /disabled/);
+  assert.equal(ui.evaluate('state.money'), 1200);
 
-  ui.click('#dialogBody', { budgetDimension: 'food', budgetTier: 'gourmet' });
-  body = ui.element('#dialogBody').innerHTML;
-  assert.match(body, /本学期预算合计 5800 元/);
-  assert.match(body, /需追加 1000 元/);
-  ui.evaluate('state = { ...state, fitness: 26 }; showBudget()');
-  assert.match(ui.element('#dialogBody').innerHTML, /预计体能 18，低于 25 会生病/);
+  ui.evaluate('state = { ...state, fitness: 21 }; showBudget()');
+  assert.match(ui.element('#dialogBody').innerHTML, /预计体能 24，低于 25 会生病/);
 
+  ui.click('#dialogBody', { budgetDimension: 'clothing', budgetTier: 'refined' });
+  assert.equal(ui.evaluate('budgetDraft.clothing'), 'ordinary', '固定维度不响应档位点击');
   ui.click('#dialogBody', { budgetDimension: 'housing', budgetTier: 'offCampus' });
   body = ui.element('#dialogBody').innerHTML;
-  assert.match(body, /本学期预算合计 7800 元/);
-  assert.match(body, /余额不足，还差 1800 元/);
+  assert.match(body, /本学期预算合计 6800 元/);
+  assert.match(body, /需追加 2000 元/);
+  assert.match(body, /余额不足，还差 800 元/);
   assert.match(ui.element('#dialogButtons').innerHTML, /disabled/);
   const revision = ui.evaluate('state.revision');
   ui.click('#dialogButtons', { dialogAction: 'budgetConfirm' });
@@ -777,10 +801,9 @@ test('开学先独立确认四维预算：默认合计、低体能警告、不�
   ui.flush();
   assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
   assert.equal(ui.evaluate('state.economy.grants[0].budgetChosen'), true);
-  assert.equal(ui.evaluate('state.economy.grants[0].budget.food'), 'gourmet');
+  assert.equal(ui.evaluate('state.economy.grants[0].budget.food'), 'ordinary');
   assert.equal(ui.evaluate('state.economy.grants[0].budget.housing'), 'ordinaryDorm');
-  assert.equal(ui.evaluate('state.money'), 200);
-  assert.equal(ui.evaluate('state.fitness'), 18);
+  assert.equal(ui.evaluate('state.money'), 1200);
 });
 
 test('开考确认显示剩余时间和平时分，打开与取消均不生成试卷或修改进度', () => {

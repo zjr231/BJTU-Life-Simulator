@@ -3,7 +3,7 @@
   const config = typeof module !== 'undefined' && module.exports ? require('./config.js') : root.CampusConfig;
   const random = typeof module !== 'undefined' && module.exports ? require('./rng.js') : root.CampusRandom;
   const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
-  const { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS } = config;
+  const { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS } = config;
   const { COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
   const CHAIN_NAMES = { project: '项目', club: '社团', internship: '实习' };
   const REQUIREMENT_LABELS = { project: '项目', contest: '竞赛', internship: '前段实习', club: '社团' };
@@ -237,9 +237,26 @@
     const effect = id === 'chat' ? applyHousingActionEffect(state, id, adjusted) : adjusted;
     return { ok: true, amount, effect: applyGrowthEffect(state, id, effect), level: investmentLevel(profile, amount) };
   }
-  function growthRests(state, purchased, term) {
-    return state.history.filter(entry => entry.command.operation === 'executeAction' && entry.action === 'rest'
+  // 养成加成的收益键；recovery 在 previewChanges 中映射为精力恢复，账目里记作 energy。
+  const GROWTH_BONUS_KEYS = ['energy', 'mood', 'fitness', 'social', 'preparation', 'furtherStudy', 'jobPreparation'];
+  const GROWTH_ENTRY_KEYS = ['energy', 'mood'];
+  function growthActionUses(state, actions, purchased, term) {
+    return state.history.filter(entry => entry.command.operation === 'executeAction' && actions.includes(entry.action)
       && (!purchased || entry.revision > purchased.revision) && (term === undefined || entry.term === term)).length;
+  }
+  function growthActionCount(state, actionId, purchased, term) {
+    return growthActionUses(state, [actionId], purchased, term);
+  }
+  function growthRests(state, purchased, term) {
+    return growthActionCount(state, 'rest', purchased, term);
+  }
+  function nodeTermStartBonuses(node) {
+    const bonuses = {};
+    for (const item of node.effects) {
+      if (item.kind !== 'termStart') continue;
+      for (const [key, amount] of Object.entries(item.bonuses)) bonuses[key] = (bonuses[key] || 0) + amount;
+    }
+    return bonuses;
   }
   function growthAvailability(state, id) {
     if (!own(GROWTH_NODES, id)) return { ok: false, reason: '未知养成节点' };
@@ -250,8 +267,15 @@
     const grant = currentGrant(state);
     if (grant?.budget && !grant.budgetChosen) return { ok: false, reason: '请先确认本学期生活预算' };
     const node = GROWTH_NODES[id];
-    if (node.openingEnergy && state.term === RULES.terms) return { ok: false, reason: '已是最后一学期，没有后续开学收益' };
-    if (node.requiredRests && growthRests(state) < node.requiredRests) return { ok: false, reason: '需要累计完成 ' + node.requiredRests + ' 次休息（当前 ' + growthRests(state) + ' 次）' };
+    if (node.effects.some(item => item.kind === 'termStart') && state.term === RULES.terms) return { ok: false, reason: '已是最后一学期，没有后续开学收益' };
+    if (node.prereq?.minTerm && state.term < node.prereq.minTerm) return { ok: false, reason: '第 ' + node.prereq.minTerm + ' 学期开始开放' };
+    if (node.prereq?.actionCounts) {
+      for (const [actionId, required] of Object.entries(node.prereq.actionCounts)) {
+        const done = growthActionCount(state, actionId);
+        const label = actionId === 'rest' ? '休息' : (ACTIONS[actionId]?.title || actionId);
+        if (done < required) return { ok: false, reason: '需要累计完成 ' + required + ' 次' + label + '（当前 ' + done + ' 次）' };
+      }
+    }
     if (state.money < node.price) return { ok: false, reason: '余额不足，还差 ' + (node.price - state.money) + ' 元' };
     return { ok: true };
   }
@@ -260,20 +284,34 @@
     const nodes = Object.values(GROWTH_NODES).map(node => {
       const record = purchased[node.id] || null;
       const check = growthAvailability(state, node.id);
+      const perTermItems = node.effects.filter(item => item.kind === 'action' && item.perTerm);
+      const restItem = node.effects.find(item => item.kind === 'action' && item.actions.includes('rest'));
+      const openingBonuses = nodeTermStartBonuses(node);
+      // 兼容字段：requiredRests / openingEnergy / restsPerTerm / remainingRests 供旧界面与既有测试使用。
       return { ...node, purchased: record, available: check.ok, reason: check.reason || '',
-        remainingRests: node.restsPerTerm && record ? Math.max(0, node.restsPerTerm - growthRests(state, record, state.term)) : null };
+        requiredRests: node.prereq?.actionCounts?.rest, openingEnergy: openingBonuses.energy,
+        restsPerTerm: restItem?.perTerm,
+        remainingUses: perTermItems.length && record ? Math.min(...perTermItems.map(item => Math.max(0, item.perTerm - growthActionUses(state, item.actions, record, state.term)))) : null,
+        remainingRests: restItem && record && restItem.perTerm ? Math.max(0, restItem.perTerm - growthActionCount(state, 'rest', record, state.term)) : null };
     });
     return { nodes, ownedCount: nodes.filter(node => node.purchased).length,
       totalSpent: nodes.filter(node => node.purchased).reduce((sum, node) => sum + node.price, 0),
       restCount: state ? growthRests(state) : 0 };
   }
   function applyGrowthEffect(state, id, effect) {
-    if (id !== 'rest' || !state.growth) return effect;
-    const purchased = state.growth.purchased;
-    const hobby = purchased.hobbyCorner;
-    return { ...effect,
-      recovery: (effect.recovery || 0) + (purchased.bedding ? GROWTH_NODES.bedding.recovery : 0),
-      mood: (effect.mood || 0) + (hobby && growthRests(state, hobby, state.term) < GROWTH_NODES.hobbyCorner.restsPerTerm ? GROWTH_NODES.hobbyCorner.mood : 0) };
+    const purchased = state.growth?.purchased;
+    if (!purchased) return effect;
+    const adjusted = { ...effect };
+    for (const node of Object.values(GROWTH_NODES)) {
+      const record = purchased[node.id];
+      if (!record) continue;
+      for (const item of node.effects) {
+        if (item.kind !== 'action' || !item.actions.includes(id)) continue;
+        if (item.perTerm !== undefined && growthActionUses(state, item.actions, record, state.term) >= item.perTerm) continue;
+        for (const [key, amount] of Object.entries(item.bonuses)) adjusted[key] = (adjusted[key] || 0) + amount;
+      }
+    }
+    return adjusted;
   }
   function purchaseGrowth(state, id, options = {}) {
     const command = commandCheck(state, options, 'purchaseGrowth:' + id);
@@ -502,7 +540,9 @@
     const baseChanges = previewChanges(state, action);
     action = applyGrowthEffect(state, id, action);
     const changes = previewChanges(state, action);
+    // energy/mood 两键恒输出（既有测试钉死形状），其余键仅在有加成时出现。
     const growthBonuses = { energy: changes.energy - baseChanges.energy, mood: changes.mood - baseChanges.mood };
+    for (const key of GROWTH_BONUS_KEYS.slice(2)) if (changes[key] - baseChanges[key]) growthBonuses[key] = changes[key] - baseChanges[key];
     let extraRecord;
     if (extra) {
       // Apply a small absolute bonus after fitness scaling; never amplify it again.
@@ -1134,7 +1174,12 @@
     const command = commandCheck(state, options, 'continueGame');
     if (!command.ok) return command;
     if (state.phase !== 'summary') return { ok: false, reason: '当前没有待确认的学期总结', state };
-    const openingEnergy = RULES.energy + (state.growth?.purchased.routine ? GROWTH_NODES.routine.openingEnergy : 0);
+    const termStartBonuses = {};
+    for (const node of Object.values(GROWTH_NODES)) {
+      if (!state.growth?.purchased[node.id]) continue;
+      for (const [key, amount] of Object.entries(nodeTermStartBonuses(node))) termStartBonuses[key] = (termStartBonuses[key] || 0) + amount;
+    }
+    const openingEnergy = RULES.energy + (termStartBonuses.energy || 0);
     const followingTerm = { ...state, term: state.term + 1, phase: 'playing', time: 12, energy: Math.min(RULES.maxEnergy, openingEnergy), preparation: 0, counts: {}, summary: null, selectedCourses: [], exam: null, npcChats: {} };
     const next = state.term === 8
       ? { ...state, phase: 'endingChoice', endingOptions: evaluateEndings(state), selectedCourses: [], exam: null }
@@ -1209,7 +1254,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, growthAvailability, growthStatus, purchaseGrowth, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, budgetPlan, currentGrant, activeBudget, housingFor, placeFor, placeDescription, applyDormEventBonus, eventChoiceEffect, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, chooseBudget, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, advisories, ADVISORIES, resume, RESUME, COMPANIES, POSITIONS, positionAvailability, REAPPLY_GAP, internshipRequirementMet, internshipProgress, settleInternship, setTargetPosition, REQUIREMENT_LABELS, TIER_LABELS, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, growthAvailability, growthStatus, purchaseGrowth, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, budgetPlan, currentGrant, activeBudget, housingFor, placeFor, placeDescription, applyDormEventBonus, eventChoiceEffect, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, chooseBudget, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, advisories, ADVISORIES, resume, RESUME, COMPANIES, POSITIONS, positionAvailability, REAPPLY_GAP, internshipRequirementMet, internshipProgress, settleInternship, setTargetPosition, REQUIREMENT_LABELS, TIER_LABELS, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

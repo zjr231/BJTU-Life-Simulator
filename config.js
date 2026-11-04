@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.7.0', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, termLivingCost: 4800, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.8.0', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, termLivingCost: 4800, lowMood: 30, fitnessThreshold: 60 };
   // initialMoney/livingCost are retained only for the current term of legacy saves.
   const FAMILIES = [
     { id: 'tight', label: '预算较紧', termAllowance: 5200, weight: 20, description: '家里的收支安排得比较紧凑。父母提前为你留好了这一学期的生活费，日常吃住能够安心，额外花销需要多做些计划。临行前，家里人叮嘱你照顾好身体，有困难记得说。' },
@@ -13,11 +13,67 @@
     materials: { id: 'materials', title: '配套学习资料', actions: ['study', 'selfStudy'], price: 80, limit: 2, bonuses: { preparation: 2 }, description: '为这次课程学习或自习买一份配套练习与讲义，帮助整理刚学过的内容。' },
     snacks: { id: 'snacks', title: '零食分享', actions: ['chat'], price: 40, limit: 1, bonuses: { social: 1, mood: 2 }, description: '室友交流时买点零食一起分享，让这次聊天更轻松。' }
   };
+  // 校园养成单品：一次性购买、本局持续。effects 只做正向追加加成，
+  // 在行动结算的倍率/体能档位缩放之后应用；perTerm 按"购买后本学期原始行动次数"计数。
+  // prereq 支持 minTerm 与 actionCounts（累计行动次数，跨学期）。
   const GROWTH_NODES = {
-    bedding: { id: 'bedding', icon: 'bed', title: '舒适寝具', category: '生活改善', price: 300, description: '换上合适的枕头和床垫，让每一次休息都更踏实。', benefit: '每次休息额外恢复 3 点精力', recovery: 3 },
-    hobbyCorner: { id: 'hobbyCorner', icon: 'books', title: '宿舍兴趣角', category: '心情照顾', price: 200, description: '为喜欢的书、音乐和小收藏留一个角落，给忙碌的生活留一点期待。', benefit: '每学期前两次休息额外恢复 2 点心情', mood: 2, restsPerTerm: 2 },
-    routine: { id: 'routine', icon: 'alarm', title: '规律作息计划', category: '习惯养成', price: 400, description: '在尝试休息调整之后，准备一份适合自己的作息计划。', benefit: '从下一学期起，开学精力由 80 提高到 83', requiredRests: 3, openingEnergy: 3 }
+    bedding: {
+      id: 'bedding', icon: 'bed', dimension: 'housing', category: '生活改善', title: '舒适寝具', price: 300,
+      description: '换上合适的枕头和床垫，让每一次休息都更踏实。', benefit: '每次休息额外恢复 3 点精力',
+      effects: [{ kind: 'action', actions: ['rest'], bonuses: { recovery: 3 } }]
+    },
+    hobbyCorner: {
+      id: 'hobbyCorner', icon: 'books', dimension: 'housing', category: '心情照顾', title: '宿舍兴趣角', price: 200,
+      description: '为喜欢的书、音乐和小收藏留一个角落，给忙碌的生活留一点期待。', benefit: '每学期前两次休息额外恢复 2 点心情',
+      effects: [{ kind: 'action', actions: ['rest'], bonuses: { mood: 2 }, perTerm: 2 }]
+    },
+    routine: {
+      id: 'routine', icon: 'alarm', dimension: 'habit', category: '习惯养成', title: '规律作息计划', price: 400,
+      description: '在尝试休息调整之后，准备一份适合自己的作息计划。', benefit: '从下一学期起，开学精力由 80 提高到 83',
+      prereq: { actionCounts: { rest: 3 } },
+      effects: [{ kind: 'termStart', bonuses: { energy: 3 } }]
+    },
+    formalSuit: {
+      id: 'formalSuit', icon: 'suit', dimension: 'clothing', category: '职业形象', title: '正装套装', price: 600,
+      description: '一套合身的正装挂在衣柜里，模拟面试和招聘季都拿得出手。', benefit: '每次求职准备额外 +4 点求职准备',
+      prereq: { minTerm: 5 },
+      effects: [{ kind: 'action', actions: ['jobPreparation'], bonuses: { jobPreparation: 4 } }]
+    },
+    runningShoes: {
+      id: 'runningShoes', icon: 'shoe', dimension: 'clothing', category: '运动装备', title: '轻便运动鞋', price: 350,
+      description: '一双合脚的跑鞋，操场上想动就动。', benefit: '锻炼与单人运动额外 +2 点体能',
+      effects: [{ kind: 'action', actions: ['exercise', 'soloSport'], bonuses: { fitness: 2 } }]
+    },
+    fruitBasket: {
+      id: 'fruitBasket', icon: 'fruit', dimension: 'food', category: '日常营养', title: '水果篮', price: 250,
+      description: '每周补一篮时令水果，放在桌面随手能拿到。', benefit: '每学期前三次休息额外恢复 1 点精力',
+      effects: [{ kind: 'action', actions: ['rest'], bonuses: { recovery: 1 }, perTerm: 3 }]
+    },
+    fitnessMeal: {
+      id: 'fitnessMeal', icon: 'bowl', dimension: 'food', category: '训练饮食', title: '健身餐计划', price: 300,
+      description: '练完有一顿蛋白质跟上的餐食，练什么、吃什么都有数。', benefit: '每次健身房锻炼额外 +3 点体能',
+      effects: [{ kind: 'action', actions: ['gym'], bonuses: { fitness: 3 } }]
+    },
+    bicycle: {
+      id: 'bicycle', icon: 'bike', dimension: 'transport', category: '代步工具', title: '自行车', price: 450,
+      description: '一辆二手自行车，校内通勤和兜风都靠它。', benefit: '散步与单人运动额外 +2 点心情',
+      effects: [{ kind: 'action', actions: ['walk', 'soloSport'], bonuses: { mood: 2 } }]
+    },
+    transitCard: {
+      id: 'transitCard', icon: 'card', dimension: 'transport', category: '通勤优惠', title: '通勤公交卡', price: 220,
+      description: '办好学生优惠公交卡，去实习点的路上能省则省。', benefit: '每次实习工作额外 +2 点心情，每学期前四次',
+      prereq: { minTerm: 3 },
+      effects: [{ kind: 'action', actions: ['internshipWork'], bonuses: { mood: 2 }, perTerm: 4 }]
+    }
   };
+  // 养成面板的分组顺序；习惯分支没有对应预算维度，单独列出。
+  const GROWTH_DIMENSIONS = [
+    { id: 'clothing', label: '衣', title: '衣着与形象' },
+    { id: 'food', label: '食', title: '三餐与饮食' },
+    { id: 'housing', label: '住', title: '住宿与休息' },
+    { id: 'transport', label: '行', title: '通勤与出行' },
+    { id: 'habit', label: '习惯', title: '习惯养成' }
+  ];
   // Fitness tiers scale the costs/rewards of non-health actions and events.
   const FITNESS_TIERS = [
     { id: 'sick', label: '生病', min: 0, max: 24, reward: 0, cost: 0, ill: true },
@@ -91,20 +147,20 @@
       id: 'clothing', label: '衣', title: '衣着与形象',
       description: '衣服、鞋包、饰品和日常打理，决定你在校园里的状态和与人相处时的底气。',
       tiers: [
-        { id: 'refined', label: '精致', cost: 1600, effects: { mood: 16, social: 10 }, description: '换季时认真添置，穿搭和打理都花心思。' },
-        { id: 'excellent', label: '出色', cost: 1300, effects: { mood: 8, social: 4 }, description: '几套体面的换洗搭配，重要场合不怯场。' },
+        { id: 'refined', label: '精致', cost: 1600, effects: { mood: 16, social: 10 }, legacy: true, description: '换季时认真添置，穿搭和打理都花心思。' },
+        { id: 'excellent', label: '出色', cost: 1300, effects: { mood: 8, social: 4 }, legacy: true, description: '几套体面的换洗搭配，重要场合不怯场。' },
         { id: 'ordinary', label: '普通', cost: 1000, effects: { mood: 2, social: 1 }, description: '按需添置，干净合身就好。' },
-        { id: 'minimal', label: '极简', cost: 300, effects: { mood: -8, social: -4 }, description: '能穿就不买，衣柜里只剩最必要的几件。' }
+        { id: 'minimal', label: '极简', cost: 300, effects: { mood: -8, social: -4 }, legacy: true, description: '能穿就不买，衣柜里只剩最必要的几件。' }
       ]
     },
     food: {
       id: 'food', label: '食', title: '三餐与饮食',
       description: '食堂、外卖、水果、补剂和偶尔下馆子。吃得怎样，直接影响精力和身体。',
       tiers: [
-        { id: 'gourmet', label: '品鉴家', cost: 3400, effects: { mood: 18, energy: 10, fitness: -8 }, description: '常去新窗口和校外小店，味蕾满足了，作息和锻炼容易落下。' },
-        { id: 'healthy', label: '健康', cost: 3000, effects: { energy: 16, fitness: 10, mood: -6 }, description: '三餐规律，水果和蛋白质跟上，口味清淡。' },
+        { id: 'gourmet', label: '品鉴家', cost: 3400, effects: { mood: 18, energy: 10, fitness: -8 }, legacy: true, description: '常去新窗口和校外小店，味蕾满足了，作息和锻炼容易落下。' },
+        { id: 'healthy', label: '健康', cost: 3000, effects: { energy: 16, fitness: 10, mood: -6 }, legacy: true, description: '三餐规律，水果和蛋白质跟上，口味清淡。' },
         { id: 'ordinary', label: '普通', cost: 2400, effects: { energy: 4, fitness: 3 }, description: '食堂为主，偶尔加餐，够吃也够用。' },
-        { id: 'minimal', label: '极简', cost: 1400, effects: { mood: -10 }, description: '能省则省，常靠面包和泡面凑合。' }
+        { id: 'minimal', label: '极简', cost: 1400, effects: { mood: -10 }, legacy: true, description: '能省则省，常靠面包和泡面凑合。' }
       ]
     },
     housing: {
@@ -847,7 +903,7 @@
     ],
     othersNote: '另有：{list}，共 {count} 项校园经历。'
   };
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

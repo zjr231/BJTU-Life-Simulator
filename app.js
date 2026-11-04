@@ -261,13 +261,22 @@ function budgetTierExtras(dimension, tier) {
   else parts.push('宿舍事件/交流 无额外加成');
   return parts.join('；');
 }
+function budgetTierButton(dimension, tier) {
+  const selected = budgetDraft[dimension.id] === tier.id;
+  return '<button type="button" class="budget-tier' + (selected ? ' is-selected' : '') + '" data-budget-dimension="' + dimension.id + '" data-budget-tier="' + tier.id + '" aria-pressed="' + selected + '"><span class="budget-tier-head"><b>' + h(tier.label) + '</b><em>' + tier.cost + ' 元</em></span><small>' + h(budgetEffectText(tier.effects)) + '</small>' + (dimension.id === 'housing' ? '<small>' + h(budgetTierExtras(dimension, tier)) + '</small>' : '') + '</button>';
+}
+// 二期起衣/食/行为固定底座（legacy 档位仅供旧存档兼容），只有住宿保留档位选择。
 function budgetPickerMarkup() {
   return '<div class="budget-picker">' + Object.values(game.BUDGET_DIMENSIONS).map(dimension => {
-    const tiers = dimension.tiers.map(tier => {
-      const selected = budgetDraft[dimension.id] === tier.id;
-      return '<button type="button" class="budget-tier' + (selected ? ' is-selected' : '') + '" data-budget-dimension="' + dimension.id + '" data-budget-tier="' + tier.id + '" aria-pressed="' + selected + '"><span class="budget-tier-head"><b>' + h(tier.label) + '</b><em>' + tier.cost + ' 元</em></span><small>' + h(budgetEffectText(tier.effects)) + '</small>' + (dimension.pending ? '<span class="budget-badge-pending">影响待完善</span>' : '') + (dimension.id === 'housing' ? '<small>' + h(budgetTierExtras(dimension, tier)) + '</small>' : '') + '</button>';
-    }).join('');
-    return '<fieldset class="budget-dimension"><legend>' + h(dimension.label) + ' · ' + h(dimension.title) + '</legend><p>' + h(dimension.description) + '</p><div class="budget-tier-list">' + tiers + '</div></fieldset>';
+    const selectable = dimension.tiers.filter(tier => !tier.legacy);
+    let content;
+    if (dimension.id === 'housing') {
+      content = '<div class="budget-tier-list">' + selectable.map(tier => budgetTierButton(dimension, tier)).join('') + '</div>';
+    } else {
+      const tier = selectable[0];
+      content = '<div class="budget-fixed"><span class="budget-tier-head"><b>' + h(tier.label) + '</b><em>' + tier.cost + ' 元</em></span><small>' + h(budgetEffectText(tier.effects)) + '</small>' + (dimension.pending ? '<span class="budget-badge-pending">影响待完善</span>' : '') + '<small class="budget-fixed-note">本学期固定安排，无需选择；想升级去「校园养成」添置单品</small></div>';
+    }
+    return '<fieldset class="budget-dimension"><legend>' + h(dimension.label) + ' · ' + h(dimension.title) + '</legend><p>' + h(dimension.description) + '</p>' + content + '</fieldset>';
   }).join('') + '</div>';
 }
 function budgetSummaryMarkup() {
@@ -291,10 +300,11 @@ function showBudget() {
   }
   const plan = game.budgetPlan(budgetDraft);
   const affordable = !!plan && plan.costs.total - grant.livingCost <= state.money;
-  const body = '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。先安排本学期的衣、食、住、行，确认后再进入选课。</p>' + budgetPickerMarkup() + budgetSummaryMarkup() + '<p id="budgetError" class="action-reason" role="alert"></p>';
+  const body = '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。确认本学期的基础费用并选择住宿档位，确认后进入选课。</p>' + budgetPickerMarkup() + budgetSummaryMarkup() + '<p id="budgetError" class="action-reason" role="alert"></p>';
   showDialog('budget', '学期生活预算', body, [{ id: 'budgetConfirm', text: '确认预算', disabled: !affordable }]);
 }
 function selectBudgetTier(dimension, tierId) {
+  if (dimension !== 'housing') return;
   const config = game.BUDGET_DIMENSIONS[dimension];
   if (!config || !config.tiers.some(tier => tier.id === tierId)) return;
   budgetDraft = { ...(budgetDraft || {}), [dimension]: tierId };
@@ -389,12 +399,20 @@ function renderResume() {
     : '';
   body.innerHTML = reqs + sections + others;
 }
+// 像素图标统一使用全站五色板：纸 #f7f2e8 / 金 #f2d04b / 深绿 #597d58 / 绿 #4a8a5c / 墨 #162b27（+ 木色 #b99164）。
 const GROWTH_ICONS = {
-  bed: '<path fill="#b99164" d="M5 19h4v21H5zm34 5h4v16h-4zM9 32h30v5H9z"/><path fill="#ead9b4" d="M9 19h11v8H9z"/><path fill="#728f87" d="M21 22h18v10H9v-5h12z"/><path fill="#aec4ab" d="M24 22h15v4H24z"/><path fill="#d4b17c" d="M5 17h4v4H5zm34 5h4v4h-4z"/>',
-  books: '<path fill="#c49061" d="M6 36h36v4H6z"/><path fill="#ab646a" d="M8 14h7v22H8z"/><path fill="#e4cc9d" d="M9 17h5v2H9zm0 12h5v2H9z"/><path fill="#7898a1" d="M17 10h7v26h-7z"/><path fill="#cad8c6" d="M18 14h5v2h-5zm0 16h5v2h-5z"/><path fill="#c7a160" d="m26 17 6-2 6 19-6 2z"/><path fill="#89a781" d="M35 8h4v13h-4zM31 9h4v6h-4zm8-4h4v8h-4z"/><path fill="#b67c63" d="M32 21h10v7H32z"/>',
-  alarm: '<path fill="#c29a64" d="M13 8h22v4H13zM9 12h30v24H9zM13 36h22v4H13zM6 15h3v18H6zm33 0h3v18h-3zM11 39h5v4h-5zm21 0h5v4h-5z"/><path fill="#dfcda9" d="M13 16h22v16H13zM17 12h14v24H17z"/><path fill="#4d5263" d="M23 16h3v11h-3zm3 8h6v3h-6zM23 30h3v3h-3z"/><path fill="#819aa2" d="M6 7h10v4H6zm26 0h10v4H32zM20 4h8v4h-8z"/>'
+  bed: '<path fill="#b99164" d="M5 19h4v21H5zm34 5h4v16h-4zM9 32h30v5H9z"/><path fill="#f7f2e8" d="M9 19h11v8H9z"/><path fill="#597d58" d="M21 22h18v10H9v-5h12z"/><path fill="#4a8a5c" d="M24 22h15v4H24z"/><path fill="#b99164" d="M5 17h4v4H5zm34 5h4v4h-4z"/>',
+  books: '<path fill="#b99164" d="M6 36h36v4H6z"/><path fill="#4a8a5c" d="M8 14h7v22H8z"/><path fill="#f7f2e8" d="M9 17h5v2H9zm0 12h5v2H9z"/><path fill="#597d58" d="M17 10h7v26h-7z"/><path fill="#f7f2e8" d="M18 14h5v2h-5zm0 16h5v2h-5z"/><path fill="#b99164" d="m26 17 6-2 6 19-6 2z"/><path fill="#4a8a5c" d="M35 8h4v13h-4zM31 9h4v6h-4zm8-4h4v8h-4z"/><path fill="#b99164" d="M32 21h10v7H32z"/>',
+  alarm: '<path fill="#b99164" d="M13 8h22v4H13zM9 12h30v24H9zM13 36h22v4H13zM6 15h3v18H6zm33 0h3v18h-3zM11 39h5v4h-5zm21 0h5v4h-5z"/><path fill="#f7f2e8" d="M13 16h22v16H13zM17 12h14v24H17z"/><path fill="#162b27" d="M23 16h3v11h-3zm3 8h6v3h-6zM23 30h3v3h-3z"/><path fill="#597d58" d="M6 7h10v4H6zm26 0h10v4H32zM20 4h8v4h-8z"/>',
+  suit: '<path fill="#162b27" d="M10 12h28v6H10z"/><path fill="#4a8a5c" d="M10 16h12v20H10z"/><path fill="#4a8a5c" d="M26 16h12v20H26z"/><path fill="#f7f2e8" d="M20 14h8v22h-8z"/><path fill="#f2d04b" d="M22 16h4v10h-4z"/>',
+  shoe: '<path fill="#597d58" d="M10 16h8v12h-8z"/><path fill="#4a8a5c" d="M10 24h20v10H10z"/><path fill="#597d58" d="M28 26h10v8H28z"/><path fill="#f7f2e8" d="M12 22h10v2H12z"/><path fill="#f2d04b" d="M14 27h4v2h-4zm6 0h4v2h-4z"/><path fill="#162b27" d="M6 34h36v5H6z"/>',
+  fruit: '<path fill="#f2d04b" d="M13 17h8v8h-8z"/><path fill="#597d58" d="M20 13h8v6h-8z"/><path fill="#4a8a5c" d="M28 19h7v6h-7z"/><path fill="#b99164" d="M8 25h32v4H8z"/><path fill="#b99164" d="M10 29h28v7H10z"/><path fill="#162b27" d="M14 29h3v7h-3zm8 0h3v7h-3zm8 0h3v7h-3z"/>',
+  bowl: '<path fill="#4a8a5c" d="M13 19h8v5h-8z"/><path fill="#f2d04b" d="M25 19h8v5h-8z"/><path fill="#f7f2e8" d="M8 24h32v4H8z"/><path fill="#f7f2e8" d="M12 28h24v7H12z"/><path fill="#162b27" d="M18 35h12v4H18z"/>',
+  bike: '<path fill="#162b27" d="M4 30h10v10H4z"/><path fill="#162b27" d="M34 30h10v10H34z"/><path fill="#f7f2e8" d="M7 33h4v4H7zm30 0h4v4h-4z"/><path fill="#4a8a5c" d="M16 22h16v4H16z"/><path fill="#4a8a5c" d="M14 24h4v8h-4zm16 0h4v8h-4z"/><path fill="#162b27" d="M12 18h8v4h-8zm18-2h8v4h-8z"/>',
+  card: '<path fill="#597d58" d="M8 14h32v20H8z"/><path fill="#162b27" d="M8 18h32v4H8z"/><path fill="#f2d04b" d="M12 26h8v4h-8z"/><path fill="#f7f2e8" d="M24 26h12v2H24zm0 4h8v2h-8z"/>'
 };
 let selectedGrowthId = 'bedding';
+let selectedGrowthDimension = 'housing';
 function growthIcon(node) {
   return '<svg viewBox="0 0 48 48" aria-hidden="true" shape-rendering="crispEdges">' + (GROWTH_ICONS[node.icon] || GROWTH_ICONS.bed) + '</svg>';
 }
@@ -416,7 +434,10 @@ function renderGrowth() {
   if (!state) return;
   const board = game.growthStatus(state);
   $('#growthCount').textContent = board.ownedCount + ' / ' + board.nodes.length;
-  const selected = board.nodes.find(node => node.id === selectedGrowthId) || board.nodes[0];
+  if (!game.GROWTH_DIMENSIONS.some(dimension => dimension.id === selectedGrowthDimension)) selectedGrowthDimension = 'housing';
+  const dimensionNodes = board.nodes.filter(node => node.dimension === selectedGrowthDimension);
+  if (!dimensionNodes.some(node => node.id === selectedGrowthId)) selectedGrowthId = dimensionNodes[0]?.id || selectedGrowthId;
+  const selected = board.nodes.find(node => node.id === selectedGrowthId) || dimensionNodes[0] || board.nodes[0];
   selectedGrowthId = selected.id;
   const status = growthNodeState(selected);
   const routine = board.nodes.find(node => node.id === 'routine');
@@ -426,7 +447,7 @@ function renderGrowth() {
   if (selected.purchased) {
     detail = game.TERM_NAMES[selected.purchased.term - 1] + '已购入 · ' + (selected.openingEnergy
       ? (state.term > selected.purchased.term ? '开学精力加成已生效' : '下学期开始生效')
-      : selected.restsPerTerm ? '本学期心情加成剩余 ' + selected.remainingRests + ' 次' : '休息加成持续生效');
+      : selected.remainingUses !== null && selected.remainingUses !== undefined ? '本学期加成剩余 ' + selected.remainingUses + ' 次' : '加成持续生效');
   }
   $('#growthDetails').innerHTML = '<div class="growth-selected-icon is-' + status.type + '">' + growthIcon(selected) + '</div>'
     + '<p class="growth-category">' + h(selected.category) + ' / 本局持续</p><h4>' + h(selected.title) + '</h4>'
@@ -438,13 +459,37 @@ function renderGrowth() {
   $('#growthPurchase').innerHTML = '<button type="button" class="growth-buy-button" data-growth-buy="' + selected.id + '" data-revision="' + state.revision + '"'
     + (selected.purchased || !selected.available || uiLocked || dialog.open ? ' disabled' : '') + '>'
     + (selected.purchased ? '已拥有 · 无需重复添置' : '确认添置 <span>' + selected.price + ' 元</span>') + '</button>';
-  const lifeNodes = board.nodes.filter(node => !node.requiredRests).map(growthNodeMarkup).join('');
-  $('#growthNodes').innerHTML = '<section class="growth-branch"><h5><span>01</span>生活与空间</h5><p>生活小物 · 两项可独立添置</p><div class="growth-branch-row">' + lifeNodes + '</div></section>'
-    + '<section class="growth-branch"><h5><span>02</span>习惯养成</h5><p>完成行动 · 解锁下一步计划</p><div class="growth-branch-row">'
-    + '<div class="growth-milestone' + (restProgress >= routine.requiredRests ? ' is-complete' : '') + '"><span class="growth-milestone-frame">'
-    + '<svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 32h28M13 32V18h22v14M13 22h8v-4M9 32v6m30-6v6M26 10h10l-10 7h10"/></svg>'
-    + '<b>' + restProgress + ' / ' + routine.requiredRests + '</b></span><span class="growth-node-name">累计休息</span><span class="growth-node-status">' + (restProgress >= routine.requiredRests ? '条件已达成 ✓' : '完成 3 次休息') + '</span></div>'
-    + '<span class="growth-link' + (restProgress >= routine.requiredRests ? ' is-complete' : '') + '" aria-hidden="true"></span>' + growthNodeMarkup(routine) + '</div></section>';
+  // 二期：顶部维度标签切换，每次只展示一个维度的卡片；习惯分支保留作息计划的累计休息里程碑。
+  const branchSubtitle = {
+    clothing: '穿戴升级 · 一次性添置',
+    food: '吃好一点 · 一次性添置',
+    housing: '宿舍好物 · 一次性添置',
+    transport: '出行装备 · 一次性添置',
+    habit: '完成行动 · 解锁下一步计划'
+  };
+  const tabs = $('#growthTabs');
+  if (tabs) tabs.innerHTML = game.GROWTH_DIMENSIONS.map(dimension => {
+    const items = board.nodes.filter(node => node.dimension === dimension.id);
+    const owned = items.filter(node => node.purchased).length;
+    const active = dimension.id === selectedGrowthDimension;
+    return '<button type="button" role="tab" class="growth-tab' + (active ? ' is-active' : '') + '" data-growth-dimension="' + dimension.id + '" aria-selected="' + active + '" aria-controls="growthNodes">'
+      + h(dimension.label) + '<small>' + owned + '/' + items.length + '</small></button>';
+  }).join('');
+  const dimension = game.GROWTH_DIMENSIONS.find(item => item.id === selectedGrowthDimension) || game.GROWTH_DIMENSIONS[0];
+  const index = game.GROWTH_DIMENSIONS.indexOf(dimension);
+  const heading = '<h5><span>' + String(index + 1).padStart(2, '0') + '</span>' + h(dimension.label + ' · ' + dimension.title) + '</h5><p>' + h(branchSubtitle[dimension.id]) + '</p>';
+  if (dimension.id === 'habit') {
+    const restProgress = Math.min(board.restCount, routine.requiredRests);
+    const complete = restProgress >= routine.requiredRests;
+    $('#growthNodes').innerHTML = '<section class="growth-branch">' + heading + '<div class="growth-branch-row">'
+      + '<div class="growth-milestone' + (complete ? ' is-complete' : '') + '"><span class="growth-milestone-frame">'
+      + '<svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 32h28M13 32V18h22v14M13 22h8v-4M9 32v6m30-6v6M26 10h10l-10 7h10"/></svg>'
+      + '<b>' + restProgress + ' / ' + routine.requiredRests + '</b></span><span class="growth-node-name">累计休息</span><span class="growth-node-status">' + (complete ? '条件已达成 ✓' : '完成 3 次休息') + '</span></div>'
+      + growthNodeMarkup(routine) + '</div></section>';
+  } else {
+    const nodes = board.nodes.filter(node => node.dimension === dimension.id).map(growthNodeMarkup).join('');
+    $('#growthNodes').innerHTML = '<section class="growth-branch">' + heading + '<div class="growth-branch-row">' + nodes + '</div></section>';
+  }
 }
 // 头像：点击可上传本地图片，压缩后存本地（只影响界面，不进存档格式）。
 const AVATAR_KEY = 'bjt-life-avatar';
@@ -1705,6 +1750,20 @@ $('#growthToggle')?.addEventListener('click', (event) => {
   if (openPanelName === 'growth') $('#growthTitle').focus({ preventScroll: true });
 });
 $('#growthClose')?.addEventListener('click', closePanel);
+$('#growthTabs')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-growth-dimension]');
+  if (!button || !state) return;
+  const dimension = game.GROWTH_DIMENSIONS.find(item => item.id === button.dataset.growthDimension);
+  if (!dimension) return;
+  event.stopPropagation();
+  if (dimension.id === selectedGrowthDimension) return;
+  selectedGrowthDimension = dimension.id;
+  const first = game.growthStatus(state).nodes.find(node => node.dimension === dimension.id);
+  if (first) selectedGrowthId = first.id;
+  $('#growthNotice').textContent = '';
+  renderGrowth();
+  $('#growthTabs').querySelector('[data-growth-dimension="' + dimension.id + '"]')?.focus({ preventScroll: true });
+});
 $('#growthNodes')?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-growth-select]');
   if (!button || dialog.open || !Object.hasOwn(game.GROWTH_NODES, button.dataset.growthSelect)) return;

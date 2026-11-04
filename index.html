@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="北交人生">
   <meta name="format-detection" content="telephone=no">
-  <link rel="stylesheet" href="styles.css?v=20261103-growth-tree">
+  <link rel="stylesheet" href="styles.css?v=20261104-growth-cards">
 </head>
 <body>
   <main class="game-shell" aria-label="北交人生校园地图">
@@ -126,7 +126,7 @@
       <nav class="growth-rail" aria-label="校园养成入口">
         <button type="button" id="growthToggle" aria-controls="panelGrowth" aria-expanded="false" hidden>
           <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 27V14m0 7C7 21 4 15 5 8c8-1 11 4 11 9m0-3c0-7 5-11 12-10 1 8-4 13-12 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>校园养成</span><small id="growthCount">0 / 3</small>
+          <span>校园养成</span><small id="growthCount">0 / 9</small>
         </button>
       </nav>
 
@@ -144,13 +144,13 @@
               <p class="growth-notice" id="growthNotice" role="status" aria-live="polite"></p>
             </aside>
             <section class="growth-tree" aria-label="校园养成节点图">
-              <div class="growth-tree-heading"><h4>基础养成</h4><span>点击图标，查看你的下一步</span></div>
-              <div class="growth-nodes" id="growthNodes"></div>
+              <div class="growth-tree-heading"><div class="growth-tabs" id="growthTabs" role="tablist" aria-label="养成分类"></div><span>点击标签切换维度，点击图标查看详情</span></div>
+              <div class="growth-nodes" id="growthNodes" role="tabpanel" aria-live="polite"></div>
               <div class="growth-legend" aria-label="节点状态说明">
                 <span><i class="is-owned"></i>已拥有</span><span><i class="is-ready"></i>可添置</span><span><i class="is-locked"></i>条件未满足</span><span><i class="is-short"></i>余额不足</span>
               </div>
-              <div class="growth-tips"><p><b>添置生活小物</b>购买一次，本局跨学期保留；休息时结算额外恢复。</p><p><b>养成自己的节奏</b>实际完成休息，解锁作息计划。连线表示需要完成的前置条件。</p></div>
-              <p class="growth-footnote">精力、心情最高 100。兴趣角每学期提供两次机会，购买后的每次休息占用一次，心情已满也会消耗。作息计划从下学期起生效。购买后记得保存，新开一局重新培养。</p>
+              <div class="growth-tips"><p><b>添置生活单品</b>衣、食、住、行各有一件长期生效的小物，购买一次本局保留，行动结算时追加固定加成。</p><p><b>养成自己的节奏</b>实际完成休息解锁作息计划。连线表示需要完成的前置条件；部分单品要到达指定学期才开放。</p></div>
+              <p class="growth-footnote">精力、心情最高 100。限次单品（兴趣角、水果篮、公交卡）每学期按购买后的实际次数计数，属性已满也会消耗机会。作息计划从下学期起生效。购买后记得保存，新开一局重新培养。</p>
             </section>
           </div>
         </section>
@@ -251,15 +251,15 @@
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </main>
-  <script src="config.js?v=20261103-growth-tree"></script>
-  <script src="courses.js?v=20261103-growth-tree"></script>
-  <script src="rng.js?v=20261103-growth-tree"></script>
-  <script src="state-validation.js?v=20261103-growth-tree"></script>
-  <script src="game.js?v=20261103-growth-tree"></script>
-  <script src="save.js?v=20261103-growth-tree"></script>
-  <script src="audio.js?v=20261103-growth-tree"></script>
-  <script src="sms.js?v=20261103-growth-tree"></script>
-  <script src="npc.js?v=20261103-growth-tree"></script>
-  <script src="app.js?v=20261103-growth-tree"></script>
+  <script src="config.js?v=20261104-growth-cards"></script>
+  <script src="courses.js?v=20261104-growth-cards"></script>
+  <script src="rng.js?v=20261104-growth-cards"></script>
+  <script src="state-validation.js?v=20261104-growth-cards"></script>
+  <script src="game.js?v=20261104-growth-cards"></script>
+  <script src="save.js?v=20261104-growth-cards"></script>
+  <script src="audio.js?v=20261104-growth-cards"></script>
+  <script src="sms.js?v=20261104-growth-cards"></script>
+  <script src="npc.js?v=20261104-growth-cards"></script>
+  <script src="app.js?v=20261104-growth-cards"></script>
 </body>
 </html>
