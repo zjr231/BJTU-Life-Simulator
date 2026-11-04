@@ -1,0 +1,19 @@
+(function (root) {
+  'use strict';
+  const h = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  function render(view) {
+    const choices = view.choices.map(choice => {
+      const attributes = Object.entries(choice.attributes || {}).filter(([name]) => /^data-[a-z-]+$/.test(name)).map(([name, value]) => name + '="' + h(value) + '"').join(' ');
+      return '<button type="button" class="vn-choice' + (choice.selected ? ' is-selected' : '') + '" ' + attributes + (choice.disabled ? ' disabled' : '') + '><span>' + h(choice.label) + '</span>' + (choice.note ? '<small>' + h(choice.note) + '</small>' : '') + '</button>';
+    }).join('');
+    const chat = view.chat ? '<form id="zhouChatForm" class="vn-chat-form"><label class="vn-sr-only" for="zhouChatInput">和周宁说句话</label><input id="zhouChatInput" name="message" maxlength="240" autocomplete="off" placeholder="想聊什么，直接告诉他……" value="' + h(view.draft || '') + '"' + (view.busy ? ' disabled' : '') + '><button type="submit"' + (view.busy ? ' disabled' : '') + '>' + (view.busy ? '正在回复…' : '发送') + '</button></form>' : '';
+    const chatHistory = view.historyOpen ? '<section class="vn-dossier vn-chat-history" aria-label="你与周宁的对话记录"><h3>你们说过的话</h3><ol>' + (view.messages || []).map(item => '<li><b>' + (item.role === 'user' ? '你' : '周宁') + '</b><p>' + h(item.content) + '</p></li>').join('') + '</ol><button type="button" data-vn-ui="history">收起对话</button></section>' : '';
+    const abilities = view.abilities || view.profile.abilities;
+    const abilityRow = abilities ? '<dt>学业能力</dt><dd>' + h(abilities.academic) + ' / 100</dd><dt>社交能力</dt><dd>' + h(abilities.social) + ' / 100</dd><dt>运动能力</dt><dd>' + h(abilities.sport) + ' / 100</dd>' : '';
+    const dossier = view.profileOpen ? '<section class="vn-dossier" aria-label="周宁的人物资料"><h3>周宁 · 同年级同学</h3><p>' + h(view.profile.description) + '</p><dl>' + abilityRow + '<dt>喜欢</dt><dd>' + h(view.profile.preference) + '</dd><dt>擅长</dt><dd>' + h(view.profile.strength) + '</dd><dt>最近的目标</dt><dd>' + h(view.goal) + '</dd><dt>现在的状态</dt><dd>' + h(view.status) + '</dd></dl><h3>你们的共同经历</h3><ul>' + view.memories.map(memory => '<li>' + h(memory) + '</li>').join('') + '</ul><button type="button" data-vn-ui="profile">收起资料</button></section>' : '';
+    return '<div class="vn-scene"><img class="vn-background" src="' + h(view.profile.background) + '" alt="午后校园的图书馆与林荫路"><div class="vn-shade"></div><header class="vn-header"><div class="vn-location"><span>北交人生 · 校园日常</span><b>' + h(view.location) + '</b></div><div class="vn-toolbar">' + (view.met ? '<button type="button" data-vn-ui="profile">人物与经历</button>' : '') + '<button type="button" data-vn-ui="history">回看</button><button type="button" data-vn-ui="save">保存</button>' + (view.canClose ? '<button type="button" data-vn-ui="close">结束对话</button>' : '') + '</div></header><div class="vn-character"><img src="' + h(view.profile.portrait) + '" alt="周宁，穿鼠尾草绿衬衫和浅色T恤的男大学生"></div><div class="vn-relationship"><span>' + h(view.stage) + '</span>' + (view.met ? '<b>相识度 ' + view.familiarity + ' / 100</b><small>' + h(view.status) + '</small>' : '<small>一段新的相识</small>') + '</div>' + dossier + chatHistory + '<aside class="vn-choices" aria-label="回应周宁"><div class="vn-choices-label">' + h(view.choiceTitle || '你想怎么回应？') + '</div>' + choices + '</aside><section class="vn-dialogue" aria-label="周宁的对话"><div class="vn-speaker"><strong>周宁</strong><span>同年级同学</span></div><p class="vn-speech">' + h(view.speech) + '</p>' + chat + '<p class="vn-context" role="status">' + h(view.detail || '选择右侧的回应，和他继续这段校园日常。') + '</p></section></div>';
+  }
+  const api = { render };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.CampusCharacterScene = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -4,13 +4,15 @@
     const { RULES, ACTIONS, EVENTS, EVENT_INVESTMENTS, BASKETBALL, TERM_NAMES, CHAIN_NAMES, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, TERMINAL_ENDINGS, gradeFor, ratingFor, NPC_CHAT } = game;
     const fail = (reason) => ({ ok: false, reason: '存档状态无效：' + reason });
     const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
+    const usesSupport = Array.isArray(state?.history) && state.history.some(entry => entry?.command?.npcSupportVersion === 1);
+    const attribute = (value, min = 0, max = 100) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max && (usesSupport ? game.npcSupport.round(value) === value : Number.isInteger(value));
     const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
     const own = (value, key) => typeof key === 'string' && Object.hasOwn(value, key);
     const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     const validInvestment = entry => {
       if (entry.investment === undefined) return true; // Earlier saves have fixed event rewards.
       let profiles;
-      if (entry.action && entry.command?.operation === 'executeAction') {
+      if (entry.action && ['executeAction', 'resolveZhouNingProposal'].includes(entry.command?.operation)) {
         // A successful transfer changes the current bonus, but earlier allocations
         // still use the original college's discount and must remain readable.
         const original = game.createGame({ seed: state.rng.seed }).background;
@@ -29,7 +31,7 @@
       // 昵称在创建时严格校验（见 game.validateNickname）；旧档可能含宽松规则的昵称，加载时只做基本检查。
       if (typeof state.nickname !== 'string' || !state.nickname.trim() || state.nickname !== state.nickname.trim() || [...state.nickname].length > 12 || /[\u0000-\u001f\u007f]/.test(state.nickname)) return fail('昵称');
       if (!integer(state.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished', 'ended'].includes(state.phase) || !integer(state.revision, 0, 2000)) return fail('学期、阶段或状态版本');
-      for (const [key, max] of [['time', 12], ['energy', 100], ['money', 1000000], ['social', 100], ['fitness', 100], ['mood', 100], ['preparation', 100], ['furtherStudy', 100], ['jobPreparation', 100]]) if (!integer(state[key], 0, max)) return fail(key);
+      for (const [key, max] of [['time', 12], ['energy', 100], ['money', 1000000], ['social', 100], ['fitness', 100], ['mood', 100], ['preparation', 100], ['furtherStudy', 100], ['jobPreparation', 100]]) if (!(['time', 'energy', 'money'].includes(key) ? integer(state[key], 0, max) : attribute(state[key], 0, max))) return fail(key);
       // 旧存档没有选课/考试字段，读取时按“未选课”处理；一旦存在就必须结构完整。
       const selectedCourses = state.selectedCourses === undefined ? [] : state.selectedCourses;
       if (!Array.isArray(selectedCourses) || ![0, 3].includes(selectedCourses.length) || new Set(selectedCourses).size !== selectedCourses.length || !selectedCourses.every((id) => COURSES.some((course) => course.id === id))) return fail('选课记录');
@@ -55,6 +57,7 @@
       const replayNickname = game.validateNickname(state.nickname).ok ? state.nickname : '北交同学';
       const initialBackground = game.createGame({ nickname: replayNickname, seed: state.rng.seed }).background;
       const backgroundReplay = game.replay({ nickname: replayNickname, seed: state.rng.seed, commands: state.history.map((entry) => entry.command) });
+      if (usesSupport && (!backgroundReplay.ok || !['time', 'energy', 'money', 'social', 'fitness', 'mood', 'preparation', 'furtherStudy', 'jobPreparation', 'rng'].every(key => same(state[key], backgroundReplay.state[key])))) return fail('玩家收获与辅助结算历史不一致');
       const transferred = state.eventHistory.some((entry) => entry.event === 'transferResult' && entry.choice === 'check') && state.experiences.some((item) => item.type === 'transfer');
       const legacyBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && (item.legacyMajors || []).includes(background.major));
       const validBackground = (background) => game.BACKGROUNDS.some((item) => item.id === background.id && item.college === background.college && item.majors.includes(background.major));
@@ -91,8 +94,21 @@
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (!['executeAction', 'completeBasketball', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc'].includes(command.operation)) return fail('历史操作类型');
+        if (command.npcSupportVersion !== undefined && (command.npcSupportVersion !== 1 || !['executeAction', 'completeBasketball', 'submitEventChoice', 'resolveZhouNingProposal'].includes(command.operation))) return fail('人物辅助规则版本');
+        const replaySupport = backgroundReplay.ok ? backgroundReplay.state.history[index]?.support : undefined;
+        if ((entry.support !== undefined || replaySupport !== undefined) && (!backgroundReplay.ok || !same(entry.support, replaySupport) || !same(entry.changes, backgroundReplay.state.history[index].changes))) return fail('人物辅助收益与历史不一致');
+        if (!['executeAction', 'completeBasketball', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal'].includes(command.operation)) return fail('历史操作类型');
+        if (command.operation === 'recordZhouNingDialogue' && (!object(command.data) || !backgroundReplay.ok || !same(entry.dialogue, backgroundReplay.state.history[index]?.dialogue) || !same(entry.changes, backgroundReplay.state.history[index]?.changes))) return fail('人物对话与历史不一致');
+        if (command.operation === 'resolveZhouNingProposal' && (!['accept', 'decline'].includes(command.id) || !integer(command.proposalRevision, 1, entry.revision - 1) || !backgroundReplay.ok || !same(entry, { ...backgroundReplay.state.history[index], commandId: entry.commandId }))) return fail('人物邀请与历史不一致');
+        if (command.agentProposalRevision !== undefined && (command.operation !== 'completeBasketball' || !integer(command.agentProposalRevision, 1, entry.revision - 1))) return fail('球场邀请记录');
+        if (command.zhouCameo !== undefined && (command.operation !== 'submitEventChoice' || command.zhouCameo !== true || !own(game.characterAgent.CAMEOS, entry.event))) return fail('偶遇事件记录');
         if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');
+        if (command.relationshipVersion !== undefined && (command.operation !== 'executeAction' || command.relationshipVersion !== 1)) return fail('历史人物关系版本');
+        if (command.characterVersion !== undefined && (command.characterVersion !== 2 || !['executeAction', 'completeBasketball', 'interactWithZhouNing'].includes(command.operation))) return fail('历史人物同行版本');
+        if (command.companionId !== undefined && (command.companionId !== 'zhouNing' || !(command.operation === 'executeAction' && command.relationshipVersion === 1 && (command.id === 'selfStudy' || command.characterVersion === 2 && own(game.relationshipRules.ACTIVITIES, command.id)) || command.operation === 'completeBasketball' && command.characterVersion === 2))) return fail('历史同行人物');
+        if (command.operation === 'interactWithZhouNing' && !['talk', 'presentation'].includes(command.id)) return fail('历史人物互动');
+        const replayRelation = backgroundReplay.ok ? backgroundReplay.state.history[index]?.relationship : undefined;
+        if ((entry.relationship !== undefined || replayRelation !== undefined) && (!backgroundReplay.ok || !same(entry.relationship, replayRelation) || !same(entry.changes, backgroundReplay.state.history[index].changes))) return fail('人物互动结果与历史不一致');
         if (command.operation === 'completeBasketball') {
           if (!integer(command.hits, 0, BASKETBALL.maxHits) || entry.action !== 'basketball') return fail('历史篮球');
           const reward = game.basketballReward(command.hits);
@@ -106,14 +122,37 @@
         if (!validInvestment(entry) || command.investment !== entry.investment?.amount) return fail('历史事件投入');
         if (command.operation === 'chooseEnding' && !['ordinary', 'employment', 'furtherStudy', 'notQualified', 'delayed', 'blankResume'].includes(command.id)) return fail('历史方向');
         if (command.operation === 'chatWithNpc' && (!own(NPC_CHAT.identities, command.identityId) || !integer(command.quality, 0, 2))) return fail('历史对话');
-        for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished', 'ended'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !integer(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 2010)) return fail('历史状态摘要');
+        for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished', 'ended'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !attribute(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 2010)) return fail('历史状态摘要');
       }
+      const relation = state.relationships;
+      if (relation !== undefined) {
+        if (!object(relation) || relation.version !== 1 || typeof relation.introSeen !== 'boolean' || relation.term !== state.term || !integer(relation.talks, 0, 2) || !integer(relation.talkGrowth, 0, 8) || !integer(relation.interactions, 0, relation.zhouNing?.life ? 4 : 2)) return fail('人物关系字段');
+        const person = relation.zhouNing;
+        if (person?.abilities !== undefined && (!object(person.abilities) || Object.keys(person.abilities).length !== 3 || !['academic', 'social', 'sport'].every(key => integer(person.abilities[key], 0, 100)))) return fail('人物的三项能力');
+        if (person !== null && (!object(person) || !integer(person.metTerm, 1, state.term) || !integer(person.familiarity, 0, 100) || !integer(person.studies, 0, 24) || !Array.isArray(person.memories) || new Set(person.memories).size !== person.memories.length || !person.memories.every(id => own(game.relationshipRules.MEMORIES, id)) || ![null, 'limited', 'steady', 'good', 'encouraged'].includes(person.presentation) || !relation.introSeen)) return fail('周宁关系记录');
+        if (person?.life !== undefined) {
+          const life = person.life;
+          if (!object(life) || !integer(life.mood, 0, 100) || !integer(life.energy, 0, 100) || !['presentation', 'explore'].includes(life.goal) || !own(game.PLACES, life.lastPlace) || !(life.lastActivity === null || own(game.relationshipRules.ACTIVITIES, life.lastActivity)) || !object(life.activities) || !Object.entries(life.activities).every(([id, count]) => own(game.relationshipRules.ACTIVITIES, id) && integer(count, 1, 96))) return fail('周宁的生活状态');
+        }
+        if (person?.agent !== undefined) {
+          const agent = person.agent;
+          if (!backgroundReplay.ok || !object(agent) || !integer(agent.term, 1, state.term) || !Array.isArray(agent.messages) || agent.messages.length > 12
+              || !agent.messages.every(item => object(item) && ['user', 'assistant'].includes(item.role) && typeof item.content === 'string' && item.content.length > 0 && item.content.length <= 240 && integer(item.term, 1, state.term))
+              || !Array.isArray(agent.checked) || agent.checked.length > 4 || !integer(agent.invitations, 0, 2) || !integer(agent.lastInviteAction, -3, 2000) || !integer(agent.chats, 0, 120)
+              || !Array.isArray(agent.topics) || agent.topics.length > 4 || !agent.topics.every(id => ['care', 'goal', 'likes', 'memory'].includes(id))
+              || !Array.isArray(agent.notes) || agent.notes.length > 4 || !agent.notes.every(item => object(item) && ['care', 'goal', 'likes', 'memory'].includes(item.topic) && typeof item.text === 'string' && item.text.length <= 240 && integer(item.term, 1, state.term))
+              || agent.proposal !== null && (!object(agent.proposal) || !(own(game.relationshipRules.ACTIVITIES, agent.proposal.id) || agent.proposal.id === 'presentation') || !integer(agent.proposal.createdRevision, 1, state.revision) || !integer(agent.proposal.term, 1, state.term))
+              || agent.cameo !== null && (!object(agent.cameo) || !own(game.characterAgent.CAMEOS, agent.cameo.eventId) || typeof agent.cameo.say !== 'string' || agent.cameo.say.length > 180)) return fail('周宁的对话与邀请状态');
+        }
+        if (person === null && (relation.talks || relation.talkGrowth || relation.interactions)) return fail('未相识的人物互动');
+        if (backgroundReplay.ok ? !same(relation, backgroundReplay.state.relationships) : relation.introSeen || person !== null) return fail('人物关系与操作历史不一致');
+      } else if (backgroundReplay.ok && backgroundReplay.state.relationships.introSeen) return fail('缺少人物关系记录');
       const expectedCourses = ['summary', 'endingChoice', 'finished'].includes(state.phase) ? state.term : state.term - 1;
       if (state.courses.length !== expectedCourses) return fail('课程记录数量与阶段不符');
       const validCourse = (course, index) => {
-        if (!object(course) || course.term !== index + 1 || course.name !== TERM_NAMES[index] || !integer(course.preparation, 0, 100) || course.passed !== (course.grade >= 60) || course.livingCost !== 300 || !integer(course.aid, 0, 300) || !integer(course.moneyAfter, 0, 1000000) || !integer(course.unusedTime, 0, 12) || !validCounts(course.counts) || !Array.isArray(course.notices) || !course.notices.every((note) => typeof note === 'string' && note.length < 200) || !object(course.attributes) || !['social', 'fitness', 'mood'].every((key) => integer(course.attributes[key], 0, 100))) return false;
+        if (!object(course) || course.term !== index + 1 || course.name !== TERM_NAMES[index] || !attribute(course.preparation, 0, 100) || course.passed !== (course.grade >= 60) || course.livingCost !== 300 || !integer(course.aid, 0, 300) || !integer(course.moneyAfter, 0, 1000000) || !integer(course.unusedTime, 0, 12) || !validCounts(course.counts) || !Array.isArray(course.notices) || !course.notices.every((note) => typeof note === 'string' && note.length < 200) || !object(course.attributes) || !['social', 'fitness', 'mood'].every((key) => attribute(course.attributes[key], 0, 100))) return false;
         const legacy = course.grade === Math.round(40 + course.preparation * 0.6);
-        const examined = integer(course.usualScore, 0, 100) && course.usualScore === course.preparation && integer(course.examScore, 0, 100) && course.examScore % 20 === 0 && course.grade === gradeFor(course.usualScore, course.examScore) && course.rating === ratingFor(course.grade) && Array.isArray(course.courseIds) && course.courseIds.length === 3 && new Set(course.courseIds).size === 3 && course.courseIds.every((id) => COURSES.some((item) => item.id === id)) && Array.isArray(course.courseNames) && course.courseNames.length === 3 && course.courseNames.every((name) => typeof name === 'string' && name.length < 200);
+        const examined = attribute(course.usualScore, 0, 100) && course.usualScore === course.preparation && integer(course.examScore, 0, 100) && course.examScore % 20 === 0 && course.grade === gradeFor(course.usualScore, course.examScore) && course.rating === ratingFor(course.grade) && Array.isArray(course.courseIds) && course.courseIds.length === 3 && new Set(course.courseIds).size === 3 && course.courseIds.every((id) => COURSES.some((item) => item.id === id)) && Array.isArray(course.courseNames) && course.courseNames.length === 3 && course.courseNames.every((name) => typeof name === 'string' && name.length < 200);
         return legacy || examined;
       };
       if (!state.courses.every(validCourse)) return fail('成绩记录');
@@ -126,6 +165,8 @@
       if (state.pendingEvent && !validInstance(state.pendingEvent)) return fail('待处理事件');
       if (!state.eventQueue.every(validInstance) || (!state.pendingEvent && state.eventQueue.length)) return fail('事件队列');
       const instances = [...state.eventQueue, ...(state.pendingEvent ? [state.pendingEvent] : [])];
+      if (instances.some(item => item.id === 'zhouNingMeet') && (!relation?.introSeen || relation.zhouNing !== null)) return fail('初识事件与人物关系不一致');
+      if (instances.some(item => item.id === 'zhouNingPresentation') && (!relation?.zhouNing || relation.zhouNing.familiarity < 30 || relation.zhouNing.studies < 1 && !Object.values(relation.zhouNing.life?.activities || {}).some(count => count > 0) || relation.zhouNing.presentation !== null)) return fail('人物事件尚未解锁');
       if (instances.length > Object.keys(EVENTS).length || new Set(instances.map((item) => item.instanceId)).size !== instances.length) return fail('重复事件实例');
       const seen = new Set();
       for (const entry of state.eventHistory) {
@@ -151,7 +192,7 @@
         const key = ['fitnessTest', 'sportsMeet'].includes(item.type) ? item.type + ':' + item.term : item.type;
         if (experienceIds.has(key)) return fail('重复经历');
         experienceIds.add(key);
-        if (item.type === 'fitnessTest' && !integer(item.fitness, 60, 100)) return fail('体测经历');
+        if (item.type === 'fitnessTest' && !attribute(item.fitness, 60, 100)) return fail('体测经历');
       }
       for (const id of Object.keys(CHAIN_NAMES)) if ((state.chains[id].status === 'completed') !== experienceIds.has(id)) return fail('事件链与经历不一致');
       for (const instance of instances) {

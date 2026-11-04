@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.5.5', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.5.9', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
   // Fitness tiers scale the costs/rewards of non-health actions and events.
   const FITNESS_TIERS = [
     { id: 'sick', label: '生病', min: 0, max: 24, reward: 0, cost: 0, ill: true },
@@ -190,6 +190,16 @@
     }
   };
   const EVENTS = {
+    zhouNingMeet: { priority: 5, title: '图书馆里的周宁', description: '你合上刚做完的习题，旁边的男生指了指你的教材：“你也选了这门课？我叫周宁。刚才那个知识点，我整理过一版笔记。”他把草稿纸轻轻推过来，纸角写着几个清楚的小标题。', trigger: '第一次在图书馆自习后，你认识了一位同年级同学', choices: [
+      { id: 'discuss', title: '自我介绍，聊聊刚才的题', description: '把自己的解法也写在纸上。你们发现，卡住的地方恰好可以互相补足。', fitnessCost: 0, preparation: 3, social: 2, mood: 2 },
+      { id: 'later', title: '交换姓名，约好下次一起学', description: '今天先收拾书包，记下他的名字。之后可以从人物关系网联系周宁。', fitnessCost: 0 }
+    ] },
+    zhouNingPresentation: { priority: 32, title: '周宁的课程展示', description: '周宁把整理好的笔记摊在桌上，却迟迟没开始讲：“题目我会做，可一想到站上讲台，脑子就空了。你能陪我练一遍吗？”这次，轮到你帮他迈出一步。', trigger: '相识度达到 30，并且至少一起学习过一次', choices: [
+      { id: 'outline', title: '一起梳理讲解顺序', description: '先把知识点连成清楚的顺序，再陪他讲一遍。充分准备能托住不稳定的发挥。', time: 1, energy: 8, fitnessCost: 2 },
+      { id: 'rehearse', title: '扮演听众，认真提问', description: '按正式展示的方式练习。你们的相识度、你的社交和当前心情会共同影响配合效果。', time: 1, energy: 6, fitnessCost: 2 },
+      { id: 'encourage', title: '鼓励他先试着讲一段', description: '认真听完，不急着纠正。先让他体验开口讲述的感觉。', time: 1, energy: 2, fitnessCost: 1 },
+      { id: 'later', title: '改天再安排', description: '先约好以后再练，不消耗资源或正式互动次数。下学期仍可重新安排。', fitnessCost: 0 }
+    ] },
     roommateCare: { priority: 10, title: '室友的关心', description: '晚上十一点，室友发来消息，说看你最近状态不太对，问要不要一起下楼吃点东西。消息后面跟了一个拍一拍。', trigger: '你最近回宿舍越来越晚，话也越来越少', choices: [
       { id: 'talk', fitnessCost: 0, title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 15, social: 3 },
       { id: 'later', fitnessCost: 0, title: '先自己调整', description: '说声不用了，戴上耳机。今晚想一个人待着。' }

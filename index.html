@@ -126,6 +126,7 @@
           <button type="button" class="app-menu-button" data-panel="status" aria-expanded="false">角色</button>
           <button type="button" class="app-menu-button" data-panel="term" aria-expanded="false">学业</button>
           <button type="button" class="app-menu-button" data-panel="goals" aria-expanded="false">发展</button>
+          <button type="button" class="app-menu-button" data-panel="relationships" aria-expanded="false">关系</button>
           <button type="button" class="app-menu-button" data-panel="records" aria-expanded="false">记录</button>
           <button type="button" class="app-menu-button" data-panel="saves" aria-expanded="false">存档</button>
           <button type="button" class="app-menu-button" data-panel="settings" aria-expanded="false">设置</button>
@@ -198,6 +199,11 @@
           <p class="app-panel-note">事件链进度与毕业条件详见「记录」。</p>
         </section>
 
+        <section class="app-panel" id="panelRelationships" data-panel-name="relationships" hidden aria-label="人物关系网">
+          <h3 class="app-panel-title">人物关系网</h3>
+          <div id="relationshipList"></div>
+        </section>
+
         <section class="app-panel" id="panelRecords" data-panel-name="records" hidden aria-label="成长记录">
           <h3 class="app-panel-title">成长记录</h3>
           <div class="record-summary" id="recordSummary"></div>
@@ -264,6 +270,7 @@
     <dialog class="basketball-dialog" id="basketballDialog" aria-label="投篮小游戏">
       <div class="basketball-shell">
         <div class="basketball-hud">
+          <div class="basketball-companion" id="basketballCompanionNotice" hidden><img src="assets/characters/zhou-ning-casual-v1.png" alt="周宁"><span>周宁在场边帮你捡球<br><small>一起活动的经历将在结束时记下</small></span></div>
           <div class="basketball-stat"><span>时间</span><b id="basketballTime">60</b></div>
           <div class="basketball-stat"><span>得分</span><b id="basketballScore">0</b></div>
           <div class="basketball-stat"><span>命中</span><b id="basketballHits">0</b></div>
@@ -287,6 +294,10 @@
   <script src="config.js"></script>
   <script src="courses.js"></script>
   <script src="rng.js"></script>
+  <script src="relationships.js"></script>
+  <script src="npc-support.js"></script>
+  <script src="character-agent.js"></script>
+  <script src="character-scene.js"></script>
   <script src="state-validation.js"></script>
   <script src="game.js"></script>
   <script src="save.js"></script>
