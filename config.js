@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.7.0', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, termLivingCost: 4800, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.8.0', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, termLivingCost: 4800, lowMood: 30, fitnessThreshold: 60 };
   // initialMoney/livingCost are retained only for the current term of legacy saves.
   const FAMILIES = [
     { id: 'tight', label: '预算较紧', termAllowance: 5200, weight: 20, description: '家里的收支安排得比较紧凑。父母提前为你留好了这一学期的生活费，日常吃住能够安心，额外花销需要多做些计划。临行前，家里人叮嘱你照顾好身体，有困难记得说。' },
@@ -13,11 +13,97 @@
     materials: { id: 'materials', title: '配套学习资料', actions: ['study', 'selfStudy'], price: 80, limit: 2, bonuses: { preparation: 2 }, description: '为这次课程学习或自习买一份配套练习与讲义，帮助整理刚学过的内容。' },
     snacks: { id: 'snacks', title: '零食分享', actions: ['chat'], price: 40, limit: 1, bonuses: { social: 1, mood: 2 }, description: '室友交流时买点零食一起分享，让这次聊天更轻松。' }
   };
+  // 校园养成单品：一次性购买、本局持续。effects 只做正向追加加成，
+  // 在行动结算的倍率/体能档位缩放之后应用；perTerm 按"购买后本学期原始行动次数"计数。
+  // prereq 支持 minTerm、nodes（已购节点）与 actionCounts（累计行动次数，跨学期）。
   const GROWTH_NODES = {
-    bedding: { id: 'bedding', icon: 'bed', title: '舒适寝具', category: '生活改善', price: 300, description: '换上合适的枕头和床垫，让每一次休息都更踏实。', benefit: '每次休息额外恢复 3 点精力', recovery: 3 },
-    hobbyCorner: { id: 'hobbyCorner', icon: 'books', title: '宿舍兴趣角', category: '心情照顾', price: 200, description: '为喜欢的书、音乐和小收藏留一个角落，给忙碌的生活留一点期待。', benefit: '每学期前两次休息额外恢复 2 点心情', mood: 2, restsPerTerm: 2 },
-    routine: { id: 'routine', icon: 'alarm', title: '规律作息计划', category: '习惯养成', price: 400, description: '在尝试休息调整之后，准备一份适合自己的作息计划。', benefit: '从下一学期起，开学精力由 80 提高到 83', requiredRests: 3, openingEnergy: 3 }
+    bedding: {
+      id: 'bedding', icon: 'bed', dimension: 'housing', category: '生活改善', title: '舒适寝具', price: 300,
+      description: '换上合适的枕头和床垫，让每一次休息都更踏实。', benefit: '每次休息额外恢复 3 点精力',
+      effects: [{ kind: 'action', actions: ['rest'], bonuses: { recovery: 3 } }]
+    },
+    hobbyCorner: {
+      id: 'hobbyCorner', icon: 'books', dimension: 'housing', category: '心情照顾', title: '宿舍兴趣角', price: 200,
+      description: '为喜欢的书、音乐和小收藏留一个角落，给忙碌的生活留一点期待。', benefit: '每学期前两次休息额外恢复 2 点心情',
+      effects: [{ kind: 'action', actions: ['rest'], bonuses: { mood: 2 }, perTerm: 2 }]
+    },
+    routine: {
+      id: 'routine', icon: 'alarm', dimension: 'habit', category: '习惯养成', title: '规律作息计划', price: 400,
+      description: '在尝试休息调整之后，准备一份适合自己的作息计划。', benefit: '从下一学期起，开学精力由 80 提高到 83',
+      prereq: { actionCounts: { rest: 3 } },
+      effects: [{ kind: 'termStart', bonuses: { energy: 3 } }]
+    },
+    formalSuit: {
+      id: 'formalSuit', icon: 'suit', dimension: 'clothing', category: '职业形象', title: '正装套装', price: 600,
+      description: '一套合身的正装挂在衣柜里，模拟面试和招聘季都拿得出手。', benefit: '每次求职准备额外 +4 点求职准备',
+      prereq: { minTerm: 5 },
+      effects: [{ kind: 'action', actions: ['jobPreparation'], bonuses: { jobPreparation: 4 } }]
+    },
+    runningShoes: {
+      id: 'runningShoes', icon: 'shoe', dimension: 'clothing', category: '运动装备', title: '轻便运动鞋', price: 350,
+      description: '一双合脚的跑鞋，操场上想动就动。', benefit: '锻炼与单人运动额外 +2 点体能',
+      effects: [{ kind: 'action', actions: ['exercise', 'soloSport'], bonuses: { fitness: 2 } }]
+    },
+    fruitBasket: {
+      id: 'fruitBasket', icon: 'fruit', dimension: 'food', category: '日常营养', title: '水果篮', price: 250,
+      description: '每周补一篮时令水果，放在桌面随手能拿到。', benefit: '每学期前三次休息额外恢复 1 点精力',
+      effects: [{ kind: 'action', actions: ['rest'], bonuses: { recovery: 1 }, perTerm: 3 }]
+    },
+    fitnessMeal: {
+      id: 'fitnessMeal', icon: 'bowl', dimension: 'food', category: '训练饮食', title: '健身餐计划', price: 300,
+      description: '练完有一顿蛋白质跟上的餐食，练什么、吃什么都有数。', benefit: '每次健身房锻炼额外 +3 点体能',
+      effects: [{ kind: 'action', actions: ['gym'], bonuses: { fitness: 3 } }]
+    },
+    bicycle: {
+      id: 'bicycle', icon: 'bike', dimension: 'transport', category: '代步工具', title: '自行车', price: 450,
+      description: '一辆二手自行车，校内通勤和兜风都靠它。', benefit: '散步与单人运动额外 +2 点心情',
+      effects: [{ kind: 'action', actions: ['walk', 'soloSport'], bonuses: { mood: 2 } }]
+    },
+    transitCard: {
+      id: 'transitCard', icon: 'card', dimension: 'transport', category: '通勤优惠', title: '通勤公交卡', price: 220,
+      description: '办好学生优惠公交卡，去实习点的路上能省则省。', benefit: '每次实习工作额外 +2 点心情，每学期前四次',
+      prereq: { minTerm: 3 },
+      effects: [{ kind: 'action', actions: ['internshipWork'], bonuses: { mood: 2 }, perTerm: 4 }]
+    },
+    studyTools: {
+      id: 'studyTools', icon: 'tools', dimension: 'learning', category: '学习与实践', title: '基础工具', price: 200,
+      description: '整理好笔记本、文具和常用工具，让每次自主学习都有清楚的起点。', benefit: '购买后，每学期前两次自学各额外增加 1 点学习进度',
+      effects: [{ kind: 'action', actions: ['selfStudy'], bonuses: { preparation: 1 }, perTerm: 2 }]
+    },
+    portfolioPlan: {
+      id: 'portfolioPlan', icon: 'portfolio', dimension: 'learning', category: '学习与实践', title: '个人作品计划', price: 500,
+      description: '把自学和项目中的尝试整理成个人作品，在逸夫楼向同学展示你的思路与成果。', benefit: '开启逸夫楼的“整理并展示个人作品”，本局可完成一次并留下作品经历',
+      prereq: { nodes: ['studyTools'], actionCounts: { selfStudy: 2, projectWork: 2 } },
+      effects: [], unlocks: ['showPortfolio']
+    },
+    hobbyGear: {
+      id: 'hobbyGear', icon: 'guitar', dimension: 'interest', category: '兴趣与活动', title: '入门器材', price: 150,
+      description: '一套入门乐器与绘画小工具，带去活动中心，给课余生活留点练习的时间。', benefit: '开放学生活动中心的兴趣练习，每学期最多两次，累计两次可解锁展演计划',
+      effects: [], unlocks: ['hobbyPractice']
+    },
+    showcasePlan: {
+      id: 'showcasePlan', icon: 'stage', dimension: 'interest', category: '兴趣与活动', title: '校园展演计划', price: 300,
+      description: '把练习过的小作品带到活动中心，与同学分享一次属于自己的校园舞台。', benefit: '开放校园小展演，本局可完成一次，留下展演经历',
+      prereq: { nodes: ['hobbyGear'], actionCounts: { hobbyPractice: 2 } },
+      effects: [], unlocks: ['campusShowcase']
+    },
+    dormDecor: {
+      id: 'dormDecor', icon: 'photo', dimension: 'housing', category: '生活与空间', title: '宿舍共同布置', price: 300,
+      description: '和室友商量好灯光、收纳与合影的位置，让住过的宿舍多一点共同生活的痕迹。', benefit: '开放宿舍的共同布置与合影，本局可完成一次，留下宿舍纪念',
+      prereq: { nodes: ['bedding', 'hobbyCorner'], actionCounts: { chat: 2 } },
+      effects: [], unlocks: ['decorateDorm']
+    }
   };
+  // 养成面板的分组顺序；学习、兴趣与习惯没有对应预算维度，单独列出。
+  const GROWTH_DIMENSIONS = [
+    { id: 'clothing', label: '衣', title: '衣着与形象' },
+    { id: 'food', label: '食', title: '三餐与饮食' },
+    { id: 'housing', label: '住', title: '生活与空间' },
+    { id: 'transport', label: '行', title: '通勤与出行' },
+    { id: 'learning', label: '学习', title: '学习与实践' },
+    { id: 'interest', label: '兴趣', title: '兴趣与活动' },
+    { id: 'habit', label: '习惯', title: '习惯养成' }
+  ];
   // Fitness tiers scale the costs/rewards of non-health actions and events.
   const FITNESS_TIERS = [
     { id: 'sick', label: '生病', min: 0, max: 24, reward: 0, cost: 0, ill: true },
@@ -91,20 +177,20 @@
       id: 'clothing', label: '衣', title: '衣着与形象',
       description: '衣服、鞋包、饰品和日常打理，决定你在校园里的状态和与人相处时的底气。',
       tiers: [
-        { id: 'refined', label: '精致', cost: 1600, effects: { mood: 10, social: 6 }, description: '换季时认真添置，穿搭和打理都花心思。' },
-        { id: 'excellent', label: '出色', cost: 1300, effects: { mood: 6, social: 4 }, description: '几套体面的换洗搭配，重要场合不怯场。' },
+        { id: 'refined', label: '精致', cost: 1600, effects: { mood: 16, social: 10 }, legacy: true, description: '换季时认真添置，穿搭和打理都花心思。' },
+        { id: 'excellent', label: '出色', cost: 1300, effects: { mood: 8, social: 4 }, legacy: true, description: '几套体面的换洗搭配，重要场合不怯场。' },
         { id: 'ordinary', label: '普通', cost: 1000, effects: { mood: 2, social: 1 }, description: '按需添置，干净合身就好。' },
-        { id: 'minimal', label: '极简', cost: 300, effects: { mood: -4, social: -2 }, description: '能穿就不买，衣柜里只剩最必要的几件。' }
+        { id: 'minimal', label: '极简', cost: 300, effects: { mood: -8, social: -4 }, legacy: true, description: '能穿就不买，衣柜里只剩最必要的几件。' }
       ]
     },
     food: {
       id: 'food', label: '食', title: '三餐与饮食',
       description: '食堂、外卖、水果、补剂和偶尔下馆子。吃得怎样，直接影响精力和身体。',
       tiers: [
-        { id: 'gourmet', label: '品鉴家', cost: 3400, effects: { mood: 12, energy: 8, fitness: -4 }, description: '常去新窗口和校外小店，味蕾满足了，作息和锻炼容易落下。' },
-        { id: 'healthy', label: '健康', cost: 3000, effects: { energy: 10, fitness: 6, mood: -4 }, description: '三餐规律，水果和蛋白质跟上，口味清淡。' },
+        { id: 'gourmet', label: '品鉴家', cost: 3400, effects: { mood: 18, energy: 10, fitness: -8 }, legacy: true, description: '常去新窗口和校外小店，味蕾满足了，作息和锻炼容易落下。' },
+        { id: 'healthy', label: '健康', cost: 3000, effects: { energy: 16, fitness: 10, mood: -6 }, legacy: true, description: '三餐规律，水果和蛋白质跟上，口味清淡。' },
         { id: 'ordinary', label: '普通', cost: 2400, effects: { energy: 4, fitness: 3 }, description: '食堂为主，偶尔加餐，够吃也够用。' },
-        { id: 'minimal', label: '极简', cost: 1400, effects: { mood: -6 }, description: '能省则省，常靠面包和泡面凑合。' }
+        { id: 'minimal', label: '极简', cost: 1400, effects: { mood: -10 }, legacy: true, description: '能省则省，常靠面包和泡面凑合。' }
       ]
     },
     housing: {
@@ -112,9 +198,9 @@
       description: '住得怎样，决定熄灯后的睡眠、室友关系和宿舍里的日常。',
       dormEvents: ['roommateCare', 'night', 'insomnia', 'flu', 'parcel', 'wall', 'ticket3'],
       tiers: [
-        { id: 'offCampus', label: '校外合租', cost: 3000, effects: { mood: 12, social: 8 }, restMultiplier: 1.4, dormMood: 0, dormSocial: 0, placeDescription: '三人合租，带客厅和独立卫浴。晚上回来，客厅的灯还亮着，室友在厨房煮面。', description: '三个人合租，有客厅和独立卫浴，空间和作息都更自由。' },
-        { id: 'luxuryDorm', label: '豪华宿舍', cost: 2000, effects: { mood: 6, social: 4 }, restMultiplier: 1.15, dormMood: 2, dormSocial: 2, placeDescription: '六人间上床下桌，独立卫浴。桌面够摊开电脑和书，阳台能晒到太阳。', description: '六人间上床下桌，独立卫浴，舍友相处体面自在。' },
-        { id: 'ordinaryDorm', label: '普通宿舍', cost: 1000, effects: { mood: -4 }, restMultiplier: 0.9, dormMood: -1, dormSocial: 0, placeDescription: '七人间上下铺，公共水房。熄灯后有人翻身，床板吱呀响一声。', description: '七人间上下铺，公共水房，热闹但不太安静。' }
+        { id: 'offCampus', label: '校外合租', cost: 3000, effects: { mood: 16, social: 10 }, restMultiplier: 1.5, dormMood: 0, dormSocial: 0, placeDescription: '三人合租，带客厅和独立卫浴。晚上回来，客厅的灯还亮着，室友在厨房煮面。', description: '三个人合租，有客厅和独立卫浴，空间和作息都更自由。' },
+        { id: 'luxuryDorm', label: '豪华宿舍', cost: 2000, effects: { mood: 8, social: 5 }, restMultiplier: 1.15, dormMood: 3, dormSocial: 3, placeDescription: '六人间上床下桌，独立卫浴。桌面够摊开电脑和书，阳台能晒到太阳。', description: '六人间上床下桌，独立卫浴，舍友相处体面自在。' },
+        { id: 'ordinaryDorm', label: '普通宿舍', cost: 1000, effects: { mood: -6 }, restMultiplier: 0.85, dormMood: -1, dormSocial: 0, placeDescription: '七人间上下铺，公共水房。熄灯后有人翻身，床板吱呀响一声。', description: '七人间上下铺，公共水房，热闹但不太安静。' }
       ]
     },
     transport: {
@@ -126,6 +212,9 @@
     }
   };
   const DEFAULT_BUDGET = Object.freeze({ clothing: 'ordinary', food: 'ordinary', housing: 'ordinaryDorm', transport: 'basic' });
+  // 预算表版本：调档位数值/效果时 +1。存档里确认过的预算快照带此标记，
+  // 与当前版本一致才做严格比对；旧版本快照降级为结构校验，保证调表不破坏旧存档。
+  const BUDGET_CONFIG_VERSION = 2;
   const ACTIONS = {
     study: { place: 'think', title: '课程学习', description: '踩着铃声进教室，摊开今天要讲的那一章。一学期下来，笔记越写越厚。', time: 2, energy: 15, fitnessCost: 3, money: 0, preparation: 20, mood: -3, limit: 4 },
     tutoring: { place: 'think', title: '课程补习', description: '约了学长把卡住的章节讲透。两个小时，白板擦了又写。', time: 2, energy: 10, fitnessCost: 2, money: 100, preparation: 25, limit: 2 },
@@ -142,6 +231,10 @@
     walk: { place: 'ginkgo', title: '散步', description: '沿着银杏大道慢慢走，脑子里什么都不装。', time: 1, energy: 0, fitnessCost: 0, money: 0, recovery: 10, mood: 10, limit: 3 },
     applyProject: { place: 'yifu', title: '申请校园项目', description: '把简历和想法递到老师桌上。老师说：回去等消息。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 2, maxTerm: 6, minPreparation: 40, chain: 'project', kind: 'apply' },
     projectWork: { place: 'yifu', title: '项目投入', description: '例会开到晚上，方案改到第七版，白板上的箭头越画越多。', time: 2, energy: 15, fitnessCost: 3, money: 0, preparation: 10, chain: 'project', kind: 'work', limit: 2 },
+    showPortfolio: { place: 'yifu', title: '整理并展示个人作品', description: '把自学笔记和项目尝试排成作品页，讲清楚做法，也认真听一听同学的建议。完成后记入个人作品经历。', time: 1, energy: 8, fitnessCost: 2, money: 0, social: 3, mood: 3, requiresGrowth: 'portfolioPlan', experience: 'portfolio', experienceTitle: '个人作品展示', hint: '购买个人作品计划后开放，本局一次；精力、体能与收益按当前体能档位结算。' },
+    hobbyPractice: { place: 'activity', title: '兴趣练习', description: '在活动中心找一个角落，练一段旋律或补完一幅画，进步不大，却让今天多了一点期待。', time: 1, energy: 5, fitnessCost: 1, money: 0, mood: 4, requiresGrowth: 'hobbyGear', growthProgress: true, limit: 2, hint: '购买入门器材后开放，每学期最多两次；心情已满仍可练习并累计展演前置进度。' },
+    campusShowcase: { place: 'activity', title: '校园小展演', description: '把练过的片段和作品分享给同学，掌声响起时，才发现平时的积累也能站到台前。', time: 1, energy: 8, fitnessCost: 2, money: 0, social: 4, mood: 6, requiresGrowth: 'showcasePlan', experience: 'showcase', experienceTitle: '校园小展演', hint: '购买校园展演计划后开放，本局一次；完成后记入简历，歌手大赛仍按原流程参加。' },
+    decorateDorm: { place: 'dorm', title: '共同布置与合影', description: '室友搬来收纳盒，你贴好照片，最后挤进同一个镜头，把住过的地方变成共同的纪念。', time: 1, energy: 5, fitnessCost: 1, money: 0, social: 2, mood: 3, requiresGrowth: 'dormDecor', experience: 'dormMemory', experienceTitle: '宿舍布置合影', hint: '购买宿舍共同布置后开放，本局一次；不再收取材料费，完成后留下宿舍纪念。' },
     applyClub: { place: 'activity', title: '参与社团招新', description: '百团大战的摊位一眼望不到头。报名表递出去，扫码进群。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 1, maxTerm: 6, autumnOnly: true, chain: 'club', kind: 'apply' },
     clubWork: { place: 'activity', title: '社团投入', description: '搬桌子、贴海报、盯签到，忙到嗓子发干。', time: 1, energy: 8, fitnessCost: 2, money: 0, social: 8, chain: 'club', kind: 'work', limit: 2 },
     applyInternship: { place: 'gate', title: '申请实习岗位', description: '南门布告栏贴满了岗位：先挑一个够得着的，把成绩单和简历装进同一个文件袋。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 3, maxTerm: 7, chain: 'internship', kind: 'apply' },
@@ -834,17 +927,20 @@
       }
     }
   };
-  // 我的简历：resume(state) 的四栏标题与其他经历的折叠文案（docs/公司库与岗位库-20261103.md 一期）。
+  // 个人作品单独展示；岗位要件继续按实习、项目、竞赛、社团四类经历判定。
   const RESUME = {
     sections: [
       { id: 'internship', title: '实习经历' },
       { id: 'project', title: '项目经历' },
       { id: 'contest', title: '竞赛经历' },
-      { id: 'club', title: '社团经历' }
+      { id: 'club', title: '社团经历' },
+      { id: 'portfolio', title: '个人作品' },
+      { id: 'showcase', title: '兴趣与展演' },
+      { id: 'dormMemory', title: '宿舍纪念' }
     ],
     othersNote: '另有：{list}，共 {count} 项校园经历。'
   };
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, BUDGET_DIMENSIONS, DEFAULT_BUDGET, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

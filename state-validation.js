@@ -53,7 +53,18 @@
             const plan = game.budgetPlan(grant.budget);
             if (!plan || !same(grant.budgetCosts, plan.costs) || grant.livingCost !== plan.costs.total) return fail('学期预算档位');
             if (grant.budgetChosen === true) {
-              if (!same(grant.budgetEffects, plan.effects) || !same(grant.budgetModifiers, plan.modifiers) || grant.budgetDelta !== plan.costs.total - RULES.termLivingCost) return fail('学期预算快照');
+              if (grant.budgetDelta !== plan.costs.total - RULES.termLivingCost) return fail('学期预算快照');
+              if (grant.budgetConfig === game.BUDGET_CONFIG_VERSION) {
+                // 当前预算表生成的快照：与配置严格比对，防篡改。
+                if (!same(grant.budgetEffects, plan.effects) || !same(grant.budgetModifiers, plan.modifiers)) return fail('学期预算快照');
+              } else {
+                // 旧预算表（无 budgetConfig 标记）的存档：只做结构校验，调表不破坏旧档；
+                // 运行时的休息/宿舍加成按当前配置即时计算，不受旧快照影响。
+                const effects = grant.budgetEffects;
+                const modifiers = grant.budgetModifiers;
+                if (!object(effects) || !['mood', 'social', 'energy', 'fitness'].every(key => integer(effects[key], -100, 100))) return fail('学期预算快照');
+                if (!object(modifiers) || !Number.isFinite(modifiers.restMultiplier) || modifiers.restMultiplier <= 0 || modifiers.restMultiplier > 3 || !integer(modifiers.dormMood, -10, 10) || !integer(modifiers.dormSocial, -10, 10)) return fail('学期预算快照');
+              }
             } else if (grant.budgetChosen === false) {
               if (!same(grant.budget, game.DEFAULT_BUDGET) || plan.costs.total !== RULES.termLivingCost || !same(grant.budgetEffects, { mood: 0, social: 0, energy: 0, fitness: 0 }) || !same(grant.budgetModifiers, { restMultiplier: 1, dormMood: 0, dormSocial: 0 }) || grant.budgetDelta !== 0) return fail('未确认预算快照');
             } else return fail('学期预算确认标记');
@@ -136,29 +147,64 @@
       if (state.history.length !== state.revision || state.processedCommands.length !== state.revision || new Set(state.processedCommands).size !== state.revision) return fail('操作序号');
       const extraCounts = new Map();
       const growthPurchases = {};
-      let completedRests = 0;
+      const completedActions = Object.create(null);
+      const growthExperiences = [];
+      const growthActionCounts = new Map();
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
         if (!['executeAction', 'purchaseGrowth', 'submitEventChoice', 'selectCourses', 'chooseBudget', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc', 'setTargetPosition', 'settleInternship'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'purchaseGrowth') {
           const node = GROWTH_NODES[command.id];
+          const hasTermStart = node && node.effects.some(item => item.kind === 'termStart');
           if (!own(GROWTH_NODES, command.id) || own(growthPurchases, command.id) || entry.action !== 'purchaseGrowth'
             || !object(entry.changes) || !same(entry.changes, { money: -node.price })
             || entry.before.phase !== 'playing' || entry.before.money < node.price || entry.after.money !== entry.before.money - node.price
             || entry.after.time !== entry.before.time || entry.after.energy !== entry.before.energy || entry.after.phase !== entry.before.phase
-            || (node.requiredRests && completedRests < node.requiredRests) || (node.openingEnergy && entry.term === RULES.terms)) return fail('校园养成扣款或条件');
+            || Object.entries(node.prereq?.actionCounts || {}).some(([id, target]) => (completedActions[id] || 0) < target)
+            || (node.prereq?.nodes || []).some(id => !own(growthPurchases, id)) || (hasTermStart && entry.term === RULES.terms)
+            || (node.prereq?.minTerm && entry.term < node.prereq.minTerm)) return fail('校园养成扣款或条件');
           growthPurchases[command.id] = { term: entry.term, revision: entry.revision };
         }
-        if (command.operation === 'executeAction' && command.id === 'rest') completedRests++;
         if (entry.growthBonuses !== undefined) {
           const bonuses = entry.growthBonuses;
-          if (command.operation !== 'executeAction' || command.id !== 'rest' || !object(bonuses) || Object.keys(bonuses).length !== 2
-            || !integer(bonuses.energy, 0, growthPurchases.bedding ? GROWTH_NODES.bedding.recovery : 0)
-            || !integer(bonuses.mood, 0, growthPurchases.hobbyCorner ? GROWTH_NODES.hobbyCorner.mood : 0)
-            || (backgroundReplay.ok && !same(bonuses, backgroundReplay.state.history[index].growthBonuses))) return fail('校园养成收益');
+          // 每键上限 = 已购节点中匹配本次行动的 action 加成之和（recovery 记为 energy）；
+          // 精确值由重放比对兜底，这里只做结构 + 上限防线。
+          const caps = { energy: 0, mood: 0, fitness: 0, social: 0, preparation: 0, furtherStudy: 0, jobPreparation: 0 };
+          for (const [nodeId, record] of Object.entries(growthPurchases)) {
+            if (entry.revision <= record.revision) continue;
+            for (const item of GROWTH_NODES[nodeId]?.effects || []) {
+              if (item.kind !== 'action' || !item.actions.includes(command.id)) continue;
+              for (const [key, amount] of Object.entries(item.bonuses)) caps[key === 'recovery' ? 'energy' : key] += amount;
+            }
+          }
+          const keys = Object.keys(bonuses);
+          if (command.operation !== 'executeAction' || !object(bonuses)
+            || !keys.includes('energy') || !keys.includes('mood')
+            || !keys.every(key => key in caps && integer(bonuses[key], 0, caps[key]))
+            || !Object.values(bonuses).some(value => value > 0)) return fail('校园养成收益');
         }
         if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');
+        if (backgroundReplay.ok && !same(entry.growthBonuses ?? null, backgroundReplay.state.history[index].growthBonuses ?? null)) return fail('校园养成收益记录');
+        if (command.operation === 'executeAction') {
+          completedActions[command.id] = (completedActions[command.id] || 0) + 1;
+          const action = ACTIONS[command.id];
+          if (action.requiresGrowth) {
+            const countKey = entry.term + ':' + command.id;
+            const count = growthActionCounts.get(countKey) || 0;
+            if (!growthPurchases[action.requiresGrowth] || entry.before.phase !== 'playing'
+              || (action.limit && count >= action.limit)
+              || entry.changes?.time !== -action.time || entry.changes?.money !== 0
+              || entry.after.time !== entry.before.time - action.time
+              || entry.after.energy !== entry.before.energy + entry.changes.energy
+              || (backgroundReplay.ok && !same(entry.changes, backgroundReplay.state.history[index].changes))) return fail('养成行动记录');
+            growthActionCounts.set(countKey, count + 1);
+            if (action.experience) {
+              if (growthExperiences.some(item => item.type === action.experience)) return fail('重复养成经历');
+              growthExperiences.push({ type: action.experience, term: entry.term });
+            }
+          }
+        }
         // 岗位化实习：command 带 positionId 时必须指向岗位库、只用于申请实习，且 entry.position 与之一致；
         // 旧档的申请命令没有 positionId（两字段皆缺省），不做强制。
         if (command.operation === 'executeAction' && command.positionId !== undefined
@@ -192,6 +238,9 @@
         for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished', 'ended'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !integer(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 2010)) return fail('历史状态摘要');
       }
       if (!same(state.growth?.purchased || {}, growthPurchases)) return fail('校园养成购买记录');
+      for (const [id, action] of Object.entries(ACTIONS)) {
+        if (action.requiresGrowth && (state.counts[id] || 0) !== (growthActionCounts.get(state.term + ':' + id) || 0)) return fail('养成行动次数');
+      }
       const expectedCourses = ['summary', 'endingChoice', 'finished'].includes(state.phase) ? state.term : state.term - 1;
       if (state.courses.length !== expectedCourses) return fail('课程记录数量与阶段不符');
       const validCourse = (course, index) => {
@@ -252,7 +301,7 @@
       if (Object.keys(state.chains).length !== 3) return fail('未知事件链');
       const experienceIds = new Set();
       for (const item of state.experiences) {
-        if (!object(item) || !integer(item.term, 1, state.term) || !['fitnessTest', 'project', 'club', 'internship', 'military', 'singer', 'trip', 'contest', 'sportsMeet', 'transfer'].includes(item.type)) return fail('经历');
+        if (!object(item) || !integer(item.term, 1, state.term) || !['fitnessTest', 'project', 'club', 'internship', 'military', 'singer', 'trip', 'contest', 'sportsMeet', 'transfer', 'portfolio', 'showcase', 'dormMemory'].includes(item.type)) return fail('经历');
         // 体测与运动会每个学年都可能留下经历，按学期区分；实习多段进行，同样按学期区分；其余经历全局唯一。
         const key = item.type === 'internship'
           ? item.type + ':' + item.term + ':' + (item.positionId || 'none')
@@ -264,6 +313,8 @@
         // 岗位字段只允许落在实习经历上，且必须指向岗位库；旧档无此字段。
         if (item.positionId !== undefined && !own(POSITIONS, item.positionId)) return fail('经历岗位');
       }
+      const growthExperienceTypes = new Set(Object.values(ACTIONS).filter(action => action.requiresGrowth && action.experience).map(action => action.experience));
+      if (!same(state.experiences.filter(item => growthExperienceTypes.has(item.type)), growthExperiences)) return fail('养成经历');
       // 链完成与经历的核对按类型集合：实习多段按学期区分经历，但链状态只看类型。
       const experienceTypes = new Set(state.experiences.map(item => item.type));
       for (const id of Object.keys(CHAIN_NAMES)) if ((state.chains[id].status === 'completed') !== experienceTypes.has(id)) return fail('事件链与经历不一致');
