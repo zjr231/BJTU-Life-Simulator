@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.5.9', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.6.1', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, lowMood: 30, fitnessThreshold: 60 };
   // Fitness tiers scale the costs/rewards of non-health actions and events.
   const FITNESS_TIERS = [
     { id: 'sick', label: '生病', min: 0, max: 24, reward: 0, cost: 0, ill: true },

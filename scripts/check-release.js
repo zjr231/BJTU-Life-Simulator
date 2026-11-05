@@ -6,8 +6,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 const root = path.resolve(__dirname, '..');
-const scripts = ['config.js', 'courses.js', 'rng.js', 'relationships.js', 'npc-support.js', 'character-agent.js', 'character-scene.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'npc.js', 'season.js', 'vendor/planck.min.js', 'basketball.js', 'app.js'];
-const files = new Set(['index.html', 'styles.css', '.nojekyll', 'vendor/planck.LICENSE.txt', 'assets/characters/zhou-ning-casual-v1.png', 'assets/scenes/campus-afternoon-v1.png', ...scripts]);
+const scripts = ['config.js', 'courses.js', 'rng.js', 'relationships.js', 'npc-cast.js', 'npc-support.js', 'character-agent.js', 'npc-director.js', 'npc-game.js', 'character-scene.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'npc.js', 'season.js', 'vendor/planck.min.js', 'basketball.js', 'app.js'];
+const files = new Set(['index.html', 'styles.css', '.nojekyll', 'vendor/planck.LICENSE.txt', 'assets/characters/zhou-ning-casual-v1.png', 'assets/characters/chen-teacher-casual-v1.png', 'assets/characters/lin-xia-sports-v1.png', 'assets/scenes/campus-afternoon-v1.png', ...scripts]);
 
 function localReference(reference, from) {
   if (!reference || /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(reference)) return;

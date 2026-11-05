@@ -72,6 +72,7 @@ let zhouView = { screen: 'home', group: 'life', activity: 'selfStudy', amount: u
 let lastVisualNovel = null;
 let zhouRequest = null;
 let zhouRequestSequence = 0;
+let activeNpcId = 'zhouNing';
 let zhouChatDraft = '';
 let zhouChatNotice = '';
 let zhouHistoryOpen = false;
@@ -727,7 +728,7 @@ function supportText(entry) {
   const metrics = Object.entries(entry.support.metrics);
   const player = metrics.map(([key, value]) => names[key] + ' +' + value.playerInitial).join('、');
   const npc = metrics.filter(([, value]) => value.npcBonus > 0).map(([key, value]) => names[key] + ' +' + value.npcBonus).join('、');
-  return (player ? '玩家初始收获：' + player + '。' : '') + (npc ? '周宁辅助：' + npc + '。' : '本次没有额外数值加成。');
+  return (player ? '玩家初始收获：' + player + '。' : '') + (npc ? game.npcCast.profile(typeof entry.support.companion==='string'?entry.support.companion:'zhouNing').name + '辅助：' + npc + '。' : '本次没有额外数值加成。');
 }
 function costs(effect) {
   return [(effect.time ? '时间 −' + effect.time : ''), (effect.energy ? '精力 −' + effect.energy : ''), (effect.money ? '钱包 −' + effect.money + ' 元' : ''), (effect.mood < 0 ? '心情 −' + Math.min(state.mood, Math.abs(effect.mood)) : ''), (effect.fitnessCost ? '体能 −' + effect.fitnessCost + '（消耗）' : '')].filter(Boolean).join(' · ') || '不消耗资源';
@@ -742,104 +743,74 @@ function renderActions() {
     const check = game.availability(state, id, amount);
     return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div><p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>' + (action.minigame ? '开始' : '确认') + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
   }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
-  if (game.getRelationships(state).zhouNing) $('#actionList').innerHTML += '<article class="action-card relationship-library-card"><h3>约周宁一起</h3><p>在这里也可以联系周宁，一起参加活动，或者先聊聊近况。</p><button type="button" data-zhou-open="1">联系周宁</button></article>';
+  for(const id of game.npcCast.known(state)){const p=game.npcCast.profile(id);$('#actionList').innerHTML+='<article class="action-card relationship-library-card"><h3>联系'+h(p.name)+'</h3><p>聊聊近况，或者商量一个共同安排。</p><button type="button" data-character-open="'+id+'">联系'+h(p.name)+'</button></article>';}
 }
 function renderRelationshipsPanel() {
-  const list = $('#relationshipList');
-  if (!list) return;
-  const relation = state && game.getRelationships(state);
-  const person = relation?.zhouNing;
-  if (!person) {
-    list.innerHTML = '<div class="relationship-empty"><b>故事从一次自习开始</b><p>去图书馆完成第一次自主学习，就会认识与你选了同一门课的周宁。</p><p>建立联系后，可以在这里找到对方，共同学习、积累经历。</p></div>';
-    return;
-  }
-  const stage = game.relationshipRules.stage(person.familiarity);
-  const available = game.zhouNingAvailability(state, 'presentation', undefined, 2).ok;
-  const abilities = game.relationshipRules.abilities(state);
-  list.innerHTML = '<article class="relationship-card"><div class="relationship-card-head"><span class="relationship-avatar">' + '<img src="' + game.relationshipRules.ZHOU_NING.portrait + '" alt="周宁">' + '</span><div><b>周宁</b><small>男 · 同年级同学 · 图书馆</small></div><span class="relationship-stage">' + h(stage.label) + '</span></div><label class="relationship-progress-label">相识度 <b>' + person.familiarity + ' / 100</b></label><progress class="relationship-progress" max="100" value="' + person.familiarity + '"></progress><p>' + h(game.relationshipRules.dialogue(state)) + '</p>' + (available ? '<p class="relationship-new">新事件：周宁想请你陪他练习课程展示</p>' : '') + '<p class="relationship-abilities">学业 ' + abilities.academic + ' · 社交 ' + abilities.social + ' · 运动 ' + abilities.sport + '</p><p class="relationship-quota">本学期同行 ' + relation.interactions + ' / 4 · 认真交流 ' + relation.talks + ' / 2</p><button type="button" class="utility-button" data-zhou-open="1">查看人物与互动</button></article>';
+  const list = $('#relationshipList'); if (!list || !state) return;
+  const cast = game.npcCast, ids = cast.known(state);
+  list.innerHTML = '<p class="relationship-quota">本学期共同活动 ' + cast.totalInteractions(state) + ' / 4（全人物共享；老师最多指导两次）</p>' + ids.map(id => {
+    const p=cast.profile(id), person=cast.get(state,id), a=cast.abilities(state,id);
+    return '<article class="relationship-card"><div class="relationship-card-head"><span class="relationship-avatar"><img src="'+p.portrait+'" alt="'+h(p.name)+'"></span><div><b>'+h(p.name)+'</b><small>'+h(p.gender+' · '+p.identity)+'</small></div><span class="relationship-stage">'+h(game.relationshipRules.stage(person.familiarity).label)+'</span></div><label class="relationship-progress-label">相识度 <b>'+person.familiarity+' / 100</b></label><progress class="relationship-progress" max="100" value="'+person.familiarity+'"></progress><p>'+h(cast.dialogue(state,id))+'</p><p class="relationship-abilities">学业 '+a.academic+' · 社交 '+a.social+' · 运动 '+a.sport+'</p>'+(game.npcStoryAvailability(state,id).ok?'<p class="relationship-new">有一段新的共同经历可以参与</p>':'')+'<button type="button" class="utility-button" data-character-open="'+id+'">查看人物与互动</button></article>';
+  }).join('') + Object.keys(cast.PROFILES).filter(id=>!ids.includes(id)).map(id=>'<div class="relationship-empty"><b>'+h(cast.profile(id).name)+' · 尚未相识</b><p>'+h(({zhouNing:'第一次在图书馆自主学习时相识。',chenTeacher:'准备小组项目或参与竞赛时，有机会认识指导教师。',linXia:'完成操场运动后，有机会认识喜欢运动的同年级同学。'})[id])+'</p></div>').join('');
 }
 function vnChoice(label, command, extra = {}, note = '', disabled = false) {
   return { label, note, disabled: disabled || ((uiLocked || zhouRequest) && ['deepTalk', 'presentation', 'confirmActivity', 'acceptProposal', 'declineProposal', 'prompt'].includes(command)), attributes: { 'data-vn-ui': command, 'data-revision': state.revision, ...extra } };
 }
 function showVisualNovel(mode, title, speech, choices, options = {}) {
-  const rules = game.relationshipRules;
-  const relation = game.getRelationships(state);
-  const person = relation.zhouNing;
-  const status = rules.status(state);
-  const scenePlace = options.place || (zhouView.screen === 'activity' ? game.ACTIONS[zhouView.activity]?.place : activePlace) || status.lastPlace || 'library';
-  const memories = person ? person.memories.map(id => rules.MEMORIES[id]).filter(Boolean) : [];
-  const body = CampusCharacterScene.render({ profile: rules.ZHOU_NING, met: !!person, familiarity: person?.familiarity || 0,
-    stage: person ? rules.stage(person.familiarity).label : '初次见面', location: (game.PLACES[scenePlace]?.title || '校园里') + ' · 与周宁',
-    abilities: rules.abilities(state), status: status.moodLabel + ' · ' + status.energyLabel, profileOpen: zhouView.profileOpen,
-    goal: person?.presentation ? '多参加一些校园活动，也想听听你的未来打算。' : rules.ZHOU_NING.goal,
-    memories, speech, choices, canClose: options.canClose ?? mode !== 'event', choiceTitle: options.choiceTitle,
-    chat: mode === 'relationship', busy: !!zhouRequest || uiLocked, draft: zhouChatDraft, historyOpen: zhouHistoryOpen, messages: game.characterAgent.read(state).messages,
-    detail: options.detail || ('时间 ' + state.time + ' · 精力 ' + state.energy + ' · 钱包 ' + state.money + ' 元。同行 ' + relation.interactions + '/4，深入交流 ' + relation.talks + '/2。') });
-  lastVisualNovel = { mode, title, speech, choices, options };
-  showDialog(mode, title, body, options.footerButtons || []);
-  dialog.classList.add('is-vn');
+  const id=options.npcId || activeNpcId, cast=game.npcCast, p=cast.profile(id), person=cast.get(state,id), status=cast.status(state,id);
+  const place=options.place || (zhouView.screen==='activity'?game.ACTIONS[zhouView.activity]?.place:activePlace) || status.lastPlace || p.place;
+  const oldConversation=$('#vnConversation');
+  const oldScroll=oldConversation?.dataset?.npcId===id?{top:oldConversation.scrollTop,key:oldConversation.dataset.lastKey}:null;
+  const body=CampusCharacterScene.render({profile:p,met:!!person,familiarity:person?.familiarity||0,stage:person?game.relationshipRules.stage(person.familiarity).label:'初次见面',location:(game.PLACES[place]?.title||'校园里')+' · 与'+p.name,
+    abilities:cast.abilities(state,id),status:status.moodLabel+' · '+status.energyLabel,profileOpen:zhouView.profileOpen,goal:person?.story||person?.presentation?'继续自己的校园安排，也关心你的近况。':p.goal,
+    memories:person?person.memories.map(key=>cast.MEMORIES[key]).filter(Boolean):[],speech,choices,canClose:options.canClose??mode!=='event',choiceTitle:options.choiceTitle,
+    chat:mode==='relationship',busy:!!zhouRequest||uiLocked,draft:zhouChatDraft,historyOpen:zhouHistoryOpen,messages:game.characterAgent.conversation(state,id),pendingText:zhouRequest?.npcId===id?zhouRequest.text:'',waiting:zhouRequest?.npcId===id,
+    detail:options.detail||('时间 '+state.time+' · 精力 '+state.energy+' · 钱包 '+state.money+' 元。全人物共同活动 '+cast.totalInteractions(state)+'/4。')});
+  lastVisualNovel={mode,title,speech,choices,options:{...options,npcId:id}};
+  showDialog(mode,title,body,options.footerButtons||[]);dialog.classList.add('is-vn');
+  const conversation=$('#vnConversation');
+  if(mode==='relationship'&&conversation&&typeof conversation.scrollHeight==='number')conversation.scrollTop=oldScroll&&oldScroll.key===conversation.dataset.lastKey?oldScroll.top:conversation.scrollHeight;
 }
-function showZhouNing(options = {}) {
-  if (!state || !game.getRelationships(state).zhouNing) return;
+function showCharacter(id, options={}) {
+  if(!state||!game.npcCast.get(state,id))return;
+  if(activeNpcId!==id){cancelZhouRequest();activeNpcId=id;zhouChatDraft='';zhouChatNotice='';zhouHistoryOpen=false;zhouView={screen:'home',profileOpen:false};}
+  showZhouNing(options);
+}
+function showZhouNing(options={}) {
+  const id=activeNpcId, cast=game.npcCast, p=cast.profile(id);
+  if(!state||!cast.get(state,id))return;
   closePanel();
-  if (!options.preserve) zhouView = { screen: 'home', group: 'life', activity: 'selfStudy', amount: undefined, profileOpen: false, text: null };
-  if (options.text) zhouView.text = options.text;
-  const rules = game.relationshipRules;
-  const person = game.getRelationships(state).zhouNing;
-  const agent = game.characterAgent.read(state);
-  let speech = zhouView.text || agent.messages.filter(item => item.role === 'assistant').at(-1)?.content || rules.dialogue(state);
-  let choiceTitle = '你想怎么回应？';
-  let detail = state.phase !== 'playing' ? '请先完成当前事件、考试或学期流程。现在仍可以和周宁闲聊。' : undefined;
-  let choices;
-  if (zhouView.screen === 'groups') {
-    speech = '今天想做点什么？学习、运动、看演出，或者一起去校园里转转，都可以。';
-    choices = Object.entries(ZHOU_GROUPS).map(([id, label]) => vnChoice(label, 'group', { 'data-vn-group': id }));
-    choices.push(vnChoice('先聊点别的', 'home'));
-  } else if (zhouView.screen === 'activities') {
-    speech = '你来选吧。我把自己的安排也理一理，能一起去的我们就一起出发。';
-    choiceTitle = ZHOU_GROUPS[zhouView.group];
-    choices = Object.entries(rules.ACTIVITIES).filter(([, activity]) => activity.group === zhouView.group).map(([id, activity]) => {
-      const check = game.companionAvailability(state, id);
-      return vnChoice(activity.label, 'activity', { 'data-vn-activity': id }, check.ok ? (game.PLACES[game.ACTIONS[id].place]?.title || '') : check.reason, !check.ok);
-    });
-    choices.push(vnChoice('换一种安排', 'groups'));
-  } else if (zhouView.screen === 'activity') {
-    const id = zhouView.activity;
-    const activity = rules.ACTIVITIES[id];
-    const action = game.getAction(state, id);
-    const profile = game.getActionInvestment(state, id);
-    const amount = zhouView.amount ?? profile?.default;
-    const preview = profile && game.previewActionInvestment(state, id, amount);
-    const check = game.companionAvailability(state, id, amount);
-    speech = check.ok ? activity.reply : check.reason;
-    choiceTitle = activity.label;
-    detail = costs(preview?.effect || game.fitnessAdjustedEffect(state, action, id)) + '。只结算一次原活动成本。';
-    choices = profile ? profile.tiers.map(tier => ({ ...vnChoice(tier.label, 'tier', { 'data-vn-amount': tier.amount }, costs(game.previewActionInvestment(state, id, tier.amount).effect)), selected: tier.amount === amount })) : [];
-    choices.push(vnChoice(action.minigame ? '一起去球场，开始投篮' : '就这样安排，一起出发', 'confirmActivity', {}, check.ok ? '确认后进行活动，再记录这段共同经历。' : check.reason, !check.ok));
-    choices.push(vnChoice('再看看别的活动', 'backActivities'));
-  } else if (zhouView.screen === 'topics') {
-    choices = [vnChoice('你平时喜欢做什么？', 'topic', { 'data-vn-topic': 'likes' }), vnChoice('最近有什么烦恼？', 'topic', { 'data-vn-topic': 'goal' }), vnChoice('你今天状态怎么样？', 'topic', { 'data-vn-topic': 'care' })];
-    const check = game.zhouNingAvailability(state, 'talk');
-    choices.push(vnChoice('认真交流', 'deepTalk', { 'data-dialog-action': 'zhouTalk' }, check.ok ? '留一点精力认真倾听 · 精力 −2' : check.reason, !check.ok));
-    choices.push(vnChoice('一起做点什么吧', 'groups'), vnChoice('回到刚才的话题', 'home'));
-  } else {
-    if (agent.proposal) {
-      const id = agent.proposal.id;
-      const check = id === 'presentation' ? game.zhouNingAvailability(state, 'presentation', undefined, 2) : game.companionAvailability(state, id);
-      const action = id === 'presentation' ? null : game.getAction(state, id);
-      const profile = action && game.getActionInvestment(state, id);
-      const preview = profile && game.previewActionInvestment(state, id, profile.default);
-      const note = !check.ok ? check.reason : id === 'presentation' ? '先听听他的请求，选择练习方式后才结算。' : costs(preview?.effect || game.fitnessAdjustedEffect(state, action, id));
-      choices = [vnChoice(id === 'presentation' ? '好，说说你的展示吧' : '好，' + rules.ACTIVITIES[id].label, 'acceptProposal', { 'data-proposal-revision': agent.proposal.createdRevision }, note, !check.ok), vnChoice('今天先不了，改天吧', 'declineProposal', { 'data-proposal-revision': agent.proposal.createdRevision }), vnChoice('我想再问问', 'prompt', { 'data-vn-prompt': '你为什么想约我做这件事？' })];
-      detail = note + '。可以直接回复“好，走吧”或“改天吧”，也可以继续聊。';
-    } else {
-      choices = [vnChoice('你最近过得怎么样？', 'prompt', { 'data-vn-prompt': '你最近过得怎么样，有没有什么想做的事？' }), vnChoice('我想和你出去走走', 'prompt', { 'data-vn-prompt': '我想和你出去走走，一起散步好吗？' }), vnChoice('一起安排活动', 'groups'), vnChoice('人物与共同经历', 'profile')];
-      if (state.phase === 'playing') detail = '可以自由聊天、提出邀请，也可以听听他的想法。聊天不扣时间或精力；同类话题不会反复增加相识度。';
-    }
+  if(!options.preserve){zhouHistoryOpen=false;zhouView={screen:'home',group:'life',activity:'selfStudy',amount:undefined,profileOpen:false,text:null};}
+  if(options.text)zhouView.text=options.text;
+  const saved=game.characterAgent.read(state,id);
+  let speech=zhouView.text||saved.messages.filter(item=>item.role==='assistant').at(-1)?.content||cast.dialogue(state,id), choices, detail,choiceTitle='你想怎么回应？';
+  if(zhouView.screen==='groups'){
+    speech=p.role==='teacher'?'带着你已经做过的部分来，我们选一个具体问题讨论。':'今天想做点什么？你可以按自己的安排选。';
+    choices=Object.entries(ZHOU_GROUPS).filter(([group])=>p.activities.some(a=>game.relationshipRules.ACTIVITIES[a].group===group)).map(([key,label])=>vnChoice(id==='chenTeacher'?(key==='campus'?'项目指导':'学业与发展方向'):label,'group',{'data-vn-group':key}));choices.push(vnChoice('先聊点别的','home'));
+  }else if(zhouView.screen==='activities'){
+    choices=p.activities.filter(a=>game.relationshipRules.ACTIVITIES[a].group===zhouView.group).map(a=>{const c=game.npcAvailability(state,id,a);return vnChoice(cast.activityLabel(id,a),'activity',{'data-vn-activity':a},c.ok?game.PLACES[game.ACTIONS[a].place]?.title:c.reason,!c.ok);});choices.push(vnChoice('换一种安排','groups'));
+  }else if(zhouView.screen==='activity'){
+    const a=zhouView.activity, action=game.getAction(state,a), investment=game.getActionInvestment(state,a), amount=zhouView.amount??investment?.default,c=game.npcAvailability(state,id,a,amount),preview=investment&&game.previewActionInvestment(state,a,amount);
+    speech=c.ok?cast.activityReply(id,a):c.reason;choiceTitle=cast.activityLabel(id,a);detail=costs(preview?.effect||game.fitnessAdjustedEffect(state,action,a))+'。只结算一次原活动成本。';
+    choices=investment?investment.tiers.map(t=>({...vnChoice(t.label,'tier',{'data-vn-amount':t.amount},costs(game.previewActionInvestment(state,a,t.amount).effect)),selected:t.amount===amount})):[];
+    choices.push(vnChoice(action.minigame?'一起去球场，开始投篮':'就这样安排，一起出发','confirmActivity',{},c.reason,!c.ok),vnChoice('再看看别的活动','backActivities'));
+  }else if(zhouView.screen==='story'){
+    speech=id==='chenTeacher'?'把你选择的方案和证据摆在一起，我们做一次复盘。你想重点检查论证，还是先练习把想法说出来？':'接力赛前总有点担心。我想再练一下配合，也想听听你怎么看待紧张。';
+    const c=game.npcStoryAvailability(state,id);detail=c.ok?costs(game.npcStoryCost(state,id))+'。准备方式会影响这次收获。':c.reason;
+    choices=[vnChoice(id==='chenTeacher'?'认真复盘依据与验证办法':'一起练习交接与节奏','storyChoice',{'data-story-choice':'prepare'},'',!c.ok),vnChoice(id==='chenTeacher'?'先练习表达，建立信心':'先聊聊赛前的担心','storyChoice',{'data-story-choice':'encourage'},'',!c.ok),vnChoice('改天再安排','home')];
+  }else if(saved.proposal){
+    const a=saved.proposal.id,story=a===p.storyId,evt=a==='joinEvent',c=story?game.npcStoryAvailability(state,id):evt?game.npcEventAvailability(state,id):game.npcAvailability(state,id,a);
+    const action=!story&&!evt?game.getAction(state,a):null,inv=action&&game.getActionInvestment(state,a),preview=inv&&game.previewActionInvestment(state,a,inv.default);
+    detail=!c.ok?c.reason:evt?'先加入当前事件，选择事件方案后才结算。':story?'先听听这件事，再选择参与方式。':costs(preview?.effect||game.fitnessAdjustedEffect(state,action,a));
+    choices=[vnChoice(story?'好，说说这件事吧':evt?'一起参与眼前的事':'好，'+cast.activityLabel(id,a),'acceptProposal',{'data-proposal-revision':saved.proposal.createdRevision},detail,!c.ok),vnChoice('今天先不了，改天吧','declineProposal',{'data-proposal-revision':saved.proposal.createdRevision}),vnChoice('我想再问问','prompt',{'data-vn-prompt':'你为什么想约我做这件事？'})];
+  }else{
+    choices=[vnChoice('你最近过得怎么样？','prompt',{'data-vn-prompt':'你最近过得怎么样，有没有什么想做的事？'}),vnChoice('一起安排活动','groups'),vnChoice('人物与共同经历','profile')];
+    if(game.npcStoryAvailability(state,id).ok)choices.push(vnChoice(id==='zhouNing'?'陪你练习课程展示':id==='chenTeacher'?'一起复盘一次方案':'陪你练习接力配合','story'));
+    detail='可以自由聊天，也可以回应对方的邀请。聊天不扣资源；共同活动需你确认后开始。';
   }
-  if (zhouRequest) detail = '周宁正在回复，稍等一下……';
-  else if (zhouChatNotice) detail = zhouChatNotice + ' ' + (detail || '');
-  showVisualNovel('relationship', '周宁 · 校园日常', speech, choices, { detail, choiceTitle, place: options.place, footerButtons: [{ id: 'resume', text: '继续安排', secondary: true }] });
+  if(state.phase!=='playing')detail='请先完成当前事件、考试或学期流程。现在仍可以聊天。 '+(detail||'');
+  if(zhouRequest)detail=p.name+'正在回复，稍等一下……';else if(zhouChatNotice)detail=zhouChatNotice+' '+(detail||'');
+  showVisualNovel('relationship',p.name+' · 校园日常',speech,choices,{npcId:id,detail,choiceTitle,place:options.place,footerButtons:[{id:'resume',text:'继续安排',secondary:true}]});
 }
 function cancelZhouRequest() {
   zhouRequestSequence++;
@@ -847,80 +818,49 @@ function cancelZhouRequest() {
   zhouRequest = null;
 }
 function answerZhouProposal(answer, proposalRevision) {
-  if (!state || uiLocked || zhouRequest) return;
-  const proposal = game.characterAgent.read(state).proposal;
-  if (!proposal || proposal.createdRevision !== Number(proposalRevision)) { showToast('邀请已经更新，请重新查看'); return; }
-  if (answer === 'accept' && proposal.id === 'basketball') { startBasketball({ companionId: 'zhouNing', agentProposalRevision: proposal.createdRevision }); return; }
-  const result = runCommand('resolveZhouNingProposal', answer, state.revision, undefined, undefined, { proposalRevision: proposal.createdRevision });
-  if (!result) return;
-  acknowledgedResultRevision = state.revision;
-  zhouView.text = null;
-  if (answer === 'decline') showZhouNing({ preserve: true });
-  else if (state.pendingEvent?.id === 'zhouNingPresentation') showEvent();
-  else if (result.entry.relationship) showEventResult(result.entry);
-  else resumePhase();
+  if(!state||uiLocked||zhouRequest)return;
+  const id=activeNpcId,p=game.npcCast.profile(id),proposal=game.characterAgent.read(state,id).proposal;
+  if(!proposal||proposal.createdRevision!==Number(proposalRevision)){showToast('邀请已经更新，请重新查看');return;}
+  if(answer==='accept'&&proposal.id==='basketball'){startBasketball({companionId:id,agentProposalRevision:proposal.createdRevision});return;}
+  if(answer==='accept'&&proposal.id===p.storyId){
+    if(id==='zhouNing'){const r=runCommand('runNpcStory',{npcId:id,choice:'start'},state.revision);if(r)showEvent();}
+    else{zhouView.screen='story';zhouView.text=null;showZhouNing({preserve:true});}return;
+  }
+  const result=runCommand('resolveNpcProposal',{npcId:id,answer},state.revision,undefined,undefined,{proposalRevision:proposal.createdRevision});if(!result)return;
+  acknowledgedResultRevision=state.revision;zhouView.text=null;
+  if(state.pendingEvent)showEvent();else if(result.entry.relationship)showRelationshipResult(result.entry);else showZhouNing({preserve:true});
 }
 async function sendZhouChat(message) {
-  if (!state || dialogMode !== 'relationship' || zhouRequest || uiLocked) return;
-  const text = String(message ?? $('#zhouChatInput')?.value ?? '').trim();
-  if (!text || text.length > 240) return;
-  if (game.characterAgent.read(state).chats >= 120) { showToast('这学期已经聊了很久，先去经历一些新的校园生活吧'); return; }
-  const proposal = game.characterAgent.read(state).proposal;
-  const answer = proposal && game.characterAgent.consent(text);
-  if (answer) { zhouChatDraft = ''; answerZhouProposal(answer, proposal.createdRevision); return; }
-  const snapshot = state;
-  const sequence = ++zhouRequestSequence;
-  const controller = typeof AbortController === 'function' ? new AbortController() : null;
-  zhouRequest = { controller };
-  zhouChatDraft = '';
-  zhouChatNotice = '';
-  zhouView.screen = 'home';
-  zhouView.text = null;
-  showZhouNing({ preserve: true });
-  const timer = controller ? setTimeout(() => controller.abort(), game.AI_CHAT.timeoutMs || 15000) : null;
-  const decision = await game.characterAgent.request({ state: snapshot, text, candidates: game.zhouNingCandidates(snapshot), relay: game.AI_CHAT.relay, fetchFn: typeof fetch === 'function' ? fetch : null, signal: controller?.signal });
-  if (timer !== null) clearTimeout(timer);
-  if (sequence !== zhouRequestSequence) return;
-  zhouRequest = null;
-  if (state !== snapshot || dialogMode !== 'relationship' || !dialog.open) { zhouChatDraft = text; return; }
-  const result = runCommand('recordZhouNingDialogue', { kind: 'chat', text, ...decision }, snapshot.revision);
-  if (!result) { zhouChatDraft = text; showZhouNing({ preserve: true }); return; }
-  acknowledgedResultRevision = state.revision;
-  zhouChatNotice = decision.source === 'local' ? '在线对话暂时没连上，先继续本地对话。' : result.entry.dialogue.gained ? '你们又多了解了彼此一点 · 相识度 +' + result.entry.dialogue.gained + '。' : '';
-  showZhouNing({ preserve: true });
+  if(!state||dialogMode!=='relationship'||zhouRequest||uiLocked)return;
+  const text=String(message??$('#zhouChatInput')?.value??'').trim();if(!text||text.length>240)return;
+  const npcId=activeNpcId,proposal=game.characterAgent.read(state,npcId).proposal,answer=proposal&&game.characterAgent.consent(text);
+  if(answer){zhouChatDraft='';answerZhouProposal(answer,proposal.createdRevision);return;}
+  const snapshot=state,sequence=++zhouRequestSequence,controller=typeof AbortController==='function'?new AbortController():null;
+  zhouRequest={controller,npcId,text};zhouChatDraft='';zhouChatNotice='';zhouView.screen='home';zhouView.text=null;showZhouNing({preserve:true});
+  const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
+  const decision=await game.characterAgent.request({state:snapshot,npcId,text,candidates:game.npcCandidates(snapshot,npcId),relay:game.AI_CHAT.relay,fetchFn:typeof fetch==='function'?fetch:null,signal:controller?.signal});
+  if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence||activeNpcId!==npcId)return;zhouRequest=null;
+  if(state!==snapshot||dialogMode!=='relationship'||!dialog.open){zhouChatDraft=text;return;}
+  const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:'chat',text},snapshot.revision);if(!result){zhouChatDraft=text;showZhouNing({preserve:true});return;}
+  acknowledgedResultRevision=state.revision;zhouChatNotice=decision.source==='local'?'在线对话暂时没连上，先继续本地对话。':result.entry.dialogue.gained?'你们多了解了彼此一点 · 相识度 +'+result.entry.dialogue.gained+'。':'';showZhouNing({preserve:true});
 }
 async function maybeZhouNingDirector() {
-  if (!state || zhouRequest || uiLocked || basketballSession || typeof fetch !== 'function' || needsCourseSelection()) return;
-  const occasion = game.zhouNingOpportunity(state);
-  if (!occasion || (dialog.open && dialogMode !== 'event')) return;
-  const snapshot = state;
-  const sequence = ++zhouRequestSequence;
-  const controller = typeof AbortController === 'function' ? new AbortController() : null;
-  zhouRequest = { controller };
-  const timer = controller ? setTimeout(() => controller.abort(), game.AI_CHAT.timeoutMs || 15000) : null;
-  const decision = await game.characterAgent.request({ state: snapshot, candidates: occasion.candidates, occasion, relay: game.AI_CHAT.relay, fetchFn: fetch, signal: controller?.signal });
-  if (timer !== null) clearTimeout(timer);
-  if (sequence !== zhouRequestSequence) return;
-  zhouRequest = null;
-  if (state !== snapshot || basketballSession || (dialog.open && dialogMode !== 'event')) {
-    if (state && dialog.open && dialogMode === 'relationship') showZhouNing({ preserve: true });
-    return;
-  }
-  const result = runCommand('recordZhouNingDialogue', { kind: occasion.kind, text: '', ...decision, trigger: occasion.key }, snapshot.revision);
-  if (!result) return;
-  acknowledgedResultRevision = state.revision;
-  if (occasion.kind === 'cameo') showEvent();
-  else { zhouChatNotice = decision.source === 'local' ? '在线对话暂时没连上，先继续本地对话。' : ''; showZhouNing({ text: decision.say, place: occasion.place }); }
+  if(!state||zhouRequest||uiLocked||basketballSession||needsCourseSelection())return;
+  const occasion=game.npcOpportunity(state);if(!occasion||(dialog.open&&dialogMode!=='event'))return;
+  const snapshot=state,sequence=++zhouRequestSequence,controller=typeof AbortController==='function'?new AbortController():null,npcId=occasion.npcId;
+  zhouRequest={controller,npcId};const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
+  const decision=await game.characterAgent.request({state:snapshot,npcId,candidates:occasion.candidates,occasion,relay:game.AI_CHAT.relay,fetchFn:typeof fetch==='function'?fetch:null,signal:controller?.signal});
+  if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence)return;zhouRequest=null;
+  if(state!==snapshot||basketballSession||(dialog.open&&dialogMode!=='event')){if(state&&dialogMode==='relationship')showZhouNing({preserve:true});return;}
+  const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:occasion.kind,text:'',trigger:occasion.key},snapshot.revision);if(!result)return;
+  acknowledgedResultRevision=state.revision;
+  if(state.pendingEvent)showEvent();else{zhouChatNotice=decision.source==='local'?'在线对话暂时没连上，先继续本地对话。':'';showCharacter(npcId,{text:decision.say,place:occasion.place});}
 }
-function showRelationshipResult(entry) {
-  const result = entry.relationship;
-  const assessment = result.assessment;
-  const title = entry.outcome || (result.kind === 'meet' ? '你认识了周宁' : result.kind === 'activity' ? entry.title : '与周宁的近况');
-  const detail = (result.kind === 'meet' ? '你与周宁建立了联系。' : '') + '相识度 +' + result.gained + ' · 当前 ' + result.familiarity + '/100。' + changeText(entry.changes)
-    + (assessment?.formula === 'player' ? '。本次表现由你的学业、社交和心情决定。' : assessment ? '。本次配合：相识度 ' + assessment.familiarity + ' × 50% + 社交 ' + assessment.social + ' × 30% + 心情 ' + assessment.mood + ' × 20%，四舍五入后为 ' + assessment.score + '。' : '') + supportText(entry);
-  const presentationLines = { good: '刚才有你在旁边接着我的话，我真的没那么紧张了。正式展示那天，我应该也能做到。谢谢你陪我练这一遍。', steady: '重新把顺序理出来以后，好像真的能讲清楚了。我回去再练几遍，这次没那么怕上台了。', limited: '刚才我还是有些地方讲不清，不过至少知道该补什么了。谢谢你陪我开口试这一遍，我再准备准备。', encouraged: '原来讲错一句，也可以接着往下讲。谢谢你没有催我，能把第一段讲完，我已经很开心了。' };
-  const text = result.kind === 'meet' ? '认识你很高兴。除了学习，我也喜欢打球、散步和看演出。下次有空，我们一起去做点什么吧？' : result.kind === 'activity' ? game.relationshipRules.afterActivity(result.activityId) : result.kind === 'presentation' ? presentationLines[result.level] : result.description;
-  showVisualNovel('relationshipResult', title, text, [vnChoice(state.pendingEvent ? '继续处理事件' : '查看人物关系', 'continue')], { detail, footerButtons: [{ id: 'relationshipContinue', text: state.pendingEvent ? '继续处理事件' : '查看人物关系' }] });
+function showRelationshipResult(entry, mode='relationshipResult') {
+  const r=entry.relationship,id=r.characterId||'zhouNing',p=game.npcCast.profile(id);activeNpcId=id;
+  const lines={good:'有你陪着练过一遍，我没那么紧张了。谢谢你，我会继续准备的。',steady:'重新把顺序理出来以后，表达也清楚多了。我回去再练几遍。',limited:'至少知道自己该补什么了，谢谢你陪我开口试这一遍。',encouraged:'讲错一句也能接着讲，谢谢你没有催我。'};
+  const speech=r.kind==='meet'?p.intro:r.kind==='activity'?game.npcCast.afterActivity(id,r.activityId):r.kind==='presentation'?lines[r.level]:r.description;
+  showVisualNovel(mode,entry.outcome||entry.title||'与'+p.name+'的近况',speech,[vnChoice(state.pendingEvent?'继续处理事件':'查看人物关系','continue')],{npcId:id,place:game.ACTIONS[entry.action]?.place||p.place,detail:(entry.action==='basketball'?'命中 '+entry.hits+' 球 · '+entry.score+' 分。':'')+(r.kind==='meet'?'你与'+p.name+'建立了联系。':'')+(r.assessment?.formula==='player'?'本次表现由你的学业、社交和心情决定。':'')+'相识度 +'+r.gained+' · 当前 '+r.familiarity+'/100。'+changeText(entry.changes)+'。'+supportText(entry),footerButtons:[{id:'relationshipContinue',text:state.pendingEvent?'继续处理事件':'查看人物关系'}]});
 }
 function renderBasketballHud(info) {
   const time = Math.max(0, Math.ceil((info.timeLeft || 0) / 1000));
@@ -944,9 +884,9 @@ function cancelBasketball() {
   closeBasketballDialog();
 }
 function startBasketball(options = {}) {
-  const companion = options.companionId === 'zhouNing';
+  const companion = options.companionId && game.npcCast.get(state,options.companionId) ? options.companionId : null;
   if (!state || state.phase !== 'playing' || basketballSession || (!companion && (activePlace !== 'track' || dialog.open))) return;
-  const check = companion ? game.companionAvailability(state, 'basketball') : game.availability(state, 'basketball');
+  const check = companion ? game.npcAvailability(state, companion, 'basketball') : game.availability(state, 'basketball');
   if (!check.ok) { showToast(check.reason); return; }
   if (!basketballGame) { showToast('当前浏览器不支持投篮小游戏'); return; }
   try {
@@ -959,9 +899,9 @@ function startBasketball(options = {}) {
       onScore: () => audio?.play('success'),
       onFinish: finishBasketball
     });
-    basketballCompanion = companion ? { companionId: 'zhouNing', characterVersion: 2, revision: state.revision, ...(options.agentProposalRevision !== undefined ? { agentProposalRevision: options.agentProposalRevision } : {}) } : null;
+    basketballCompanion = companion ? { companionId: companion, characterVersion: 2, npcCastVersion:1, revision: state.revision, ...(options.agentProposalRevision !== undefined ? { agentProposalRevision: options.agentProposalRevision } : {}) } : null;
     if ($('#basketballCompanionNotice')) $('#basketballCompanionNotice').hidden = !companion;
-    if (companion) dialog.close();
+    if (companion) { $('#basketballCompanionNotice').textContent=game.npcCast.profile(companion).name+'与你一起打球。完成后结算一次共同活动。'; dialog.close(); }
     if (basketballDialog && !basketballDialog.open) basketballDialog.showModal();
     basketballSession.start();
     renderBasketballHud({ hits: 0, score: 0, timeLeft: game.BASKETBALL.durationMs });
@@ -990,10 +930,7 @@ function finishBasketball(result) {
   showBasketballResult(commandResult.entry);
 }
 function showBasketballResult(entry) {
-  if (entry.relationship) {
-    showVisualNovel('basketballResult', '与周宁的球场日常', entry.hits ? '刚才那个球进得漂亮！我把球捡回来时，你都准备好下一次出手了。下次有空再来？' : '今天的手感还没找到也没关系。我们已经一起跑出一身汗了，下次再慢慢练。', [vnChoice('查看人物关系', 'continue')], { place: 'track', detail: '命中 ' + entry.hits + ' 球 · ' + entry.score + ' 分。相识度 +' + entry.relationship.gained + '。' + changeText(entry.changes) + '。' + supportText(entry), footerButtons: [{ id: 'basketballContinue', text: '继续安排' }] });
-    return;
-  }
+  if(entry.relationship){showRelationshipResult(entry,'basketballResult');return;}
   const tier = entry.tierLabel || game.BASKETBALL.rewards.find((item) => item.id === entry.tier)?.label || '投篮结算';
   showDialog('basketballResult', '球场结算', '<div class="basketball-result"><p class="basketball-result-score"><b>' + entry.score + '</b> 分</p><p>命中 <b>' + entry.hits + '</b> 球 · ' + h(tier) + '</p><div class="basketball-result-change">' + h(changeText(entry.changes)) + '</div><p class="dialog-note">本局结果已记入成长记录，下一球从零开始。</p></div>', [{ id: 'basketballContinue', text: '继续安排' }]);
 }
@@ -1123,7 +1060,7 @@ function resetNpcSystem() {
 function npcDisplayList() {
   const entries = [];
   if (npcSystem && state) for (const npc of npcSystem.active()) entries.push({ npc, fading: false });
-  if (state && game.getRelationships(state).zhouNing) entries.push({ npc: { id: 'zhouNing', label: '周宁 · 已认识', figure: 'student', x: 70, y: 47 }, fading: false });
+  if(state)for(const id of game.npcCast.known(state)){const p=game.npcCast.profile(id),pos={zhouNing:[70,47],chenTeacher:[48,37],linXia:[27,66]}[id];entries.push({npc:{id,label:p.name+' · 已认识',figure:p.figure||'student',x:pos[0],y:pos[1]},fading:false});}
   const now = Date.now();
   for (const [id, entry] of npcFades) {
     if (now - entry.since >= 700) npcFades.delete(id);
@@ -1191,7 +1128,7 @@ function npcTick() {
   if (typeof setTimeout === 'function') npcTimer = setTimeout(npcTick, 300);
 }
 function talkToNpc(npcId) {
-  if (npcId === 'zhouNing' && state && !dialog.open) { showZhouNing(); return; }
+  if(state&&game.npcCast.get(state,npcId)&&!dialog.open){showCharacter(npcId);return;}
   if (!npcSystem || !state || dialog.open) return;
   const found = npcSystem.active().find((item) => item.id === npcId);
   if (!found) return;
@@ -1370,9 +1307,10 @@ function lockUi() {
 function runCommand(operation, id, expectedRevision, eventInstanceId, investment, extraOptions = {}) {
   if (!state || uiLocked) return null;
   const options = { ...extraOptions, commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId, investment };
-  if (['executeAction', 'completeBasketball', 'submitEventChoice', 'resolveZhouNingProposal'].includes(operation)) options.npcSupportVersion = 1;
+  if(['executeAction','completeBasketball','submitEventChoice','resolveNpcProposal','runNpcStory'].includes(operation)){options.npcSupportVersion=1;options.npcCastVersion=1;if(options.companionId)options.characterVersion=2;}
+  if(operation==='submitEventChoice'&&state.relationships?.eventCompanion?.instanceId===state.pendingEvent?.instanceId)options.companionId=state.relationships.eventCompanion.npcId;
   if (operation === 'submitEventChoice' && id !== game.SICK_LEAVE_ID && game.characterAgent.read(state).cameo?.instanceId === state.pendingEvent?.instanceId) options.zhouCameo = true;
-  const result = ['executeAction', 'completeBasketball', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'updateExamAnswers', 'submitExam', 'chatWithNpc', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const result = ['executeAction', 'completeBasketball', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'updateExamAnswers', 'submitExam', 'chatWithNpc', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal','recordNpcDialogue','resolveNpcProposal','runNpcStory','attachNpcToEvent'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');
@@ -1614,7 +1552,7 @@ function showEvent() {
         return { label: choice.title, note: check.ok ? costs(game.fitnessAdjustedEffect(state, choice, null)) : check.reason, disabled: !check.ok || uiLocked, attributes: { 'data-event-choice': choice.id, 'data-instance': pending.instanceId, 'data-revision': state.revision } };
       });
     const speech = pending.id === 'zhouNingMeet' ? '你也选了这门课？我叫周宁。刚才那个知识点，我整理过一版笔记。你愿意和我聊聊你的解法吗？' : '题目我会做，可一想到站上讲台，脑子就空了。你能陪我练一遍吗？这次，想请你帮我迈出一步。';
-    showVisualNovel('event', event.title, speech, choices, { canClose: false, place: 'library', detail: event.trigger + '。相识和免费暂缓不会额外收费。' });
+    showVisualNovel('event', event.title, speech, choices, {npcId:'zhouNing',canClose:false,place:'library',detail: event.trigger + '。相识和免费暂缓不会额外收费。' });
     return;
   }
 
@@ -1631,17 +1569,15 @@ function showEvent() {
   const note = sick
     ? '身体不适，先处理身体。待处理事件可以先去校医院，之后再回来处理。'
     : h(event.trigger) + '。剩余时间 ' + state.time + ' · 精力 ' + state.energy + ' · 钱包 ' + state.money + ' 元。确认才扣费，切换档位不会结算。';
-  const cameo = game.characterAgent.read(state).cameo;
-  const cameoBody = cameo?.instanceId === pending.instanceId ? '<div class="zhou-event-cameo"><img src="' + game.relationshipRules.ZHOU_NING.portrait + '" alt="周宁"><div><b>你在这里遇见了周宁</b><p>' + h(cameo.say) + '</p><small>他会陪你参与这件事。配合效果受相识度、社交和心情影响。</small></div></div>' : '';
+  const bound=state.relationships?.eventCompanion, cameo=bound?.instanceId===pending.instanceId?bound:null, p=cameo&&game.npcCast.profile(cameo.npcId);
+  const helpers=game.npcCast.known(state).filter(id=>game.npcEventAvailability(state,id).ok);
+  const cameoBody=cameo?'<div class="zhou-event-cameo"><img src="'+p.portrait+'" alt="'+h(p.name)+'"><div><b>'+h(p.name)+'在你身边</b><p>'+h(cameo.say)+'</p><small>你的选择与投入决定主要结果，人物提供少量辅助。</small></div></div>':helpers.length?'<div class="event-helper"><p>也可以请认识的人一起参与：</p>'+helpers.map(id=>'<button type="button" data-event-npc="'+id+'" data-instance="'+pending.instanceId+'" data-revision="'+state.revision+'">联系'+h(game.npcCast.profile(id).name)+'</button>').join('')+'</div>':'';
   showDialog('event', event.title, '<p>' + h(event.description) + '</p>' + cameoBody + '<p class="dialog-note">' + note + '</p><div class="event-choice-list">' + choices + '</div>');
   maybeZhouNingDirector();
 }
 const INVESTMENT_OUTCOMES = { setback: '发挥失常', limited: '收获有限', steady: '有所收获', good: '状态出色', surprise: '意外收获' };
 function showEventResult(entry) {
-  if (entry.relationship) {
-    showVisualNovel('eventResult', entry.title, entry.relationship.kind === 'activity' ? game.relationshipRules.afterActivity(entry.action) : entry.relationship.description, [vnChoice(state.pendingEvent ? '处理下一个事件' : '查看人物关系', 'continue')], { place: game.ACTIONS[entry.action]?.place, detail: '相识度 +' + entry.relationship.gained + ' · 当前 ' + entry.relationship.familiarity + '/100。' + changeText(entry.changes) + '。' + supportText(entry), footerButtons: [{ id: 'eventContinue', text: state.pendingEvent ? '处理下一个事件' : '继续安排' }] });
-    return;
-  }
+  if(entry.relationship){showRelationshipResult(entry,'eventResult');return;}
   const result = { ...entry.investment, description: entry.investment.description + (entry.relationship ? ' ' + entry.relationship.description + ' 相识度 +' + entry.relationship.gained + '，当前 ' + entry.relationship.familiarity + '/100。' : '') };
   const profile = entry.event ? game.EVENT_INVESTMENTS[entry.event + ':' + entry.choice] || game.LEGACY_INVESTMENTS.events[entry.event + ':' + entry.choice] : game.getActionInvestment(state, entry.action) || game.LEGACY_INVESTMENTS.actions[entry.action];
   const rawFitnessCost = entry.event
@@ -1790,12 +1726,12 @@ function buildRecordEntries() {
   for (const log of state.history) {
     const operation = log.command && log.command.operation;
     if (!operation || operation === 'updateExamAnswers') continue;
-    if (operation === 'executeAction' || operation === 'completeBasketball' || operation === 'resolveZhouNingProposal' && log.action !== 'zhouDialogue' || operation === 'chatWithNpc' || operation === 'interactWithZhouNing') {
-      const action = ['executeAction', 'completeBasketball', 'resolveZhouNingProposal'].includes(operation) ? game.ACTIONS[log.action] : null;
+    if (operation === 'executeAction' || operation === 'completeBasketball' || operation === 'resolveZhouNingProposal' && log.action !== 'zhouDialogue' || operation === 'chatWithNpc' || operation === 'interactWithZhouNing' || operation==='runNpcStory' || operation==='recordNpcDialogue' && log.dialogue?.kind==='meet' || operation==='resolveNpcProposal' && !!log.relationship) {
+      const action = ['executeAction', 'completeBasketball', 'resolveZhouNingProposal','resolveNpcProposal'].includes(operation) ? game.ACTIONS[log.action] : null;
       const chainId = action && action.chain ? action.chain : null;
       const place = action && action.place && game.PLACES[action.place] ? game.PLACES[action.place].title : '';
       const notes = [place, supportText(log)];
-      if (log.relationship) notes.push('周宁 · 相识度 +' + log.relationship.gained + '（' + log.relationship.familiarity + '/100）');
+      if (log.relationship) notes.push(game.npcCast.profile(log.relationship.characterId||'zhouNing').name+' · 相识度 +' + log.relationship.gained + '（' + log.relationship.familiarity + '/100）');
       if (log.investment) {
         notes.push('投入 ' + log.investment.amount + ' ' + investmentUnit(log.investment.resource));
         if (INVESTMENT_OUTCOMES[log.investment.outcome]) notes.push(INVESTMENT_OUTCOMES[log.investment.outcome]);
@@ -1815,7 +1751,7 @@ function buildRecordEntries() {
       const chainId = event && event.chain ? event.chain : null;
       const category = recordEventCategory(log.event);
       const notes = ['选择「' + (choice ? choice.title : (log.title || '先去校医院')) + '」', supportText(log)].filter(Boolean);
-      if (log.relationship) notes.push('周宁 · 相识度 +' + log.relationship.gained + '（' + log.relationship.familiarity + '/100）');
+      if (log.relationship) notes.push(game.npcCast.profile(log.relationship.characterId||'zhouNing').name+' · 相识度 +' + log.relationship.gained + '（' + log.relationship.familiarity + '/100）');
       if (choice && choice.chainEffect && RECORD_CHAIN_EFFECTS[choice.chainEffect]) notes.push(RECORD_CHAIN_EFFECTS[choice.chainEffect]);
       if (log.outcome) notes.push(log.outcome);
       if (log.investment) {
@@ -2066,7 +2002,8 @@ $('#dialogBody').addEventListener('change', (event) => {
 });
 $('#actionList').addEventListener('click', (event) => {
   const button = event.target.closest('button');
-  if (button?.dataset.zhouOpen && !dialog.open) { showZhouNing(); return; }
+  if (button?.dataset.characterOpen && !dialog.open) { showCharacter(button.dataset.characterOpen); return; }
+  if (button?.dataset.zhouOpen && !dialog.open) { showCharacter('zhouNing'); return; }
   if (button?.dataset.actionInvestmentPreset) { updateActionInvestment(button.dataset.actionInvestmentPreset, Number(button.dataset.amount)); return; }
   if (!button || game.ACTIONS[button.dataset.action]?.place !== activePlace || dialog.open) return;
   if (game.ACTIONS[button.dataset.action]?.minigame === 'basketball') { startBasketball(); return; }
@@ -2110,11 +2047,16 @@ $('#dialogBody').addEventListener('click', (event) => {
       if (result) { if (type === 'talk') showRelationshipResult(result.entry); else showEvent(); }
       return;
     }
+    if(command==='story'){
+      if(activeNpcId==='zhouNing'){const r=runCommand('runNpcStory',{npcId:activeNpcId,choice:'start'},state.revision);if(r)showEvent();}
+      else{zhouView.screen='story';zhouView.text=null;showZhouNing({preserve:true});}return;
+    }
+    if(command==='storyChoice'){const r=runCommand('runNpcStory',{npcId:activeNpcId,choice:button.dataset.storyChoice},state.revision);if(r){acknowledgedResultRevision=state.revision;showRelationshipResult(r.entry);}return;}
     if (command === 'confirmActivity') {
-      if (zhouView.activity === 'basketball') { startBasketball({ companionId: 'zhouNing' }); return; }
+      if (zhouView.activity === 'basketball') { startBasketball({ companionId: activeNpcId }); return; }
       const profile = game.getActionInvestment(state, zhouView.activity);
       const amount = zhouView.amount ?? profile?.default;
-      const result = runCommand('executeAction', zhouView.activity, button.dataset.revision, undefined, amount, { companionId: 'zhouNing', characterVersion: 2 });
+      const result = runCommand('executeAction', zhouView.activity, button.dataset.revision, undefined, amount, { companionId: activeNpcId, characterVersion: 2 });
       if (result) {
         audio?.play(ACTION_SOUNDS[zhouView.activity] || 'success');
         if (result.entry.investment) showEventResult(result.entry); else showRelationshipResult(result.entry);
@@ -2133,6 +2075,7 @@ $('#dialogBody').addEventListener('click', (event) => {
     showZhouNing({ preserve: true });
     return;
   }
+  if(button.dataset.eventNpc){const r=runCommand('attachNpcToEvent',button.dataset.eventNpc,button.dataset.revision,button.dataset.instance);if(r)showEvent();return;}
   if (button.dataset.zhouStudy) {
     const result = runCommand('executeAction', 'selfStudy', button.dataset.revision, undefined, Number(button.dataset.zhouStudy), { companionId: 'zhouNing' });
     if (result) { audio?.play('study'); showEventResult(result.entry); }
@@ -2247,7 +2190,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
   }
 });
 hotspots.forEach((hotspot) => hotspot.addEventListener('click', () => openPlace(hotspot.dataset.place, hotspot)));
-$('#relationshipList')?.addEventListener('click', (event) => { if (event.target.closest('[data-zhou-open]') && !dialog.open) showZhouNing(); });
+$('#relationshipList')?.addEventListener('click', event=>{const b=event.target.closest('[data-character-open]');if(b&&!dialog.open)showCharacter(b.dataset.characterOpen);});
 const npcLayer = $('#npcLayer');
 if (npc && npcLayer) {
   npcLayer.addEventListener('click', (event) => {

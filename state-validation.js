@@ -12,7 +12,7 @@
     const validInvestment = entry => {
       if (entry.investment === undefined) return true; // Earlier saves have fixed event rewards.
       let profiles;
-      if (entry.action && ['executeAction', 'resolveZhouNingProposal'].includes(entry.command?.operation)) {
+      if (entry.action && ['executeAction', 'resolveZhouNingProposal','resolveNpcProposal'].includes(entry.command?.operation)) {
         // A successful transfer changes the current bonus, but earlier allocations
         // still use the original college's discount and must remain readable.
         const original = game.createGame({ seed: state.rng.seed }).background;
@@ -94,10 +94,12 @@
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (command.npcSupportVersion !== undefined && (command.npcSupportVersion !== 1 || !['executeAction', 'completeBasketball', 'submitEventChoice', 'resolveZhouNingProposal'].includes(command.operation))) return fail('人物辅助规则版本');
+        if (command.npcCastVersion !== undefined && (command.npcCastVersion !== 1 || !['executeAction','completeBasketball','submitEventChoice','recordNpcDialogue','resolveNpcProposal','runNpcStory','attachNpcToEvent'].includes(command.operation))) return fail('多人物命令版本');
+        if (['recordNpcDialogue','resolveNpcProposal','runNpcStory','attachNpcToEvent'].includes(command.operation) && (!backgroundReplay.ok || !same(entry, {...backgroundReplay.state.history[index], commandId: entry.commandId}))) return fail('人物会话与历史不一致');
+        if (command.npcSupportVersion !== undefined && (command.npcSupportVersion !== 1 || !['executeAction', 'completeBasketball', 'submitEventChoice', 'resolveZhouNingProposal', 'runNpcStory', 'resolveNpcProposal'].includes(command.operation))) return fail('人物辅助规则版本');
         const replaySupport = backgroundReplay.ok ? backgroundReplay.state.history[index]?.support : undefined;
         if ((entry.support !== undefined || replaySupport !== undefined) && (!backgroundReplay.ok || !same(entry.support, replaySupport) || !same(entry.changes, backgroundReplay.state.history[index].changes))) return fail('人物辅助收益与历史不一致');
-        if (!['executeAction', 'completeBasketball', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal'].includes(command.operation)) return fail('历史操作类型');
+        if (!['executeAction', 'completeBasketball', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal', 'recordNpcDialogue', 'resolveNpcProposal', 'runNpcStory', 'attachNpcToEvent'].includes(command.operation)) return fail('历史操作类型');
         if (command.operation === 'recordZhouNingDialogue' && (!object(command.data) || !backgroundReplay.ok || !same(entry.dialogue, backgroundReplay.state.history[index]?.dialogue) || !same(entry.changes, backgroundReplay.state.history[index]?.changes))) return fail('人物对话与历史不一致');
         if (command.operation === 'resolveZhouNingProposal' && (!['accept', 'decline'].includes(command.id) || !integer(command.proposalRevision, 1, entry.revision - 1) || !backgroundReplay.ok || !same(entry, { ...backgroundReplay.state.history[index], commandId: entry.commandId }))) return fail('人物邀请与历史不一致');
         if (command.agentProposalRevision !== undefined && (command.operation !== 'completeBasketball' || !integer(command.agentProposalRevision, 1, entry.revision - 1))) return fail('球场邀请记录');
@@ -105,7 +107,7 @@
         if (command.operation === 'executeAction' && (!own(ACTIONS, command.id) || command.id !== entry.action)) return fail('历史行动');
         if (command.relationshipVersion !== undefined && (command.operation !== 'executeAction' || command.relationshipVersion !== 1)) return fail('历史人物关系版本');
         if (command.characterVersion !== undefined && (command.characterVersion !== 2 || !['executeAction', 'completeBasketball', 'interactWithZhouNing'].includes(command.operation))) return fail('历史人物同行版本');
-        if (command.companionId !== undefined && (command.companionId !== 'zhouNing' || !(command.operation === 'executeAction' && command.relationshipVersion === 1 && (command.id === 'selfStudy' || command.characterVersion === 2 && own(game.relationshipRules.ACTIVITIES, command.id)) || command.operation === 'completeBasketball' && command.characterVersion === 2))) return fail('历史同行人物');
+        if (command.companionId !== undefined && (command.npcCastVersion === 1 ? !game.npcCast.profile(command.companionId) || !['executeAction', 'completeBasketball', 'submitEventChoice'].includes(command.operation) : command.companionId !== 'zhouNing' || !(command.operation === 'executeAction' && command.relationshipVersion === 1 && (command.id === 'selfStudy' || command.characterVersion === 2 && own(game.relationshipRules.ACTIVITIES, command.id)) || command.operation === 'completeBasketball' && command.characterVersion === 2))) return fail('历史同行人物');
         if (command.operation === 'interactWithZhouNing' && !['talk', 'presentation'].includes(command.id)) return fail('历史人物互动');
         const replayRelation = backgroundReplay.ok ? backgroundReplay.state.history[index]?.relationship : undefined;
         if ((entry.relationship !== undefined || replayRelation !== undefined) && (!backgroundReplay.ok || !same(entry.relationship, replayRelation) || !same(entry.changes, backgroundReplay.state.history[index].changes))) return fail('人物互动结果与历史不一致');
@@ -141,12 +143,31 @@
               || !Array.isArray(agent.checked) || agent.checked.length > 4 || !integer(agent.invitations, 0, 2) || !integer(agent.lastInviteAction, -3, 2000) || !integer(agent.chats, 0, 120)
               || !Array.isArray(agent.topics) || agent.topics.length > 4 || !agent.topics.every(id => ['care', 'goal', 'likes', 'memory'].includes(id))
               || !Array.isArray(agent.notes) || agent.notes.length > 4 || !agent.notes.every(item => object(item) && ['care', 'goal', 'likes', 'memory'].includes(item.topic) && typeof item.text === 'string' && item.text.length <= 240 && integer(item.term, 1, state.term))
-              || agent.proposal !== null && (!object(agent.proposal) || !(own(game.relationshipRules.ACTIVITIES, agent.proposal.id) || agent.proposal.id === 'presentation') || !integer(agent.proposal.createdRevision, 1, state.revision) || !integer(agent.proposal.term, 1, state.term))
+              || agent.proposal !== null && (!object(agent.proposal) || !(own(game.relationshipRules.ACTIVITIES, agent.proposal.id) || agent.proposal.id === 'presentation' || agent.proposal.id === 'joinEvent' && agent.proposal.npcId === 'zhouNing') || !integer(agent.proposal.createdRevision, 1, state.revision) || !integer(agent.proposal.term, 1, state.term))
               || agent.cameo !== null && (!object(agent.cameo) || !own(game.characterAgent.CAMEOS, agent.cameo.eventId) || typeof agent.cameo.say !== 'string' || agent.cameo.say.length > 180)) return fail('周宁的对话与邀请状态');
         }
         if (person === null && (relation.talks || relation.talkGrowth || relation.interactions)) return fail('未相识的人物互动');
         if (backgroundReplay.ok ? !same(relation, backgroundReplay.state.relationships) : relation.introSeen || person !== null) return fail('人物关系与操作历史不一致');
       } else if (backgroundReplay.ok && backgroundReplay.state.relationships.introSeen) return fail('缺少人物关系记录');
+      if (relation?.people !== undefined || relation?.director !== undefined || relation?.eventCompanion !== undefined) {
+        if (!backgroundReplay.ok || !same(relation, backgroundReplay.state.relationships)) return fail('多人物状态与历史不一致');
+        if (relation.people !== undefined && (!object(relation.people) || Object.keys(relation.people).some(id => !['chenTeacher','linXia'].includes(id)))) return fail('人物索引');
+        for (const [id, person] of Object.entries(relation.people || {})) {
+          if (!object(person) || !integer(person.metTerm,1,state.term) || !integer(person.familiarity,0,100) || !integer(person.studies,0,96) || !object(person.abilities) || Object.keys(person.abilities).length !== 3 || !['academic','social','sport'].every(key=>integer(person.abilities[key],0,100)) || !Array.isArray(person.memories) || !person.memories.every(key=>own(game.npcCast.MEMORIES,key))) return fail('新增人物资料');
+          const life=person.life, usage=person.usage;
+          if (!object(life) || !integer(life.energy,0,100) || !integer(life.mood,0,100) || ![game.npcCast.profile(id).goalId,'explore'].includes(life.goal) || !own(game.PLACES,life.lastPlace) || !(life.lastActivity===null || own(ACTIONS,life.lastActivity)) || !object(life.activities) || !Object.entries(life.activities).every(([key,count])=>own(ACTIONS,key)&&integer(count,1,96))) return fail('新增人物生活状态');
+          if (!object(usage) || !integer(usage.term,1,state.term) || !integer(usage.interactions,0,id==='chenTeacher'?2:4) || !integer(usage.talkGrowth,0,8) || !integer(usage.talks,0,2)) return fail('人物互动次数');
+          if (person.agent !== undefined) {
+            const a=person.agent;
+            if (!object(a)||!integer(a.term,1,state.term)||!Array.isArray(a.messages)||a.messages.length>12||!a.messages.every(m=>object(m)&&['user','assistant'].includes(m.role)&&typeof m.content==='string'&&m.content.length<=240&&integer(m.term,1,state.term))||!integer(a.chats,0,120)||!Array.isArray(a.notes)||a.notes.length>4||!Array.isArray(a.topics)||a.topics.length>4) return fail('独立人物对话');
+            if(a.proposal!==null && (!object(a.proposal)||a.proposal.npcId!==id||!integer(a.proposal.createdRevision,1,state.revision)||!integer(a.proposal.term,1,state.term)||!(game.npcCast.profile(id).activities.includes(a.proposal.id)||a.proposal.id===game.npcCast.profile(id).storyId||a.proposal.id==='joinEvent'))) return fail('人物邀请归属');
+          }
+        }
+        const d=relation.director;
+        if(d!==undefined && (!object(d)||d.version!==1||!integer(d.term,1,state.term)||!integer(d.intros,0,2)||!integer(d.invitations,0,2)||!integer(d.attempts,0,6)||!integer(d.lastAction,-2,2000)||!Array.isArray(d.checked)||d.checked.length>6||!Array.isArray(d.recent)||d.recent.length>16||!d.recent.every(item=>game.npcCast.profile(item.npcId)&&integer(item.serial,0,2000)&&integer(item.term,1,state.term)&&['meet','proactive','cameo'].includes(item.kind)))) return fail('人物出场调度');
+        if(d?.pending && (!object(d.pending)||!game.npcCast.profile(d.pending.npcId)||!['meet','proactive','cameo'].includes(d.pending.kind)||!own(game.PLACES,d.pending.place)||!Array.isArray(d.pending.candidates)||d.pending.candidates.length>6||!Array.isArray(d.pending.scores)||d.pending.scores.length>3)) return fail('待发生人物出场');
+        if(relation.eventCompanion!==undefined && relation.eventCompanion!==null && (!object(relation.eventCompanion)||!game.npcCast.get(state,relation.eventCompanion.npcId)||relation.eventCompanion.instanceId!==state.pendingEvent?.instanceId)) return fail('当前事件人物绑定');
+      }
       const expectedCourses = ['summary', 'endingChoice', 'finished'].includes(state.phase) ? state.term : state.term - 1;
       if (state.courses.length !== expectedCourses) return fail('课程记录数量与阶段不符');
       const validCourse = (course, index) => {

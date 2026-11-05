@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - lin
+      - feat/npc-initial
 
 permissions:
   contents: read

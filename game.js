@@ -5,6 +5,8 @@
   const courses = typeof module !== 'undefined' && module.exports ? require('./courses.js') : root.CampusCourses;
   const relationships = typeof module !== 'undefined' && module.exports ? require('./relationships.js') : root.CampusRelationships;
   const characterAgent = typeof module !== 'undefined' && module.exports ? require('./character-agent.js') : root.CampusCharacterAgent;
+  const npcCast = typeof module !== 'undefined' && module.exports ? require('./npc-cast.js') : root.CampusNpcCast;
+  const npcGame = typeof module !== 'undefined' && module.exports ? require('./npc-game.js') : root.CampusNpcGame;
   const npcSupport = typeof module !== 'undefined' && module.exports ? require('./npc-support.js') : root.CampusNpcSupport;
   const { RULES, FITNESS_TIERS, BASKETBALL, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT } = config;
   const { COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor } = courses;
@@ -270,23 +272,27 @@
   function commit(state, next, command, entry, commandId) {
     const revision = state.revision + 1;
     const log = { ...entry, term: state.term, revision, commandId, command, before: stateBrief(state), after: stateBrief(next) };
-    return { ok: true, state: { ...next, appVersion: RULES.appVersion, revision, processedCommands: [...state.processedCommands, commandId], history: [...state.history, log] }, changes: entry.changes, summary: next.summary, entry: log };
+    let committed = { ...next, appVersion: RULES.appVersion, revision, processedCommands: [...state.processedCommands, commandId], history: [...state.history, log] };
+    if (command.npcCastVersion === 1 && ['executeAction', 'completeBasketball', 'submitEventChoice', 'runNpcStory', 'resolveNpcProposal'].includes(command.operation)) committed = api.planNpcDirector(committed);
+    return { ok: true, state: committed, changes: entry.changes, summary: next.summary, entry: log };
   }
   function executeAction(state, id, options = {}) {
     const command = commandCheck(state, options, 'action:' + id);
     if (!command.ok) return command;
+    const multi = options.npcCastVersion === 1;
+    if (options.npcCastVersion !== undefined && ![0,1].includes(options.npcCastVersion)) return { ok:false, reason:'人物调度版本无效', state };
     const characterVersion = options.characterVersion || 0;
     const supportVersion = options.npcSupportVersion ?? 0;
     if (![0, 1].includes(supportVersion)) return { ok: false, reason: '人物辅助规则版本无效', state };
     if (![0, 2].includes(characterVersion)) return { ok: false, reason: '人物同行规则版本无效', state };
-    const check = options.companionId === 'zhouNing' && characterVersion === 2 ? companionAvailability(state, id, options.investment) : availability(state, id, options.investment);
+    const check = multi && options.companionId ? api.npcAvailability(state, options.companionId, id, options.investment) : options.companionId === 'zhouNing' && characterVersion === 2 ? companionAvailability(state, id, options.investment) : availability(state, id, options.investment);
     if (!check.ok) return { ...check, state };
     const relationshipVersion = options.relationshipVersion === undefined ? 1 : options.relationshipVersion;
     if (![0, 1].includes(relationshipVersion)) return { ok: false, reason: '人物关系规则版本无效', state };
     const companion = options.companionId;
     if (companion !== undefined) {
-      if (companion !== 'zhouNing' || relationshipVersion !== 1 || (characterVersion !== 2 && id !== 'selfStudy')) return { ok: false, reason: '这个同行安排不可用', state };
-      const together = characterVersion === 2 ? companionAvailability(state, id, options.investment) : zhouNingAvailability(state, 'study', options.investment);
+      if (multi ? !npcCast.get(state, companion) || characterVersion !== 2 || supportVersion !== 1 : companion !== 'zhouNing' || relationshipVersion !== 1 || (characterVersion !== 2 && id !== 'selfStudy')) return { ok: false, reason: '这个同行安排不可用', state };
+      const together = multi ? api.npcAvailability(state, companion, id, options.investment) : characterVersion === 2 ? companionAvailability(state, id, options.investment) : zhouNingAvailability(state, 'study', options.investment);
       if (!together.ok) return { ...together, state };
     }
     if (getAction(state, id).minigame) return { ok: false, reason: '这项行动需要先完成小游戏', state };
@@ -306,18 +312,21 @@
       else if (!supportVersion && companion) action.preparation = (action.preparation || 0) + relationships.studyBonus(relationships.read(state).zhouNing.familiarity);
       const rawAction = action;
       action = fitnessAdjustedEffect(state, action, id);
-      if (supportVersion) ({ effect: action, support } = npcSupport.resolve(state, action, fitnessAdjustedEffect({ ...state, fitness: 50 }, rawAction, id), id, !!companion));
+      if (supportVersion) ({ effect: action, support } = npcSupport.resolve(state, action, fitnessAdjustedEffect({ ...state, fitness: 50 }, rawAction, id), id, multi ? companion || false : !!companion));
       investment = describeInvestment(profile, preview, factor, curve.mean, action);
     } else {
       if (!supportVersion && companion && characterVersion === 2) for (const [key, value] of Object.entries(relationships.activityBonus(state, id))) action[key] = (action[key] || 0) + value;
       const rawAction = action;
       action = fitnessAdjustedEffect(state, action, id);
-      if (supportVersion) ({ effect: action, support } = npcSupport.resolve(state, action, fitnessAdjustedEffect({ ...state, fitness: 50 }, rawAction, id), id, !!companion));
+      if (supportVersion) ({ effect: action, support } = npcSupport.resolve(state, action, fitnessAdjustedEffect({ ...state, fitness: 50 }, rawAction, id), id, multi ? companion || false : !!companion));
     }
     const changes = previewChanges(state, action);
     let next = { ...applyChanges(state, changes), rng, counts: { ...state.counts, [id]: (state.counts[id] || 0) + 1 } };
     let relationship;
-    if (companion) {
+    if (companion && multi) {
+      next.relationships = npcCast.accompanied(state,companion,id,action.place,characterAgent.read(state,companion)).relationships;
+      relationship = npcCast.record(state, next, companion, id);
+    } else if (companion) {
       next.relationships = characterVersion === 2 ? relationships.accompanied(state, id, action.place) : relationships.studied(state);
       if (characterVersion === 2) next = rememberAgentActivity(state, next, id);
       const before = relationships.read(state).zhouNing;
@@ -329,18 +338,20 @@
     }
     if (action.kind === 'work') next.chains = { ...state.chains, [action.chain]: { ...state.chains[action.chain], progress: state.chains[action.chain].progress + 1 } };
     next = attachEvents(next, id, relationshipVersion === 1);
-    return commit(state, next, { operation: 'executeAction', id, ...(supportVersion ? { npcSupportVersion: supportVersion } : {}), ...(relationshipVersion ? { relationshipVersion } : {}), ...(companion ? { companionId: companion, ...(characterVersion ? { characterVersion } : {}) } : {}), ...(investment ? { investment: investment.amount } : {}) }, { action: id, title: companion ? characterVersion === 2 ? '与周宁' + action.title : '与周宁共同自习' : action.title, changes, fitnessCost: action.fitnessCost || 0, ...(relationship ? { relationship } : {}), ...(investment ? { investment } : {}), ...(support ? { support } : {}) }, command.commandId);
+    return commit(state, next, { operation: 'executeAction', id, ...(multi ? { npcCastVersion: 1 } : {}), ...(supportVersion ? { npcSupportVersion: supportVersion } : {}), ...(relationshipVersion ? { relationshipVersion } : {}), ...(companion ? { companionId: companion, ...(characterVersion ? { characterVersion } : {}) } : {}), ...(investment ? { investment: investment.amount } : {}) }, { action: id, title: multi && companion ? '与' + npcCast.profile(companion).name + action.title : companion ? characterVersion === 2 ? '与周宁' + action.title : '与周宁共同自习' : action.title, changes, fitnessCost: action.fitnessCost || 0, ...(relationship ? { relationship } : {}), ...(investment ? { investment } : {}), ...(support ? { support } : {}) }, command.commandId);
   }
   function completeBasketball(state, hits, options = {}) {
     const command = commandCheck(state, options, 'basketball');
     if (!command.ok) return command;
+    const multi = options.npcCastVersion === 1;
+    if(options.npcCastVersion!==undefined && ![0,1].includes(options.npcCastVersion))return {ok:false,reason:'人物调度版本无效',state};
     const supportVersion = options.npcSupportVersion ?? 0;
     if (![0, 1].includes(supportVersion)) return { ok: false, reason: '人物辅助规则版本无效', state };
     if (!Number.isSafeInteger(hits) || hits < 0 || hits > BASKETBALL.maxHits) return { ok: false, reason: '投篮结果无效', state };
-    if (options.companionId !== undefined && (options.companionId !== 'zhouNing' || options.characterVersion !== 2)) return { ok: false, reason: '这个同行安排不可用', state };
-    const companion = options.companionId === 'zhouNing';
-    if (options.agentProposalRevision !== undefined && (!companion || characterAgent.read(state).proposal?.id !== 'basketball' || characterAgent.read(state).proposal.createdRevision !== options.agentProposalRevision)) return { ok: false, reason: '这个球场邀请已更新', state };
-    const check = companion ? companionAvailability(state, 'basketball') : availability(state, 'basketball');
+    if (options.companionId !== undefined && (multi ? !npcCast.get(state, options.companionId) || options.characterVersion !== 2 || supportVersion !== 1 : options.companionId !== 'zhouNing' || options.characterVersion !== 2)) return { ok: false, reason: '这个同行安排不可用', state };
+    const companion = multi ? options.companionId : options.companionId === 'zhouNing';
+    if (options.agentProposalRevision !== undefined && (!companion || characterAgent.read(state, multi ? companion : 'zhouNing').proposal?.id !== 'basketball' || characterAgent.read(state, multi ? companion : 'zhouNing').proposal.createdRevision !== options.agentProposalRevision)) return { ok: false, reason: '这个球场邀请已更新', state };
+    const check = multi && companion ? api.npcAvailability(state, companion, 'basketball') : companion ? companionAvailability(state, 'basketball') : availability(state, 'basketball');
     if (!check.ok) return { ...check, state };
     const base = getAction(state, 'basketball');
     const reward = basketballReward(hits);
@@ -349,18 +360,21 @@
     let support;
     const rawEffect = effect;
     effect = fitnessAdjustedEffect(state, effect, 'basketball');
-    if (supportVersion) ({ effect, support } = npcSupport.resolve(state, effect, fitnessAdjustedEffect({ ...state, fitness: 50 }, rawEffect, 'basketball'), 'basketball', companion));
+    if (supportVersion) ({ effect, support } = npcSupport.resolve(state, effect, fitnessAdjustedEffect({ ...state, fitness: 50 }, rawEffect, 'basketball'), 'basketball', multi ? companion || false : companion));
     const changes = previewChanges(state, effect);
     let next = { ...applyChanges(state, changes), counts: { ...state.counts, basketball: (state.counts.basketball || 0) + 1 } };
     let relationship;
-    if (companion) {
+    if (companion && multi) {
+      next.relationships = npcCast.accompanied(state,companion,'basketball','track',characterAgent.read(state,companion)).relationships;
+      relationship = npcCast.record(state, next, companion, 'basketball');
+    } else if (companion) {
       next.relationships = relationships.accompanied(state, 'basketball', 'track');
       next = rememberAgentActivity(state, next, 'basketball');
       relationship = relationships.activityRecord(state, next, 'basketball');
       if (supportVersion) next = withAbilities(next);
     }
     next = attachEvents(next, 'basketball');
-    return commit(state, next, { operation: 'completeBasketball', hits, ...(supportVersion ? { npcSupportVersion: supportVersion } : {}), ...(companion ? { companionId: 'zhouNing', characterVersion: 2 } : {}), ...(options.agentProposalRevision !== undefined ? { agentProposalRevision: options.agentProposalRevision } : {}) }, { action: 'basketball', title: companion ? '与周宁一起打篮球' : base.title, hits, score: reward.score, tier: reward.id, tierLabel: reward.label, changes, fitnessCost: base.fitnessCost || 0, ...(relationship ? { relationship } : {}), ...(support ? { support } : {}) }, command.commandId);
+    return commit(state, next, { operation: 'completeBasketball', hits, ...(multi ? { npcCastVersion: 1 } : {}), ...(supportVersion ? { npcSupportVersion: supportVersion } : {}), ...(companion ? { companionId: multi ? companion : 'zhouNing', characterVersion: 2 } : {}), ...(options.agentProposalRevision !== undefined ? { agentProposalRevision: options.agentProposalRevision } : {}) }, { action: 'basketball', title: companion ? '与' + (multi ? npcCast.profile(companion).name : '周宁') + '一起打篮球' : base.title, hits, score: reward.score, tier: reward.id, tierLabel: reward.label, changes, fitnessCost: base.fitnessCost || 0, ...(relationship ? { relationship } : {}), ...(support ? { support } : {}) }, command.commandId);
   }
   function getEventInvestment(state, choiceId) {
     return state.pendingEvent ? EVENT_INVESTMENTS[state.pendingEvent.id + ':' + choiceId] || null : null;
@@ -436,6 +450,7 @@
   function submitEventChoice(state, choiceId, options = {}) {
     const command = commandCheck(state, options, 'event:' + choiceId);
     if (!command.ok) return command;
+    const multi = options.npcCastVersion === 1;
     const supportVersion = options.npcSupportVersion ?? 0;
     if (![0, 1].includes(supportVersion)) return { ok: false, reason: '人物辅助规则版本无效', state };
     const check = eventAvailability(state, choiceId, options.eventInstanceId, options.investment);
@@ -445,8 +460,9 @@
       const changes = previewChanges(state, {});
       const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: SICK_LEAVE_ID, title: '先去校医院', outcome: null, changes };
       let next = { ...applyChanges(state, changes), pendingEvent: null, phase: 'playing', eventFlags: { ...state.eventFlags, [pending.instanceId]: true }, eventHistory: [...state.eventHistory, entry] };
+      if (multi) next = api.finishNpcEvent(state, next, entry, null, SICK_LEAVE_ID);
       next = attachEvents(next, 'eventChoice');
-      return commit(state, next, { operation: 'submitEventChoice', id: SICK_LEAVE_ID, eventInstanceId: pending.instanceId }, entry, command.commandId);
+      return commit(state, next, { operation: 'submitEventChoice', id: SICK_LEAVE_ID, eventInstanceId: pending.instanceId, ...(multi ? {npcCastVersion:1} : {}) }, entry, command.commandId);
     }
     const event = EVENTS[pending.id];
     const choice = event.choices.find((item) => item.id === choiceId);
@@ -472,7 +488,9 @@
     for (const key of ['time', 'energy', 'recovery', 'money', 'income', 'preparation', 'social', 'fitness', 'mood', 'furtherStudy', 'jobPreparation']) {
       effect[key] = (baseEffect[key] || 0) + (outcome[key] || 0);
     }
-    const cameo = options.zhouCameo === true;
+    const eventNpc = multi ? api.boundEventNpc(state, options) : null;
+    if (multi && options.companionId && !eventNpc) return {ok:false,reason:'这位人物没有参与当前事件',state};
+    const cameo = !eventNpc && options.zhouCameo === true;
     if (cameo && (!characterAgent.CAMEOS[pending.id] || characterAgent.read(state).cameo?.instanceId !== pending.instanceId)) return { ok: false, reason: '当前事件没有周宁同行', state };
     const sharedCameo = cameo && choiceId !== 'later';
     const cameoAssessment = sharedCameo ? supportVersion ? relationships.playerPerformance(state) : relationships.performance(state) : null;
@@ -486,7 +504,7 @@
     neutralEffect = fitnessAdjustedEffect({ ...state, fitness: 50 }, neutralEffect, null);
     effect = fitnessAdjustedEffect(state, effect, null);
     let support;
-    if (supportVersion && choiceId !== 'later' && (sharedCameo || pending.id === 'zhouNingPresentation')) ({ effect, support } = npcSupport.resolve(state, effect, neutralEffect, pending.id, true));
+    if (supportVersion && choiceId !== 'later' && (eventNpc || sharedCameo || pending.id === 'zhouNingPresentation')) ({ effect, support } = npcSupport.resolve(state, effect, neutralEffect, pending.id, eventNpc || true));
     if (profile) investment = describeInvestment(profile, investmentPreview, investmentFactor, investmentCurveData.mean, effect);
     const changes = previewChanges(state, effect);
     const entry = { term: state.term, event: pending.id, instanceId: pending.instanceId, choice: choiceId, title: choice.title, outcome: outcome.title || null, changes, fitnessCost: effect.fitnessCost || 0, ...(investment ? { investment } : {}), ...(support ? { support } : {}) };
@@ -510,6 +528,7 @@
       next.relationships = { ...relation, zhouNing: person };
       if (sharedCameo) entry.relationship = { characterId: 'zhouNing', kind: 'cameo', gained: person.familiarity - relation.zhouNing.familiarity, familiarity: person.familiarity, description: '刚才一起经历了这件事，我也记住了。能在校园里这样碰见你，还挺开心的。', assessment: cameoAssessment };
     }
+    if (multi) next = api.finishNpcEvent(state, next, entry, eventNpc, choiceId);
     if (supportVersion && next.relationships?.zhouNing) next = withAbilities(next);
     if (event.chain) {
       const chain = { ...state.chains[event.chain] };
@@ -540,10 +559,10 @@
     }
     if (effect.ending) {
       const terminal = finishTerminal(next, effect.ending, effect.reason || choice.title);
-      return commit(state, terminal, { operation: 'submitEventChoice', id: choiceId, eventInstanceId: pending.instanceId }, entry, command.commandId);
+      return commit(state, terminal, {operation:'submitEventChoice',id:choiceId,eventInstanceId:pending.instanceId,...(multi?{npcCastVersion:1}:{}),...(eventNpc?{companionId:eventNpc}:{}),...(supportVersion?{npcSupportVersion:supportVersion}:{})},entry,command.commandId);
     }
     next = attachEvents(next, 'eventChoice');
-    return commit(state, next, { operation: 'submitEventChoice', id: choiceId, eventInstanceId: pending.instanceId, ...(investment ? { investment: investment.amount } : {}), ...(cameo ? { zhouCameo: true } : {}), ...(supportVersion ? { npcSupportVersion: supportVersion } : {}) }, entry, command.commandId);
+    return commit(state, next, { operation: 'submitEventChoice', id: choiceId, eventInstanceId: pending.instanceId, ...(multi ? { npcCastVersion: 1 } : {}), ...(eventNpc ? { companionId: eventNpc } : {}), ...(investment ? { investment: investment.amount } : {}), ...(cameo ? { zhouCameo: true } : {}), ...(supportVersion ? { npcSupportVersion: supportVersion } : {}) }, entry, command.commandId);
   }
   function settlementChains(state) {
     const chains = clone(state.chains);
@@ -676,9 +695,10 @@
     const command = commandCheck(state, options, 'continueGame');
     if (!command.ok) return command;
     if (state.phase !== 'summary') return { ok: false, reason: '当前没有待确认的学期总结', state };
-    const next = state.term === 8
+    let next = state.term === 8
       ? { ...state, phase: 'endingChoice', endingOptions: evaluateEndings(state), selectedCourses: [], exam: null }
       : attachEvents({ ...state, term: state.term + 1, phase: 'playing', time: 12, energy: 80, preparation: 0, counts: {}, summary: null, selectedCourses: [], exam: null, npcChats: {}, ...(state.relationships ? { relationships: { ...state.relationships, term: state.term + 1, talks: 0, talkGrowth: 0, interactions: 0, ...(state.relationships.zhouNing?.life ? { zhouNing: { ...state.relationships.zhouNing, life: { ...state.relationships.zhouNing.life, energy: 80 } } } : {}) } } : {}) }, 'newTerm');
+    if (next.relationships?.people) next.relationships = {...next.relationships, eventCompanion:null, people:Object.fromEntries(Object.entries(next.relationships.people).map(([id,person])=>[id,{...person,life:{...person.life,energy:80}}]))};
     return commit(state, next, { operation: 'continueGame' }, { action: 'continueGame', title: state.term === 8 ? '评估毕业方向' : '进入下一学期' }, command.commandId);
   }
   function chooseEnding(state, id, options = {}) {
@@ -883,8 +903,12 @@
   function replay({ nickname, seed, commands }) {
     let state = createGame({ nickname, seed });
     for (const [index, command] of commands.entries()) {
-      const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment, relationshipVersion: command.relationshipVersion || 0, companionId: command.companionId, characterVersion: command.characterVersion || 0, proposalRevision: command.proposalRevision, agentProposalRevision: command.agentProposalRevision, zhouCameo: command.zhouCameo, npcSupportVersion: command.npcSupportVersion || 0 };
+      const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment, relationshipVersion: command.relationshipVersion || 0, companionId: command.companionId, characterVersion: command.characterVersion || 0, proposalRevision: command.proposalRevision, agentProposalRevision: command.agentProposalRevision, zhouCameo: command.zhouCameo, npcCastVersion: command.npcCastVersion || 0, npcId: command.npcId, npcSupportVersion: command.npcSupportVersion || 0 };
       const handlers = { executeAction: () => executeAction(state, command.id, args), completeBasketball: () => completeBasketball(state, command.hits, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), cheatExam: () => cheatExam(state, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args) };
+      handlers.recordNpcDialogue = () => api.recordNpcDialogue(state, command.data, args);
+      handlers.resolveNpcProposal = () => api.resolveNpcProposal(state, command.data, args);
+      handlers.runNpcStory = () => api.runNpcStory(state, command.data, args);
+      handlers.attachNpcToEvent = () => api.attachNpcToEvent(state, command.npcId, args);
       handlers.interactWithZhouNing = () => interactWithZhouNing(state, command.id, args);
       handlers.recordZhouNingDialogue = () => recordZhouNingDialogue(state, command.data, args);
       handlers.resolveZhouNingProposal = () => resolveZhouNingProposal(state, command.id, args);
@@ -897,6 +921,7 @@
   }
   const api = { RULES, FITNESS_TIERS, BASKETBALL, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, RANDOM_POOL, CAMPUS_SCHEDULE, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, basketballReward, availability, previewChanges, executeAction, completeBasketball, eventAvailability, submitEventChoice, previewSettlement, selectCourses, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   Object.assign(api, { getRelationships, companionAvailability, zhouNingAvailability, interactWithZhouNing, relationshipRules: relationships, characterAgent, zhouNingCandidates, zhouNingOpportunity, recordZhouNingDialogue, resolveZhouNingProposal, npcSupport });
+  Object.assign(api, npcGame.install(api, { commandCheck, commit, resourceCheck, applyChanges, attachEvents, activeMilitary }));
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
