@@ -7,6 +7,8 @@ function actionableState(id) {
   const state = game.createGame({ legacyEconomy: true });
   const action = game.ACTIONS[id];
   state.term = 5;
+  // 养成解锁型行动（个人作品、兴趣练习、展演、宿舍合影）需要先持有对应单品。
+  if (action.requiresGrowth) state.growth = { version: 1, purchased: { [action.requiresGrowth]: { term: 5, revision: 1 } } };
   if (action.sickOnly) state.fitness = 24;
   state.preparation = action.minPreparation || 0;
   if (action.minAverage || id === 'applyInternship') state.courses = [{ grade: 80 }];

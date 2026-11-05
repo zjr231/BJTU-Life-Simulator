@@ -64,15 +64,15 @@ function replayAndSave(state) {
 }
 function bonusesOf(result) { return result.entry.growthBonuses; }
 
-test('九个单品配置：五维分组、旧节点行为字段保留、金额与前置齐全', () => {
+test('十四个单品配置：七维分组、旧节点行为字段保留、金额与前置齐全', () => {
   const status = game.growthStatus(ready());
-  assert.equal(status.nodes.length, 9);
+  assert.equal(status.nodes.length, 14);
   assert.equal(status.ownedCount, 0);
-  assert.deepEqual(game.GROWTH_DIMENSIONS.map(item => item.id), ['clothing', 'food', 'housing', 'transport', 'habit']);
+  assert.deepEqual(game.GROWTH_DIMENSIONS.map(item => item.id), ['clothing', 'food', 'housing', 'transport', 'learning', 'interest', 'habit']);
   for (const node of status.nodes) {
     assert.ok(game.GROWTH_DIMENSIONS.some(item => item.id === node.dimension), node.id);
     assert.ok(Number.isInteger(node.price) && node.price > 0, node.id);
-    assert.ok(Array.isArray(node.effects) && node.effects.length, node.id);
+    assert.ok(Array.isArray(node.effects) && (node.effects.length || node.unlocks?.length), node.id);
   }
   // 旧节点的兼容派生字段与金额不变。
   const byId = Object.fromEntries(status.nodes.map(node => [node.id, node]));
@@ -85,6 +85,14 @@ test('九个单品配置：五维分组、旧节点行为字段保留、金额�
   assert.deepEqual(game.GROWTH_NODES.hobbyCorner.effects, [{ kind: 'action', actions: ['rest'], bonuses: { mood: 2 }, perTerm: 2 }]);
   assert.deepEqual(game.GROWTH_NODES.routine.prereq, { actionCounts: { rest: 3 } });
   assert.deepEqual(game.GROWTH_NODES.routine.effects, [{ kind: 'termStart', bonuses: { energy: 3 } }]);
+  // 学习/兴趣/宿舍三个新分支：单品不直接加属性，而是解锁一次性经历行动。
+  assert.deepEqual(game.GROWTH_NODES.studyTools.effects, [{ kind: 'action', actions: ['selfStudy'], bonuses: { preparation: 1 }, perTerm: 2 }]);
+  assert.deepEqual(game.GROWTH_NODES.portfolioPlan.prereq, { nodes: ['studyTools'], actionCounts: { selfStudy: 2, projectWork: 2 } });
+  assert.deepEqual(game.GROWTH_NODES.portfolioPlan.unlocks, ['showPortfolio']);
+  assert.deepEqual(game.GROWTH_NODES.showcasePlan.prereq, { nodes: ['hobbyGear'], actionCounts: { hobbyPractice: 2 } });
+  assert.deepEqual(game.GROWTH_NODES.showcasePlan.unlocks, ['campusShowcase']);
+  assert.deepEqual(game.GROWTH_NODES.dormDecor.prereq, { nodes: ['bedding', 'hobbyCorner'], actionCounts: { chat: 2 } });
+  assert.deepEqual(game.GROWTH_NODES.dormDecor.unlocks, ['decorateDorm']);
 });
 
 test('新单品同样受预算确认、余额与阶段门限制', () => {

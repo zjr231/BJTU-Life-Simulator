@@ -158,10 +158,10 @@ test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可�
   assert.match(ui.element('#growthNodes').innerHTML, /舒适寝具/);
   // 二期：顶部维度标签切换，默认显示住宿，只有选中维度的卡片出现在下方。
   const tabHtml = ui.element('#growthTabs').innerHTML;
-  for (const label of ['衣', '食', '住', '行', '习惯']) assert.match(tabHtml, new RegExp('>' + label + '<'));
-  assert.equal((tabHtml.match(/data-growth-dimension=/g) || []).length, 5);
+  for (const label of ['衣', '食', '住', '行', '学习', '兴趣', '习惯']) assert.match(tabHtml, new RegExp('>' + label + '<'));
+  assert.equal((tabHtml.match(/data-growth-dimension=/g) || []).length, 7);
   assert.equal(ui.evaluate('selectedGrowthDimension'), 'housing');
-  assert.match(ui.element('#growthNodes').innerHTML, /住 · 住宿与休息/);
+  assert.match(ui.element('#growthNodes').innerHTML, /住 · 生活与空间/);
   assert.match(ui.element('#growthNodes').innerHTML, /舒适寝具/);
   assert.doesNotMatch(ui.element('#growthNodes').innerHTML, /正装套装|水果篮|自行车/);
   ui.click('#growthTabs', { growthDimension: 'clothing' });
@@ -189,7 +189,7 @@ test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可�
   const before = ui.evaluate('state.revision');
   ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(before) });
   assert.equal(ui.evaluate('state.money'), 900);
-  assert.equal(ui.element('#growthCount').textContent, '1 / 9');
+  assert.equal(ui.element('#growthCount').textContent, '1 / 14');
   assert.match(ui.element('#growthNodes').innerHTML, /已拥有 ✓/);
   assert.match(ui.element('#growthNotice').textContent, /支出 300 元/);
   assert.match(ui.evaluate('growthRecord()'), /添置舒适寝具/);
@@ -204,7 +204,7 @@ test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可�
   ui.click('#loadButton');
   ui.click('#dialogBody', { loadSlot: '3', saveSource: 'primary' });
   assert.equal(ui.evaluate('JSON.stringify(state)'), purchased);
-  assert.equal(ui.element('#growthCount').textContent, '1 / 9');
+  assert.equal(ui.element('#growthCount').textContent, '1 / 14');
   ui.click('#growthClose');
   ui.element('#growthToggle').emit('click', { stopPropagation() {} });
   assert.equal(ui.evaluate('openPanelName'), 'growth');

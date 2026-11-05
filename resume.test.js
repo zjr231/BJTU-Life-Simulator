@@ -23,9 +23,9 @@ test('resume 纯只读：调用前后状态、随机计数、revision 均不变'
   assert.equal(state.revision, before.revision);
 });
 
-test('新档空简历：四栏全空、其他经历为空、四要件全 false', () => {
+test('新档空简历：七栏全空、其他经历为空、四要件全 false', () => {
   const resume = game.resume(baseState());
-  assert.deepEqual(resume.sections.map((section) => section.id), ['internship', 'project', 'contest', 'club']);
+  assert.deepEqual(resume.sections.map((section) => section.id), ['internship', 'project', 'contest', 'club', 'portfolio', 'showcase', 'dormMemory']);
   for (const section of resume.sections) assert.deepEqual(section.items, []);
   assert.deepEqual(resume.others, []);
   assert.deepEqual(resume.requirements, { hasInternship: false, hasProject: false, hasContest: false, hasClub: false });
