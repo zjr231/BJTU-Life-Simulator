@@ -119,6 +119,17 @@
     { id: 'engineering', college: '工程类学院', majors: ['土木工程', '交通运输', '机械工程', '电气工程及其自动化'], legacyMajors: ['交通工程方向', '土木工程方向'], bonus: '图纸和方案上手快：项目投入额外增加 5 点学习进度。', action: 'projectWork', preparationBonus: 5 },
     { id: 'management', college: '经管类学院', majors: ['经济学', '金融学', '会计学', '工商管理'], legacyMajors: ['经营管理方向', '经济分析方向'], bonus: '组局张罗是日常：社团投入额外增加 2 点社交。', action: 'clubWork', socialBonus: 2 }
   ];
+  const BASKETBALL = {
+    durationMs: 60000,
+    maxHits: Infinity,
+    pointsPerHit: 3,
+    rewards: [
+      { id: 'warmup', label: '热身局', minHits: 0, fitness: 2, mood: 2 },
+      { id: 'steady', label: '稳定输出', minHits: 25, fitness: 6, mood: 5 },
+      { id: 'sharp', label: '手感火热', minHits: 50, fitness: 10, mood: 8, social: 2 },
+      { id: 'unreal', label: '神射手', minHits: 80, fitness: 15, mood: 12, social: 4 }
+    ]
+  };
   const PLACES = {
     activity: { title: '学生活动中心', kicker: '社团与活动', description: '大厅里永远有人。招新季的海报从门口贴到宿舍楼下，吉他社在角落试音，辩论队的学长拉着新生对练。想认识谁，从这里开始。' },
     think: { title: '思源楼', kicker: '课程与学习', description: '上课铃响前五分钟，走廊里的脚步最急。有人抱着水杯去占座，有人在后排补作业，讲台边总围着问问题的同学。' },
@@ -227,6 +238,7 @@
     exercise: { place: 'track', title: '锻炼', description: '去操场跑几圈，出一身汗。晚风吹在脸上，很凉快。', time: 1, energy: 10, fitnessCost: 2, money: 0, fitness: 6, mood: 4, limit: 4, hint: '运动会消耗体能，但锻炼结束后能恢复更多体能。' },
     gym: { place: 'track', title: '健身房锻炼', description: '刷开健身房的门，器械区还空着。热身之后，按计划一组一组做完。', time: 1, energy: 12, fitnessCost: 3, money: 50, limit: 2, hint: '需要额外预算，但体能提升更明显。' },
     teamSport: { place: 'track', title: '多人运动', description: '群里喊一声，球场很快就凑齐人。足球、篮球、橄榄球，规则不重要，跑起来就行。', time: 1, energy: 15, fitnessCost: 3, money: 0, limit: 2, hint: '更耗费精力，但心情和社交提升更多。' },
+    basketball: { place: 'track', title: '打篮球', description: '球场上只剩你和一个篮筐。60 秒，从三分线后出手，看看手感能撑到第几球。', time: 1, energy: 12, fitnessCost: 3, money: 0, limit: 2, minigame: 'basketball', hint: '进入投篮小游戏；命中越多，奖励越高。' },
     soloSport: { place: 'track', title: '单人运动', description: '戴上耳机，沿着跑道或骑行道出发。骑行、游泳、跑步，一个人也能把节奏找回来。', time: 1, energy: 3, fitnessCost: 1, money: 0, limit: 3, hint: '精力消耗最少，适合日常保持体能。' },
     walk: { place: 'ginkgo', title: '散步', description: '沿着银杏大道慢慢走，脑子里什么都不装。', time: 1, energy: 0, fitnessCost: 0, money: 0, recovery: 10, mood: 10, limit: 3 },
     applyProject: { place: 'yifu', title: '申请校园项目', description: '把简历和想法递到老师桌上。老师说：回去等消息。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 2, maxTerm: 6, minPreparation: 40, chain: 'project', kind: 'apply' },
@@ -369,6 +381,16 @@
     }
   };
   const EVENTS = {
+    zhouNingMeet: { priority: 5, title: '图书馆里的周宁', description: '你合上刚做完的习题，旁边的男生指了指你的教材：“你也选了这门课？我叫周宁。刚才那个知识点，我整理过一版笔记。”他把草稿纸轻轻推过来，纸角写着几个清楚的小标题。', trigger: '第一次在图书馆自习后，你认识了一位同年级同学', choices: [
+      { id: 'discuss', title: '自我介绍，聊聊刚才的题', description: '把自己的解法也写在纸上。你们发现，卡住的地方恰好可以互相补足。', fitnessCost: 0, preparation: 3, social: 2, mood: 2 },
+      { id: 'later', title: '交换姓名，约好下次一起学', description: '今天先收拾书包，记下他的名字。之后可以从人物关系网联系周宁。', fitnessCost: 0 }
+    ] },
+    zhouNingPresentation: { priority: 32, title: '周宁的课程展示', description: '周宁把整理好的笔记摊在桌上，却迟迟没开始讲：“题目我会做，可一想到站上讲台，脑子就空了。你能陪我练一遍吗？”这次，轮到你帮他迈出一步。', trigger: '相识度达到 30，并且至少一起学习过一次', choices: [
+      { id: 'outline', title: '一起梳理讲解顺序', description: '先把知识点连成清楚的顺序，再陪他讲一遍。充分准备能托住不稳定的发挥。', time: 1, energy: 8, fitnessCost: 2 },
+      { id: 'rehearse', title: '扮演听众，认真提问', description: '按正式展示的方式练习。你们的相识度、你的社交和当前心情会共同影响配合效果。', time: 1, energy: 6, fitnessCost: 2 },
+      { id: 'encourage', title: '鼓励他先试着讲一段', description: '认真听完，不急着纠正。先让他体验开口讲述的感觉。', time: 1, energy: 2, fitnessCost: 1 },
+      { id: 'later', title: '改天再安排', description: '先约好以后再练，不消耗资源或正式互动次数。下学期仍可重新安排。', fitnessCost: 0 }
+    ] },
     roommateCare: { priority: 10, title: '室友的关心', description: '晚上十一点，室友发来消息，说看你最近状态不太对，问要不要一起下楼吃点东西。消息后面跟了一个拍一拍。', trigger: '你最近回宿舍越来越晚，话也越来越少', choices: [
       { id: 'talk', fitnessCost: 0, title: '和室友聊一会儿', description: '下楼，边吃边把最近的破事倒一倒。', time: 1, mood: 15, social: 3 },
       { id: 'later', fitnessCost: 0, title: '先自己调整', description: '说声不用了，戴上耳机。今晚想一个人待着。' }
@@ -826,14 +848,14 @@
   const RANDOM_CONTEXTS = {
     campusDiscussion: { actions: ['selfStudy'] },
     cat: { actions: ['selfStudy', 'walk'] },
-    canteen: { actions: ['selfStudy', 'walk', 'chat', 'exercise', 'gym', 'teamSport', 'soloSport'] },
-    card: { actions: ['selfStudy', 'walk', 'exercise', 'gym', 'teamSport', 'soloSport'] },
+    canteen: { actions: ['selfStudy', 'walk', 'chat', 'exercise', 'gym', 'teamSport', 'soloSport', 'basketball'] },
+    card: { actions: ['selfStudy', 'walk', 'exercise', 'gym', 'teamSport', 'soloSport', 'basketball'] },
     wall: { actions: ['selfStudy', 'chat'] },
     seat: { actions: ['selfStudy'] },
     snow: { actions: ['walk'], season: 'autumn', minElapsed: 9 },
     parcel: { actions: ['chat'], season: 'autumn', minElapsed: 6 },
     night: { actions: ['chat'] },
-    injury: { actions: ['exercise', 'gym', 'teamSport', 'soloSport'] },
+    injury: { actions: ['exercise', 'gym', 'teamSport', 'soloSport', 'basketball'] },
     flu: { actions: ['chat'], season: 'autumn', minElapsed: 4 },
     insomnia: { actions: ['chat'] },
     lecture: { actions: ['show'] },
@@ -841,7 +863,7 @@
     alumniStory: { actions: ['alumniVolunteer'] },
     frontDesk: { actions: ['alumniVolunteer'] },
     ginkgo: { actions: ['walk'], season: 'autumn', minElapsed: 5 },
-    hawthorn: { actions: ['exercise', 'gym', 'teamSport', 'soloSport'], season: 'autumn', minElapsed: 4 },
+    hawthorn: { actions: ['exercise', 'gym', 'teamSport', 'soloSport', 'basketball'], season: 'autumn', minElapsed: 4 },
     alumniFair: { actions: ['alumniVolunteer'] },
     rollCall: { actions: ['study', 'tutoring'] },
     jobFair: { actions: ['work'] },
@@ -940,7 +962,7 @@
     ],
     othersNote: '另有：{list}，共 {count} 项校园经历。'
   };
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
+  const api = { RULES, BASKETBALL, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, FITNESS_TIERS, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, RANDOM_POOL, CAMPUS_SCHEDULE, RANDOM_CONTEXTS, AI_CHAT, NPC_CHAT, ADVISORIES, RESUME, COMPANIES, POSITIONS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

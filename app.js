@@ -15,9 +15,12 @@ const mathText = (value) => {
 };
 const hotspots = [...document.querySelectorAll('.map-hotspot')];
 const audio = typeof CampusAudio !== 'undefined' ? CampusAudio : null;
+const basketballGame = typeof CampusBasketball !== 'undefined' ? CampusBasketball : null;
+const seasonal = typeof CampusSeason !== 'undefined' ? CampusSeason : null;
 const PLACE_SOUNDS = { think: 'study', library: 'study', yifu: 'study', dorm: 'relax', ginkgo: 'relax', track: 'sport', activity: 'opportunity', gate: 'opportunity', hospital: 'info', auditorium: 'info', hotel: 'info' };
-const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', showPortfolio: 'success', hobbyPractice: 'relax', campusShowcase: 'fanfare', decorateDorm: 'success', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport', treatment: 'success' };
+const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', showPortfolio: 'success', hobbyPractice: 'relax', campusShowcase: 'fanfare', decorateDorm: 'success', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport', basketball: 'sport', treatment: 'success' };
 const dialog = $('#termDialog');
+const basketballDialog = $('#basketballDialog');
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
 try { storage = window.localStorage; } catch (_) { /* Play remains available without storage. */ }
@@ -44,6 +47,10 @@ let uiLocked = false;
 let unlockTimer;
 let toastTimer;
 let placeEnterTimer;
+// 季节与天气是纯观感层：由学期、剩余时间和存档种子推导，不写入游戏状态，也不消耗随机数。
+let lastSeasonClock = null;
+let seasonVisualKey = '';
+let seasonNoticeTimer = null;
 // 校园偶遇 NPC：纯逻辑在 npc.js，渲染与点击对话在这里。
 // 聊天记录与走位仍是观感层、不进存档；playing 阶段每条消息会走规则命令 chatWithNpc 结算消耗与收益。
 const npc = typeof CampusNpc !== 'undefined' ? CampusNpc : null;
@@ -63,6 +70,17 @@ const eventDrafts = new Map();
 const actionDrafts = new Map();
 let pendingActionExtra = null;
 let acknowledgedResultRevision = -1;
+let basketballSession = null;
+let basketballCompanion = null;
+let zhouView = { screen: 'home', group: 'life', activity: 'selfStudy', amount: undefined, profileOpen: false, text: null };
+let lastVisualNovel = null;
+let zhouRequest = null;
+let zhouRequestSequence = 0;
+let activeNpcId = 'zhouNing';
+let zhouChatDraft = '';
+let zhouChatNotice = '';
+let zhouHistoryOpen = false;
+const ZHOU_GROUPS = { study: '学习与未来计划', sport: '运动与球场', life: '散步、演出与日常', campus: '社团、项目与工作' };
 const failures = [];
 const sessionId = Date.now().toString(36);
 function showToast(message) {
@@ -85,6 +103,7 @@ const ACTION_FLAVOR = {
   exercise: '你在跑道边撑着膝盖喘气，心里却踏实。',
   gym: '器械归位，汗水把衣服贴在背上，整个人轻了一截。',
   teamSport: '球场上的热闹散了，你还站在原地喘气，嘴角没压住。',
+  basketball: '球从指尖离手，篮网翻了一下。你捡起球，听见自己还在喘。',
   soloSport: '耳机里的歌放到最后一段，你放慢速度，慢慢走回去。',
   walk: '一圈走下来，步子轻了些。',
   applyProject: '申请递出去了，接下来等回复。',
@@ -524,24 +543,33 @@ function renderGrowth() {
     $('#growthNodes').innerHTML = '<section class="growth-branch" data-dimension="' + dimension.id + '">' + heading + '<div class="growth-branch-row">' + nodes + '</div>' + progress + '</section>';
   }
 }
-// 头像：点击可上传本地图片，压缩后存本地（只影响界面，不进存档格式）。
+// 头像与昵称：点头像弹出资料卡（放大 + 更换/恢复），点昵称弹出修改框，效仿主流 App。
 const AVATAR_KEY = 'bjt-life-avatar';
+const MOTION_KEY = 'bjt-life-motion';
+const HOTSPOT_KEY = 'bjt-life-hotspots';
 function setAvatarImage(dataUrl) {
-  const avatar = $('#playerAvatar');
-  if (!avatar || !avatar.style) return;
-  if (dataUrl) {
-    avatar.style.backgroundImage = 'url("' + dataUrl + '")';
-    avatar.classList.add('has-image');
-  } else {
-    avatar.style.backgroundImage = '';
-    avatar.classList.remove('has-image');
-  }
+  ['#playerAvatar', '#avatarPopoverImage'].forEach((selector) => {
+    const avatar = $(selector);
+    if (!avatar || !avatar.style) return;
+    if (dataUrl) {
+      avatar.style.backgroundImage = 'url("' + dataUrl + '")';
+      avatar.classList.add('has-image');
+    } else {
+      avatar.style.backgroundImage = '';
+      avatar.classList.remove('has-image');
+    }
+  });
 }
 function loadAvatar() {
   try {
     const saved = window.localStorage && window.localStorage.getItem(AVATAR_KEY);
     if (saved) setAvatarImage(saved);
   } catch (_) {}
+}
+function resetAvatar() {
+  setAvatarImage(null);
+  try { window.localStorage.removeItem(AVATAR_KEY); } catch (_) {}
+  showToast('已恢复默认头像');
 }
 function saveAvatarFile(file) {
   try {
@@ -578,6 +606,180 @@ function pickAvatar() {
   const input = $('#avatarInput');
   if (input && typeof input.click === 'function') input.click();
 }
+// 资料卡 / 昵称框：定位在锚点下方，点空白或 Esc 收起。
+let openPopoverName = null;
+function positionPopover(popover, anchor) {
+  try {
+    if (!popover || !popover.style || !anchor || typeof anchor.getBoundingClientRect !== 'function') return;
+    const rect = anchor.getBoundingClientRect();
+    const viewport = Number.isFinite(window.innerWidth) ? window.innerWidth : 360;
+    const width = Math.min(280, viewport - 24);
+    const left = Math.max(12, Math.min(rect.left, viewport - width - 12));
+    popover.style.width = width + 'px';
+    popover.style.left = Math.round(left) + 'px';
+    popover.style.top = Math.round(rect.bottom + 10) + 'px';
+  } catch (_) {}
+}
+function showPopover(name) {
+  const avatarPopover = $('#avatarPopover');
+  const namePopover = $('#namePopover');
+  const attrPopover = $('#attrPopover');
+  if (attrPopover) attrPopover.hidden = true;
+  if (avatarPopover) avatarPopover.hidden = name !== 'avatar';
+  if (namePopover) namePopover.hidden = name !== 'name';
+  openPopoverName = name;
+  const avatarButton = $('#playerAvatar');
+  if (avatarButton) avatarButton.classList.toggle('is-open', name === 'avatar');
+  if (name === 'avatar' && avatarPopover) {
+    const title = $('#popoverName');
+    if (title) title.textContent = state ? state.nickname : '等待入学';
+    const major = $('#popoverMajor');
+    if (major && state) major.textContent = (state.background.college ? state.background.college + ' · ' : '') + state.background.major;
+    positionPopover(avatarPopover, avatarButton);
+  }
+  if (name === 'name' && namePopover) {
+    const input = $('#nameInput');
+    if (input) {
+      input.value = state ? state.nickname : '';
+      try { input.focus(); input.select(); } catch (_) {}
+    }
+    const error = $('#nameError');
+    if (error) error.textContent = '';
+    positionPopover(namePopover, $('#playerName'));
+  }
+}
+function closePopovers() {
+  openPopoverName = null;
+  const avatarPopover = $('#avatarPopover');
+  if (avatarPopover) avatarPopover.hidden = true;
+  const namePopover = $('#namePopover');
+  if (namePopover) namePopover.hidden = true;
+  const attrPopover = $('#attrPopover');
+  if (attrPopover) attrPopover.hidden = true;
+  const avatarButton = $('#playerAvatar');
+  if (avatarButton) avatarButton.classList.remove('is-open');
+}
+function submitNickname() {
+  if (!state) { showToast('入学后才能修改昵称'); return; }
+  const input = $('#nameInput');
+  const checked = game.validateNickname(input ? input.value : '');
+  const error = $('#nameError');
+  if (!checked.ok) {
+    if (error) error.textContent = checked.reason;
+    return;
+  }
+  state.nickname = checked.value;
+  closePopovers();
+  renderState();
+  showToast('昵称已更新');
+}
+// 设置里的高频偏好：动画效果、热点提示，记在本机浏览器。
+let motionOn = true;
+let hotspotsOn = true;
+function applyMotion() {
+  if (document.body && document.body.classList) document.body.classList.toggle('reduce-motion', !motionOn);
+  const button = $('#motionButton');
+  if (button) {
+    button.textContent = '动画效果:' + (motionOn ? '开' : '关');
+    button.setAttribute('aria-pressed', motionOn ? 'true' : 'false');
+  }
+}
+function applyHotspots() {
+  if (document.body && document.body.classList) document.body.classList.toggle('hide-hotspot-rings', !hotspotsOn);
+  const button = $('#hotspotButton');
+  if (button) {
+    button.textContent = '热点提示:' + (hotspotsOn ? '开' : '关');
+    button.setAttribute('aria-pressed', hotspotsOn ? 'true' : 'false');
+  }
+}
+function loadPreferences() {
+  try {
+    const motion = window.localStorage.getItem(MOTION_KEY);
+    if (motion === '0') motionOn = false;
+    const hotspots = window.localStorage.getItem(HOTSPOT_KEY);
+    if (hotspots === '0') hotspotsOn = false;
+  } catch (_) {}
+  applyMotion();
+  applyHotspots();
+}
+// 属性说明：点顶部状态条 / 时间 / 钱包，查看怎么获得、有什么用。
+const ATTR_INFO = {
+  time: {
+    title: '时间',
+    how: '每学期固定 12 点，进入下一学期时重置为 12 点；本学期未用完的时间不结转。',
+    why: '地图上的行动与部分事件会消耗时间；时间为 0 时无法继续行动，只能结束学期并参加期末考试。'
+  },
+  energy: {
+    title: '精力',
+    how: '每学期开始时为 80 点；休息恢复 30 点，散步恢复 10 点；学期之间不结转。',
+    why: '大多数行动需要消耗精力；精力不足时相关行动不可执行，需要先通过休息等方式恢复。'
+  },
+  mood: {
+    title: '心情',
+    how: '散步、观看演出、室友交流、喂猫、锻炼、校友接待等行动可以提升心情。',
+    why: '心情会计入学期结算与成长记录；低于 30 时会触发室友关心等负面事件。'
+  },
+  fitness: {
+    title: '体能',
+    how: '锻炼、健身房、多人运动、单人运动可以提升体能；生病和部分事件会降低体能。',
+    why: '体能按档位缩放行动的收益与消耗；低于 25 进入生病状态，只能先去校医院就诊；体测以体能 60 为达标线。'
+  },
+  social: {
+    title: '社交',
+    how: '社团投入、室友交流、比赛、志愿活动、观看演出等行动可以积累社交。',
+    why: '社交会计入学期结算与成长记录，反映本学期的校园活跃度。'
+  },
+  learning: {
+    title: '学习进度',
+    how: '课程学习、自主学习、补习、项目投入可以增加学习进度；与学长学姐、老师聊天每次额外 +2。',
+    why: '学习进度是期末总评的平时分，占总评 40%；申请校园项目要求学习进度达到 40；进入下一学期后清零。'
+  },
+  money: {
+    title: '钱包',
+    how: '初始 1000 元；校内勤工助学每次 +200，实习投入每次 +100，部分事件也有收入。',
+    why: '用于支付每学期生活费 300 元（不足由补助补足），以及补习 100 元、健身房 50 元、体检 50 元、看病 20～60 元、观演 40 元等开销和事件投入预算。'
+  }
+};
+function attrValueText(attr) {
+  if (!state) return '';
+  const values = { time: state.time + ' / 12', money: state.money + ' 元' };
+  if (values[attr]) return values[attr];
+  const map = { energy: state.energy, mood: state.mood, fitness: state.fitness, social: state.social, learning: state.preparation };
+  return map[attr] === undefined ? '' : map[attr] + ' / 100';
+}
+function attrStatusText(attr) {
+  if (!state) return '';
+  if (attr === 'fitness') {
+    const tier = game.fitnessTier(state.fitness);
+    if (!tier) return '';
+    if (tier.ill) return '生病：先去校医院就诊';
+    return '当前档位：' + tier.label + '（收益 ×' + tier.reward.toFixed(2) + ' / 消耗 ×' + tier.cost.toFixed(2) + '）';
+  }
+  if (attr === 'mood' && state.mood < 30) return '心情偏低，可能触发负面事件。';
+  if (attr === 'energy' && state.energy < 10) return '精力见底，先休息再安排行动。';
+  if (attr === 'time' && state.time === 0) return '时间用完了，去地图上结束这个学期吧。';
+  return '';
+}
+function showAttrPopover(attr, anchorEl) {
+  const info = ATTR_INFO[attr];
+  const popover = $('#attrPopover');
+  if (!info || !popover) return;
+  if (openPanelName) closePanel();
+  closePopovers();
+  openPopoverName = 'attr';
+  const title = $('#attrTitle');
+  if (title) title.textContent = info.title;
+  const value = $('#attrValue');
+  if (value) value.textContent = attrValueText(attr);
+  const status = $('#attrStatus');
+  if (status) { status.textContent = attrStatusText(attr); status.hidden = !status.textContent; }
+  const how = $('#attrHow');
+  if (how) how.textContent = info.how;
+  const why = $('#attrWhy');
+  if (why) why.textContent = info.why;
+  popover.hidden = false;
+  positionPopover(popover, anchorEl);
+}
 // 顶部菜单：点击展开对应面板，再点或点空白处收起。
 let openPanelName = null;
 function setPanel(name) {
@@ -593,6 +795,8 @@ function setPanel(name) {
     $('#growthNotice').textContent = '';
     renderGrowth();
   }
+  if (name === 'records') renderRecordsPanel();
+  if (name === 'relationships') renderRelationshipsPanel();
 }
 function closePanel() {
   const wasGrowth = openPanelName === 'growth';
@@ -609,11 +813,120 @@ function syncBarHeight() {
     }
   } catch (_) {}
 }
+// 季节天气：秋→冬 / 春→夏，每季 6 点时间；换季给一次提醒，特殊天气按种子固定分配。
+function hideSeasonNotice() {
+  clearTimeout(seasonNoticeTimer);
+  const notice = $('#seasonNotice');
+  if (notice) { notice.hidden = true; notice.classList.remove('is-visible'); }
+}
+function resetSeasonTracking() {
+  lastSeasonClock = null;
+  seasonVisualKey = '';
+  hideSeasonNotice();
+}
+function clearSeasonEffects() {
+  resetSeasonTracking();
+  const overlay = $('#seasonOverlay');
+  if (overlay) overlay.hidden = true;
+  const particles = $('#weatherParticles');
+  if (particles) particles.innerHTML = '';
+  const chip = $('#seasonLabel');
+  if (chip) { chip.textContent = '—'; chip.setAttribute('data-season', 'none'); chip.setAttribute('title', ''); }
+  const mapLayer = $('#mapLayer');
+  if (mapLayer) mapLayer.setAttribute('data-season', 'none');
+}
+function seasonParticleMarkup(info) {
+  if (!seasonal) return '';
+  const plan = seasonal.particlePlan(info.season, info.weather.id);
+  const narrow = typeof window !== 'undefined' && Number.isFinite(window.innerWidth) && window.innerWidth < 720;
+  const scale = narrow ? 0.62 : 1;
+  return plan.map((item) => {
+    const count = Math.max(1, Math.round(item.count * scale));
+    let html = '';
+    for (let index = 0; index < count; index += 1) {
+      const seed = seasonal.hash(info.season + ':' + info.weather.id + ':' + item.type + ':' + index);
+      const x = seed % 100;
+      const delay = -(((seed >>> 7) % 140) / 10);
+      const duration = item.type === 'rain' ? 0.55 + ((seed >>> 13) % 40) / 100
+        : item.type === 'wind' ? 1.2 + ((seed >>> 13) % 80) / 100
+          : item.type === 'catkin' ? 12 + ((seed >>> 13) % 100) / 10
+            : item.type === 'mote' ? 8 + ((seed >>> 13) % 70) / 10
+              : item.type === 'cloud' ? 35 + ((seed >>> 13) % 50)
+                : item.type === 'fog' ? 22 + ((seed >>> 13) % 100) / 10
+                  : 7 + ((seed >>> 13) % 90) / 10;
+      const size = item.type === 'dust' ? 3 + ((seed >>> 3) % 10)
+        : item.type === 'mote' ? 3 + ((seed >>> 3) % 4)
+          : item.type === 'rain' ? 7 + ((seed >>> 3) % 7)
+            : item.type === 'snow' ? 5 + ((seed >>> 3) % 9)
+              : item.type === 'catkin' ? 10 + ((seed >>> 3) % 12)
+                : item.type === 'cloud' ? 60 + ((seed >>> 3) % 90)
+                  : item.type === 'fog' ? 120 + ((seed >>> 3) % 140)
+                    : 9 + ((seed >>> 3) % 10);
+      const drift = ((seed >>> 17) % 140) - 70;
+      const style = '--x:' + x + '%;--delay:' + delay + 's;--dur:' + duration + 's;--size:' + size + 'px;--drift:' + drift + 'px;';
+      html += '<span class="weather-particle is-' + item.type + '" style="' + style + '"></span>';
+    }
+    return html;
+  }).join('');
+}
+function showSeasonNotice(info) {
+  const node = $('#seasonNotice');
+  if (!node || !seasonal) return;
+  const pair = info.pair || seasonal.pairForTerm(state.term);
+  const from = seasonal.SEASONS[pair[0]];
+  const to = seasonal.SEASONS[pair[1]];
+  node.innerHTML = '<span class="season-notice-kicker">换季提醒</span><b>' + h(from.short) + ' → ' + h(to.short) + '</b><p>' + h(to.notice) + '</p>';
+  node.hidden = false;
+  node.classList.add('is-visible');
+  clearTimeout(seasonNoticeTimer);
+  seasonNoticeTimer = setTimeout(() => {
+    node.classList.remove('is-visible');
+    seasonNoticeTimer = setTimeout(() => { node.hidden = true; }, 380);
+  }, 4200);
+}
+function renderSeasonEffects() {
+  const overlay = $('#seasonOverlay');
+  const chip = $('#seasonLabel');
+  const mapLayer = $('#mapLayer');
+  if (!state || !seasonal) {
+    if (overlay) overlay.hidden = true;
+    const particles = $('#weatherParticles');
+    if (particles) particles.innerHTML = '';
+    if (chip) { chip.textContent = '—'; chip.setAttribute('data-season', 'none'); chip.setAttribute('title', ''); }
+    if (mapLayer) mapLayer.setAttribute('data-season', 'none');
+    resetSeasonTracking();
+    return;
+  }
+  const info = seasonal.weatherFor(state.rng.seed, state.term, state.time);
+  if (chip) {
+    chip.textContent = info.seasonInfo.short + ' · ' + info.weather.label;
+    chip.setAttribute('data-season', info.season);
+    chip.setAttribute('title', info.seasonInfo.name + ' · ' + info.weather.label + (info.special ? '（季节专属天气）' : ''));
+  }
+  if (mapLayer) mapLayer.setAttribute('data-season', info.season);
+  if (lastSeasonClock && lastSeasonClock.term !== state.term) hideSeasonNotice();
+  // 同一学期里时间从 6 点以上走到 6 点以下，就是换季节点。
+  if (lastSeasonClock && lastSeasonClock.term === state.term && lastSeasonClock.time > 6 && state.time <= 6) showSeasonNotice(info);
+  lastSeasonClock = { term: state.term, time: state.time };
+  if (!overlay) return;
+  overlay.hidden = false;
+  const key = info.season + ':' + info.weather.id;
+  if (key === seasonVisualKey) return;
+  seasonVisualKey = key;
+  overlay.setAttribute('data-season', info.season);
+  overlay.setAttribute('data-weather', info.weather.id);
+  overlay.setAttribute('data-tone', info.weather.tone);
+  const particles = $('#weatherParticles');
+  if (particles) particles.innerHTML = seasonParticleMarkup(info);
+}
 function renderState() {
   if (!state) return;
   $('#playerLabel').textContent = (state.background.college ? state.background.college + ' · ' : '') + state.background.major;
-  const avatar = $('#playerAvatar');
-  if (avatar) avatar.textContent = String(state.nickname || '北').trim().slice(0, 1) || '北';
+  const avatarLetter = String(state.nickname || '北').trim().slice(0, 1) || '北';
+  ['#playerAvatar', '#avatarPopoverImage'].forEach((selector) => {
+    const avatar = $(selector);
+    if (avatar) avatar.textContent = avatarLetter;
+  });
   const playerName = $('#playerName');
   if (playerName) playerName.textContent = state.nickname;
   const setVital = (barId, valueId, value, max) => {
@@ -629,15 +942,38 @@ function renderState() {
   setVital('barPreparation', 'valuePreparation', state.preparation, 100);
   $('#termLabel').textContent = game.TERM_NAMES[state.term - 1] + (['finished', 'ended'].includes(state.phase) ? ' · 已结束' : ' · ' + game.getTermStage(state));
   $('#timeLabel').textContent = '时间 ' + state.time + ' / 12';
-  $('#energyLabel').textContent = '精力 ' + state.energy + ' / 100';
+  renderSeasonEffects();
+  const energyLabel = $('#energyLabel');
+  if (energyLabel) energyLabel.textContent = '精力 ' + state.energy + ' / 100';
+  const moneyLabel = $('#moneyLabel');
+  if (moneyLabel) moneyLabel.textContent = '钱包 ' + state.money + ' 元';
   $('#mapStats').innerHTML = statsMarkup();
+  const profileBrief = $('#profileBrief');
+  if (profileBrief) {
+    const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
+    profileBrief.innerHTML = '<div>当前学期 <b>' + h(game.TERM_NAMES[state.term - 1]) + '</b> · 当前阶段 <b>' + h(game.getTermStage(state)) + '</b></div>' +
+      (background ? '<div>背景加成 ' + h(background.bonus) + '</div>' : '') +
+      '<div>已通过学期 <b>' + state.courses.filter((item) => item.passed).length + ' / 8</b></div>';
+  }
+  const profileCardName = $('#profileCardName');
+  if (profileCardName) profileCardName.textContent = state.nickname;
+  const profileCardMajor = $('#profileCardMajor');
+  if (profileCardMajor) profileCardMajor.textContent = state.background.college + ' · ' + state.background.major;
+  const profileAvatar = $('#profileAvatar');
+  if (profileAvatar) profileAvatar.textContent = String(state.nickname || '北').trim().slice(0, 1) || '北';
+  const popoverName = $('#popoverName');
+  if (popoverName) popoverName.textContent = state.nickname;
+  const popoverMajor = $('#popoverMajor');
+  if (popoverMajor) popoverMajor.textContent = (state.background.college ? state.background.college + ' · ' : '') + state.background.major;
   const fitnessWarning = $('#fitnessWarning');
   if (fitnessWarning) {
     fitnessWarning.hidden = !game.isSick(state);
     fitnessWarning.textContent = game.isSick(state) ? '身体已经撑不住：先去校医院就诊，否则无法安排其他行动。' : '';
   }
-  $('#preparationValue').textContent = state.preparation + ' / 100';
-  $('#preparationMeter').value = state.preparation;
+  const preparationValue = $('#preparationValue');
+  if (preparationValue) preparationValue.textContent = state.preparation + ' / 100';
+  const preparationMeter = $('#preparationMeter');
+  if (preparationMeter) preparationMeter.value = state.preparation;
   $('#placeStats').innerHTML = '<div class="place-resources"><span>时间 <b>' + state.time + ' / 12</b></span><span>精力 <b>' + state.energy + ' / 100</b></span><span>学习进度 <b>' + state.preparation + ' / 100</b></span></div><div class="place-attributes">' + statsMarkup() + '</div>';
   const selectedIds = state.selectedCourses || [];
   const selectedNames = selectedIds.map((id) => game.courseById(id)?.name || id).join('、') || '未选课';
@@ -647,7 +983,11 @@ function renderState() {
   renderGrowth();
   $('#endTermButton').textContent = ({ eventPending: '处理当前事件', examPending: '继续期末考试', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果', ended: '查看本局结局' })[state.phase] || (selectedIds.length ? '结束学期并考试' : '结束学期');
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
+  renderRecordsPanel();
+  renderRelationshipsPanel();
+  renderNpcLayer();
   $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(dialogMode);
+  syncBarHeight();
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
@@ -666,6 +1006,14 @@ function positionFeedback(entry) {
 function extraFeedback(entry) {
   const extra = entry.extra ? (entry.extra.skipped ? ' 本次基础收获已达到上限，未购买额外项目，也未扣费。' : ' 额外消费：' + entry.extra.title + ' −' + entry.extra.price + ' 元，额外收获 ' + changeText(entry.extra.bonuses) + '。') : '';
   return extra + (entry.growthBonuses ? (entry.action === 'selfStudy' ? ' 基础工具额外收获：' : ' 校园养成额外恢复：') + changeText(entry.growthBonuses) + '（已计入本次收获）。' : '');
+}
+function supportText(entry) {
+  if (!entry.support?.companion) return '';
+  const names = { preparation: '学习', social: '社交', fitness: '体能', mood: '心情', furtherStudy: '深造', jobPreparation: '求职' };
+  const metrics = Object.entries(entry.support.metrics);
+  const player = metrics.map(([key, value]) => names[key] + ' +' + value.playerInitial).join('、');
+  const npc = metrics.filter(([, value]) => value.npcBonus > 0).map(([key, value]) => names[key] + ' +' + value.npcBonus).join('、');
+  return (player ? '玩家初始收获：' + player + '。' : '') + (npc ? game.npcCast.profile(typeof entry.support.companion==='string'?entry.support.companion:'zhouNing').name + '辅助：' + npc + '。' : '本次没有额外数值加成。');
 }
 function costs(effect) {
   return [(effect.time ? '时间 −' + effect.time : ''), (effect.energy ? '精力 −' + effect.energy : ''), (effect.money ? '钱包 −' + effect.money + ' 元' : ''), (effect.mood < 0 ? '心情 −' + Math.min(state.mood, Math.abs(effect.mood)) : ''), (effect.fitnessCost ? '体能 −' + effect.fitnessCost + '（消耗）' : '')].filter(Boolean).join(' · ') || '不消耗资源';
@@ -793,8 +1141,198 @@ function renderActions() {
       ? '<p class="action-position' + (internship.met ? ' is-met' : '') + '">累计投入：时间 ' + internship.workTime + ' / ' + internship.reqTime + ' · 精力 ' + internship.workEnergy + ' / ' + internship.reqEnergy + (internship.met ? ' · 门槛已达标，可办证明' : '') + '</p>'
         + (internship.met ? '<button type="button" class="settle-internship" data-settle-internship="1" data-revision="' + state.revision + '"' + (uiLocked ? ' disabled' : '') + '>办理实习证明</button>' : '')
       : '';
-    return '<article class="action-card' + (wideCard ? ' is-wide' : '') + '"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.experience ? '本局 ' + (state.experiences.some(item => item.type === action.experience) ? 1 : 0) + ' / 1 次' : action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div>' + positionLine + progressLine + '<p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>确认' + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
+    return '<article class="action-card' + (wideCard ? ' is-wide' : '') + '"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.experience ? '本局 ' + (state.experiences.some(item => item.type === action.experience) ? 1 : 0) + ' / 1 次' : action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div>' + positionLine + progressLine + '<p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>' + (action.minigame ? '开始' : '确认') + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
   }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>');
+  for(const id of game.npcCast.known(state)){const p=game.npcCast.profile(id);$('#actionList').innerHTML+='<article class="action-card relationship-library-card"><h3>联系'+h(p.name)+'</h3><p>聊聊近况，或者商量一个共同安排。</p><button type="button" data-character-open="'+id+'">联系'+h(p.name)+'</button></article>';}
+}
+function renderRelationshipsPanel() {
+  const list = $('#relationshipList'); if (!list || !state) return;
+  const cast = game.npcCast, ids = cast.known(state);
+  list.innerHTML = '<p class="relationship-quota">本学期共同活动 ' + cast.totalInteractions(state) + ' / 4（全人物共享；老师最多指导两次）</p>' + ids.map(id => {
+    const p=cast.profile(id), person=cast.get(state,id), a=cast.abilities(state,id);
+    return '<article class="relationship-card"><div class="relationship-card-head"><span class="relationship-avatar"><img src="'+p.portrait+'" alt="'+h(p.name)+'"></span><div><b>'+h(p.name)+'</b><small>'+h(p.gender+' · '+p.identity)+'</small></div><span class="relationship-stage">'+h(game.relationshipRules.stage(person.familiarity).label)+'</span></div><label class="relationship-progress-label">相识度 <b>'+person.familiarity+' / 100</b></label><progress class="relationship-progress" max="100" value="'+person.familiarity+'"></progress><p>'+h(cast.dialogue(state,id))+'</p><p class="relationship-abilities">学业 '+a.academic+' · 社交 '+a.social+' · 运动 '+a.sport+'</p>'+(game.npcStoryAvailability(state,id).ok?'<p class="relationship-new">有一段新的共同经历可以参与</p>':'')+'<button type="button" class="utility-button" data-character-open="'+id+'">查看人物与互动</button></article>';
+  }).join('') + Object.keys(cast.PROFILES).filter(id=>!ids.includes(id)).map(id=>'<div class="relationship-empty"><b>'+h(cast.profile(id).name)+' · 尚未相识</b><p>'+h(({zhouNing:'第一次在图书馆自主学习时相识。',chenTeacher:'准备小组项目或参与竞赛时，有机会认识指导教师。',linXia:'完成操场运动后，有机会认识喜欢运动的同年级同学。'})[id])+'</p></div>').join('');
+}
+function vnChoice(label, command, extra = {}, note = '', disabled = false) {
+  return { label, note, disabled: disabled || ((uiLocked || zhouRequest) && ['deepTalk', 'presentation', 'confirmActivity', 'acceptProposal', 'declineProposal', 'prompt'].includes(command)), attributes: { 'data-vn-ui': command, 'data-revision': state.revision, ...extra } };
+}
+function showVisualNovel(mode, title, speech, choices, options = {}) {
+  const id=options.npcId || activeNpcId, cast=game.npcCast, p=cast.profile(id), person=cast.get(state,id), status=cast.status(state,id);
+  const place=options.place || (zhouView.screen==='activity'?game.ACTIONS[zhouView.activity]?.place:activePlace) || status.lastPlace || p.place;
+  const oldConversation=$('#vnConversation');
+  const oldScroll=oldConversation?.dataset?.npcId===id?{top:oldConversation.scrollTop,key:oldConversation.dataset.lastKey}:null;
+  const body=CampusCharacterScene.render({profile:p,met:!!person,familiarity:person?.familiarity||0,stage:person?game.relationshipRules.stage(person.familiarity).label:'初次见面',location:(game.PLACES[place]?.title||'校园里')+' · 与'+p.name,
+    abilities:cast.abilities(state,id),status:status.moodLabel+' · '+status.energyLabel,profileOpen:zhouView.profileOpen,goal:person?.story||person?.presentation?'继续自己的校园安排，也关心你的近况。':p.goal,
+    memories:person?person.memories.map(key=>cast.MEMORIES[key]).filter(Boolean):[],speech,choices,canClose:options.canClose??mode!=='event',choiceTitle:options.choiceTitle,
+    chat:mode==='relationship',busy:!!zhouRequest||uiLocked,draft:zhouChatDraft,historyOpen:zhouHistoryOpen,messages:game.characterAgent.conversation(state,id),pendingText:zhouRequest?.npcId===id?zhouRequest.text:'',waiting:zhouRequest?.npcId===id,
+    detail:options.detail||('时间 '+state.time+' · 精力 '+state.energy+' · 钱包 '+state.money+' 元。全人物共同活动 '+cast.totalInteractions(state)+'/4。')});
+  lastVisualNovel={mode,title,speech,choices,options:{...options,npcId:id}};
+  showDialog(mode,title,body,options.footerButtons||[]);dialog.classList.add('is-vn');
+  const conversation=$('#vnConversation');
+  if(mode==='relationship'&&conversation&&typeof conversation.scrollHeight==='number')conversation.scrollTop=oldScroll&&oldScroll.key===conversation.dataset.lastKey?oldScroll.top:conversation.scrollHeight;
+}
+function showCharacter(id, options={}) {
+  if(!state||!game.npcCast.get(state,id))return;
+  if(activeNpcId!==id){cancelZhouRequest();activeNpcId=id;zhouChatDraft='';zhouChatNotice='';zhouHistoryOpen=false;zhouView={screen:'home',profileOpen:false};}
+  showZhouNing(options);
+}
+function showZhouNing(options={}) {
+  const id=activeNpcId, cast=game.npcCast, p=cast.profile(id);
+  if(!state||!cast.get(state,id))return;
+  closePanel();
+  if(!options.preserve){zhouHistoryOpen=false;zhouView={screen:'home',group:'life',activity:'selfStudy',amount:undefined,profileOpen:false,text:null};}
+  if(options.text)zhouView.text=options.text;
+  const saved=game.characterAgent.read(state,id);
+  let speech=zhouView.text||saved.messages.filter(item=>item.role==='assistant').at(-1)?.content||cast.dialogue(state,id), choices, detail,choiceTitle='你想怎么回应？';
+  if(zhouView.screen==='groups'){
+    speech=p.role==='teacher'?'带着你已经做过的部分来，我们选一个具体问题讨论。':'今天想做点什么？你可以按自己的安排选。';
+    choices=Object.entries(ZHOU_GROUPS).filter(([group])=>p.activities.some(a=>game.relationshipRules.ACTIVITIES[a].group===group)).map(([key,label])=>vnChoice(id==='chenTeacher'?(key==='campus'?'项目指导':'学业与发展方向'):label,'group',{'data-vn-group':key}));choices.push(vnChoice('先聊点别的','home'));
+  }else if(zhouView.screen==='activities'){
+    choices=p.activities.filter(a=>game.relationshipRules.ACTIVITIES[a].group===zhouView.group).map(a=>{const c=game.npcAvailability(state,id,a);return vnChoice(cast.activityLabel(id,a),'activity',{'data-vn-activity':a},c.ok?game.PLACES[game.ACTIONS[a].place]?.title:c.reason,!c.ok);});choices.push(vnChoice('换一种安排','groups'));
+  }else if(zhouView.screen==='activity'){
+    const a=zhouView.activity, action=game.getAction(state,a), investment=game.getActionInvestment(state,a), amount=zhouView.amount??investment?.default,c=game.npcAvailability(state,id,a,amount),preview=investment&&game.previewActionInvestment(state,a,amount);
+    speech=c.ok?cast.activityReply(id,a):c.reason;choiceTitle=cast.activityLabel(id,a);detail=costs(preview?.effect||game.fitnessAdjustedEffect(state,action,a))+'。只结算一次原活动成本。';
+    choices=investment?investment.tiers.map(t=>({...vnChoice(t.label,'tier',{'data-vn-amount':t.amount},costs(game.previewActionInvestment(state,a,t.amount).effect)),selected:t.amount===amount})):[];
+    choices.push(vnChoice(action.minigame?'一起去球场，开始投篮':'就这样安排，一起出发','confirmActivity',{},c.reason,!c.ok),vnChoice('再看看别的活动','backActivities'));
+  }else if(zhouView.screen==='story'){
+    speech=id==='chenTeacher'?'把你选择的方案和证据摆在一起，我们做一次复盘。你想重点检查论证，还是先练习把想法说出来？':'接力赛前总有点担心。我想再练一下配合，也想听听你怎么看待紧张。';
+    const c=game.npcStoryAvailability(state,id);detail=c.ok?costs(game.npcStoryCost(state,id))+'。准备方式会影响这次收获。':c.reason;
+    choices=[vnChoice(id==='chenTeacher'?'认真复盘依据与验证办法':'一起练习交接与节奏','storyChoice',{'data-story-choice':'prepare'},'',!c.ok),vnChoice(id==='chenTeacher'?'先练习表达，建立信心':'先聊聊赛前的担心','storyChoice',{'data-story-choice':'encourage'},'',!c.ok),vnChoice('改天再安排','home')];
+  }else if(saved.proposal){
+    const a=saved.proposal.id,story=a===p.storyId,evt=a==='joinEvent',c=story?game.npcStoryAvailability(state,id):evt?game.npcEventAvailability(state,id):game.npcAvailability(state,id,a);
+    const action=!story&&!evt?game.getAction(state,a):null,inv=action&&game.getActionInvestment(state,a),preview=inv&&game.previewActionInvestment(state,a,inv.default);
+    detail=!c.ok?c.reason:evt?'先加入当前事件，选择事件方案后才结算。':story?'先听听这件事，再选择参与方式。':costs(preview?.effect||game.fitnessAdjustedEffect(state,action,a));
+    choices=[vnChoice(story?'好，说说这件事吧':evt?'一起参与眼前的事':'好，'+cast.activityLabel(id,a),'acceptProposal',{'data-proposal-revision':saved.proposal.createdRevision},detail,!c.ok),vnChoice('今天先不了，改天吧','declineProposal',{'data-proposal-revision':saved.proposal.createdRevision}),vnChoice('我想再问问','prompt',{'data-vn-prompt':'你为什么想约我做这件事？'})];
+  }else{
+    choices=[vnChoice('你最近过得怎么样？','prompt',{'data-vn-prompt':'你最近过得怎么样，有没有什么想做的事？'}),vnChoice('一起安排活动','groups'),vnChoice('人物与共同经历','profile')];
+    if(game.npcStoryAvailability(state,id).ok)choices.push(vnChoice(id==='zhouNing'?'陪你练习课程展示':id==='chenTeacher'?'一起复盘一次方案':'陪你练习接力配合','story'));
+    detail='可以自由聊天，也可以回应对方的邀请。聊天不扣资源；共同活动需你确认后开始。';
+  }
+  if(state.phase!=='playing')detail='请先完成当前事件、考试或学期流程。现在仍可以聊天。 '+(detail||'');
+  if(zhouRequest)detail=p.name+'正在回复，稍等一下……';else if(zhouChatNotice)detail=zhouChatNotice+' '+(detail||'');
+  showVisualNovel('relationship',p.name+' · 校园日常',speech,choices,{npcId:id,detail,choiceTitle,place:options.place,footerButtons:[{id:'resume',text:'继续安排',secondary:true}]});
+}
+function cancelZhouRequest() {
+  zhouRequestSequence++;
+  zhouRequest?.controller?.abort();
+  zhouRequest = null;
+}
+function answerZhouProposal(answer, proposalRevision) {
+  if(!state||uiLocked||zhouRequest)return;
+  const id=activeNpcId,p=game.npcCast.profile(id),proposal=game.characterAgent.read(state,id).proposal;
+  if(!proposal||proposal.createdRevision!==Number(proposalRevision)){showToast('邀请已经更新，请重新查看');return;}
+  if(answer==='accept'&&proposal.id==='basketball'){startBasketball({companionId:id,agentProposalRevision:proposal.createdRevision});return;}
+  if(answer==='accept'&&proposal.id===p.storyId){
+    if(id==='zhouNing'){const r=runCommand('runNpcStory',{npcId:id,choice:'start'},state.revision);if(r)showEvent();}
+    else{zhouView.screen='story';zhouView.text=null;showZhouNing({preserve:true});}return;
+  }
+  const result=runCommand('resolveNpcProposal',{npcId:id,answer},state.revision,undefined,undefined,{proposalRevision:proposal.createdRevision});if(!result)return;
+  acknowledgedResultRevision=state.revision;zhouView.text=null;
+  if(state.pendingEvent)showEvent();else if(result.entry.relationship)showRelationshipResult(result.entry);else showZhouNing({preserve:true});
+}
+async function sendZhouChat(message) {
+  if(!state||dialogMode!=='relationship'||zhouRequest||uiLocked)return;
+  const text=String(message??$('#zhouChatInput')?.value??'').trim();if(!text||text.length>240)return;
+  const npcId=activeNpcId,proposal=game.characterAgent.read(state,npcId).proposal,answer=proposal&&game.characterAgent.consent(text);
+  if(answer){zhouChatDraft='';answerZhouProposal(answer,proposal.createdRevision);return;}
+  const snapshot=state,sequence=++zhouRequestSequence,controller=typeof AbortController==='function'?new AbortController():null;
+  zhouRequest={controller,npcId,text};zhouChatDraft='';zhouChatNotice='';zhouView.screen='home';zhouView.text=null;showZhouNing({preserve:true});
+  const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
+  const decision=await game.characterAgent.request({state:snapshot,npcId,text,candidates:game.npcCandidates(snapshot,npcId),relay:game.AI_CHAT.relay,fetchFn:typeof fetch==='function'?fetch:null,signal:controller?.signal});
+  if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence||activeNpcId!==npcId)return;zhouRequest=null;
+  if(state!==snapshot||dialogMode!=='relationship'||!dialog.open){zhouChatDraft=text;return;}
+  const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:'chat',text},snapshot.revision);if(!result){zhouChatDraft=text;showZhouNing({preserve:true});return;}
+  acknowledgedResultRevision=state.revision;zhouChatNotice=decision.source==='local'?'在线对话暂时没连上，先继续本地对话。':result.entry.dialogue.gained?'你们多了解了彼此一点 · 相识度 +'+result.entry.dialogue.gained+'。':'';showZhouNing({preserve:true});
+}
+async function maybeZhouNingDirector() {
+  if(!state||zhouRequest||uiLocked||basketballSession||needsCourseSelection())return;
+  const occasion=game.npcOpportunity(state);if(!occasion||(dialog.open&&dialogMode!=='event'))return;
+  const snapshot=state,sequence=++zhouRequestSequence,controller=typeof AbortController==='function'?new AbortController():null,npcId=occasion.npcId;
+  zhouRequest={controller,npcId};const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
+  const decision=await game.characterAgent.request({state:snapshot,npcId,candidates:occasion.candidates,occasion,relay:game.AI_CHAT.relay,fetchFn:typeof fetch==='function'?fetch:null,signal:controller?.signal});
+  if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence)return;zhouRequest=null;
+  if(state!==snapshot||basketballSession||(dialog.open&&dialogMode!=='event')){if(state&&dialogMode==='relationship')showZhouNing({preserve:true});return;}
+  const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:occasion.kind,text:'',trigger:occasion.key},snapshot.revision);if(!result)return;
+  acknowledgedResultRevision=state.revision;
+  if(state.pendingEvent)showEvent();else{zhouChatNotice=decision.source==='local'?'在线对话暂时没连上，先继续本地对话。':'';showCharacter(npcId,{text:decision.say,place:occasion.place});}
+}
+function showRelationshipResult(entry, mode='relationshipResult') {
+  const r=entry.relationship,id=r.characterId||'zhouNing',p=game.npcCast.profile(id);activeNpcId=id;
+  const lines={good:'有你陪着练过一遍，我没那么紧张了。谢谢你，我会继续准备的。',steady:'重新把顺序理出来以后，表达也清楚多了。我回去再练几遍。',limited:'至少知道自己该补什么了，谢谢你陪我开口试这一遍。',encouraged:'讲错一句也能接着讲，谢谢你没有催我。'};
+  const speech=r.kind==='meet'?p.intro:r.kind==='activity'?game.npcCast.afterActivity(id,r.activityId):r.kind==='presentation'?lines[r.level]:r.description;
+  showVisualNovel(mode,entry.outcome||entry.title||'与'+p.name+'的近况',speech,[vnChoice(state.pendingEvent?'继续处理事件':'查看人物关系','continue')],{npcId:id,place:game.ACTIONS[entry.action]?.place||p.place,detail:(entry.action==='basketball'?'命中 '+entry.hits+' 球 · '+entry.score+' 分。':'')+(r.kind==='meet'?'你与'+p.name+'建立了联系。':'')+(r.assessment?.formula==='player'?'本次表现由你的学业、社交和心情决定。':'')+'相识度 +'+r.gained+' · 当前 '+r.familiarity+'/100。'+changeText(entry.changes)+'。'+supportText(entry),footerButtons:[{id:'relationshipContinue',text:state.pendingEvent?'继续处理事件':'查看人物关系'}]});
+}
+function renderBasketballHud(info) {
+  const time = Math.max(0, Math.ceil((info.timeLeft || 0) / 1000));
+  const timeNode = $('#basketballTime');
+  const scoreNode = $('#basketballScore');
+  const hitsNode = $('#basketballHits');
+  if (timeNode) timeNode.textContent = String(time);
+  if (scoreNode) scoreNode.textContent = String(info.score || 0);
+  if (hitsNode) hitsNode.textContent = String(info.hits || 0);
+}
+function closeBasketballDialog() {
+  if ($('#basketballCompanionNotice')) $('#basketballCompanionNotice').hidden = true;
+  if (basketballDialog && basketballDialog.open) {
+    try { basketballDialog.close(); } catch (_) { basketballDialog.removeAttribute('open'); }
+  }
+}
+function cancelBasketball() {
+  basketballSession?.destroy();
+  basketballSession = null;
+  basketballCompanion = null;
+  closeBasketballDialog();
+}
+function startBasketball(options = {}) {
+  const companion = options.companionId && game.npcCast.get(state,options.companionId) ? options.companionId : null;
+  if (!state || state.phase !== 'playing' || basketballSession || (!companion && (activePlace !== 'track' || dialog.open))) return;
+  const check = companion ? game.npcAvailability(state, companion, 'basketball') : game.availability(state, 'basketball');
+  if (!check.ok) { showToast(check.reason); return; }
+  if (!basketballGame) { showToast('当前浏览器不支持投篮小游戏'); return; }
+  try {
+    basketballSession = basketballGame.createSession({
+      canvas: $('#basketballCanvas'),
+      durationMs: game.BASKETBALL.durationMs,
+      maxHits: game.BASKETBALL.maxHits,
+      pointsPerHit: game.BASKETBALL.pointsPerHit,
+      onTick: renderBasketballHud,
+      onScore: () => audio?.play('success'),
+      onFinish: finishBasketball
+    });
+    basketballCompanion = companion ? { companionId: companion, characterVersion: 2, npcCastVersion:1, revision: state.revision, ...(options.agentProposalRevision !== undefined ? { agentProposalRevision: options.agentProposalRevision } : {}) } : null;
+    if ($('#basketballCompanionNotice')) $('#basketballCompanionNotice').hidden = !companion;
+    if (companion) { $('#basketballCompanionNotice').textContent=game.npcCast.profile(companion).name+'与你一起打球。完成后结算一次共同活动。'; dialog.close(); }
+    if (basketballDialog && !basketballDialog.open) basketballDialog.showModal();
+    basketballSession.start();
+    renderBasketballHud({ hits: 0, score: 0, timeLeft: game.BASKETBALL.durationMs });
+    $('#basketballCanvas')?.focus();
+    audio?.play('sport');
+  } catch (error) {
+    basketballSession?.destroy();
+    basketballSession = null;
+    basketballCompanion = null;
+    closeBasketballDialog();
+    showToast(error?.message || '投篮小游戏启动失败');
+  }
+}
+function finishBasketball(result) {
+  if (!basketballSession) return;
+  const session = basketballSession;
+  basketballSession = null;
+  session.destroy();
+  closeBasketballDialog();
+  const companion = basketballCompanion;
+  basketballCompanion = null;
+  const commandResult = runCommand('completeBasketball', result.hits, companion?.revision ?? state.revision, undefined, undefined, companion || {});
+  if (!commandResult) return;
+  audio?.play('success');
+  $('#actionFeedback').textContent = '本局命中 ' + result.hits + ' 球，得分 ' + result.score + '。' + changeText(commandResult.changes);
+  showBasketballResult(commandResult.entry);
+}
+function showBasketballResult(entry) {
+  if(entry.relationship){showRelationshipResult(entry,'basketballResult');return;}
+  const tier = entry.tierLabel || game.BASKETBALL.rewards.find((item) => item.id === entry.tier)?.label || '投篮结算';
+  showDialog('basketballResult', '球场结算', '<div class="basketball-result"><p class="basketball-result-score"><b>' + entry.score + '</b> 分</p><p>命中 <b>' + entry.hits + '</b> 球 · ' + h(tier) + '</p><div class="basketball-result-change">' + h(changeText(entry.changes)) + '</div><p class="dialog-note">本局结果已记入成长记录，下一球从零开始。</p></div>', [{ id: 'basketballContinue', text: '继续安排' }]);
 }
 // 地点插画：按建筑名取 assets/places 下对应的矢量图；锚点与地图热点坐标一致。
 const PLACE_ART = {
@@ -864,8 +1402,9 @@ function unlockBodyScroll() {
   } catch (_) {}
 }
 function openPlace(key, hotspot) {
-  if (!state) return;
+  if (!state || basketballSession) return;
   closePanel();
+  closePopovers();
   if (state.phase !== 'playing') { resumePhase(); return; }
   if (!Object.hasOwn(game.PLACES, key)) return;
   audio?.play(PLACE_SOUNDS[key]);
@@ -923,6 +1462,7 @@ function resetNpcSystem() {
 function npcDisplayList() {
   const entries = [];
   if (npcSystem && state) for (const npc of npcSystem.active()) entries.push({ npc, fading: false });
+  if(state)for(const id of game.npcCast.known(state)){const p=game.npcCast.profile(id),pos={zhouNing:[70,47],chenTeacher:[48,37],linXia:[27,66]}[id];entries.push({npc:{id,label:p.name+' · 已认识',figure:p.figure||'student',x:pos[0],y:pos[1]},fading:false});}
   const now = Date.now();
   for (const [id, entry] of npcFades) {
     if (now - entry.since >= 700) npcFades.delete(id);
@@ -990,6 +1530,7 @@ function npcTick() {
   if (typeof setTimeout === 'function') npcTimer = setTimeout(npcTick, 300);
 }
 function talkToNpc(npcId) {
+  if(state&&game.npcCast.get(state,npcId)&&!dialog.open){showCharacter(npcId);return;}
   if (!npcSystem || !state || dialog.open) return;
   const found = npcSystem.active().find((item) => item.id === npcId);
   if (!found) return;
@@ -1134,10 +1675,11 @@ async function sendNpcChat() {
   if (sendButton) { sendButton.disabled = false; sendButton.textContent = buttonText; }
 }
 function showDialog(mode, title, body, buttons = []) {
+  dialog.classList.remove('is-vn');
   dialogMode = mode;
   stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', budget: '学期预算', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', npc: '校园偶遇', positionPicker: '南门岗位库' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ relationship: '人物关系网', relationshipResult: '共同经历', basketballResult: '球场结算', event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', budget: '学期预算', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', npc: '校园偶遇', positionPicker: '南门岗位库' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
@@ -1162,12 +1704,17 @@ function lockUi() {
     dialog.querySelectorAll('[data-event-choice]').forEach((button) => { button.disabled = !game.eventAvailability(state, button.dataset.eventChoice, button.dataset.instance, eventDraft(button.dataset.eventChoice)).ok; });
     dialog.querySelectorAll('[data-ending]').forEach((button) => { button.disabled = !state.endingOptions.options.find((item) => item.id === button.dataset.ending)?.available; });
     dialog.querySelectorAll('#examForm input, #examForm > button[type="submit"]').forEach((input) => { input.disabled = false; });
+    if (dialogMode === 'relationship') showZhouNing({ preserve: true });
+    else if (!dialog.open || dialogMode === 'event') maybeZhouNingDirector();
   }, 300);
 }
 function runCommand(operation, id, expectedRevision, eventInstanceId, investment, extra, positionId) {
   if (!state || uiLocked) return null;
-  const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId, investment, extra, positionId };
-  const result = ['executeAction', 'purchaseGrowth', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'chooseBudget', 'updateExamAnswers', 'submitExam', 'chatWithNpc', 'setTargetPosition'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const options = { ...(extra && typeof extra === 'object' ? extra : { extra }), positionId, commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId, investment };
+  if(['executeAction','completeBasketball','submitEventChoice','resolveNpcProposal','runNpcStory'].includes(operation)){options.npcSupportVersion=1;options.npcCastVersion=1;if(options.companionId)options.characterVersion=2;}
+  if(operation==='submitEventChoice'&&state.relationships?.eventCompanion?.instanceId===state.pendingEvent?.instanceId)options.companionId=state.relationships.eventCompanion.npcId;
+  if (operation === 'submitEventChoice' && id !== game.SICK_LEAVE_ID && game.characterAgent.read(state).cameo?.instanceId === state.pendingEvent?.instanceId) options.zhouCameo = true;
+  const result = ['executeAction', 'purchaseGrowth', 'chooseBudget', 'setTargetPosition', 'completeBasketball', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'updateExamAnswers', 'submitExam', 'chatWithNpc', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal','recordNpcDialogue','resolveNpcProposal','runNpcStory','attachNpcToEvent'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');
@@ -1321,6 +1868,7 @@ function startGame() {
   savedAt = '';
   saveNotice = '';
   failures.length = 0;
+  resetSeasonTracking();
   audio?.play('success');
   audio?.startBgm();
   resetNpcSystem();
@@ -1404,8 +1952,19 @@ function showEvent() {
   audio?.play('event');
   const pending = state.pendingEvent;
   const event = game.EVENTS[pending.id];
+  if (['zhouNingMeet', 'zhouNingPresentation'].includes(pending.id)) {
+    const choices = game.isSick(state) && pending.id !== 'zhouNingMeet'
+      ? [{ label: '先去校医院', note: '先照顾好身体，之后再安排。', attributes: { 'data-event-choice': game.SICK_LEAVE_ID, 'data-instance': pending.instanceId, 'data-revision': state.revision }, disabled: uiLocked }]
+      : event.choices.map(choice => {
+        const check = game.eventAvailability(state, choice.id, pending.instanceId);
+        return { label: choice.title, note: check.ok ? costs(game.fitnessAdjustedEffect(state, choice, null)) : check.reason, disabled: !check.ok || uiLocked, attributes: { 'data-event-choice': choice.id, 'data-instance': pending.instanceId, 'data-revision': state.revision } };
+      });
+    const speech = pending.id === 'zhouNingMeet' ? '你也选了这门课？我叫周宁。刚才那个知识点，我整理过一版笔记。你愿意和我聊聊你的解法吗？' : '题目我会做，可一想到站上讲台，脑子就空了。你能陪我练一遍吗？这次，想请你帮我迈出一步。';
+    showVisualNovel('event', event.title, speech, choices, {npcId:'zhouNing',canClose:false,place:'library',detail: event.trigger + '。相识和免费暂缓不会额外收费。' });
+    return;
+  }
 
-  const sick = game.isSick(state);
+  const sick = game.isSick(state) && pending.id !== 'zhouNingMeet';
   const choices = sick
     ? '<article class="event-choice"><h3>先去校医院</h3><p>烧还没退，现在不是处理这件事的时候。</p><div class="action-cost">不消耗资源 · 事件先搁置</div><button type="button" id="event-choice-sickLeave" data-event-choice="sickLeave" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '">选择：先去校医院</button><div class="action-reason"></div></article>'
     : event.choices.filter(choice => !choice.legacyHidden).map((choice) => {
@@ -1418,11 +1977,16 @@ function showEvent() {
   const note = sick
     ? '身体不适，先处理身体。待处理事件可以先去校医院，之后再回来处理。'
     : h(event.trigger) + '。剩余时间 ' + state.time + ' · 精力 ' + state.energy + ' · 钱包 ' + state.money + ' 元。确认才扣费，切换档位不会结算。';
-  showDialog('event', event.title, '<p>' + h(event.description) + '</p><p class="dialog-note">' + note + '</p><div class="event-choice-list">' + choices + '</div>');
+  const bound=state.relationships?.eventCompanion, cameo=bound?.instanceId===pending.instanceId?bound:null, p=cameo&&game.npcCast.profile(cameo.npcId);
+  const helpers=game.npcCast.known(state).filter(id=>game.npcEventAvailability(state,id).ok);
+  const cameoBody=cameo?'<div class="zhou-event-cameo"><img src="'+p.portrait+'" alt="'+h(p.name)+'"><div><b>'+h(p.name)+'在你身边</b><p>'+h(cameo.say)+'</p><small>你的选择与投入决定主要结果，人物提供少量辅助。</small></div></div>':helpers.length?'<div class="event-helper"><p>也可以请认识的人一起参与：</p>'+helpers.map(id=>'<button type="button" data-event-npc="'+id+'" data-instance="'+pending.instanceId+'" data-revision="'+state.revision+'">联系'+h(game.npcCast.profile(id).name)+'</button>').join('')+'</div>':'';
+  showDialog('event', event.title, '<p>' + h(event.description) + '</p>' + cameoBody + '<p class="dialog-note">' + note + '</p><div class="event-choice-list">' + choices + '</div>');
+  maybeZhouNingDirector();
 }
 const INVESTMENT_OUTCOMES = { setback: '发挥失常', limited: '收获有限', steady: '有所收获', good: '状态出色', surprise: '意外收获' };
 function showEventResult(entry) {
-  const result = entry.investment;
+  if(entry.relationship){showRelationshipResult(entry,'eventResult');return;}
+  const result = { ...entry.investment, description: entry.investment.description + (entry.relationship ? ' ' + entry.relationship.description + ' 相识度 +' + entry.relationship.gained + '，当前 ' + entry.relationship.familiarity + '/100。' : '') };
   const profile = entry.event ? game.EVENT_INVESTMENTS[entry.event + ':' + entry.choice] || game.LEGACY_INVESTMENTS.events[entry.event + ':' + entry.choice] : game.getActionInvestment(state, entry.action) || game.LEGACY_INVESTMENTS.actions[entry.action];
   const rawFitnessCost = entry.event
     ? ((game.EVENTS[entry.event] && game.EVENTS[entry.event].choices.find(item => item.id === entry.choice)) || {}).fitnessCost || 0
@@ -1431,8 +1995,8 @@ function showEventResult(entry) {
   const spent = Number.isSafeInteger(result.spent) ? result.spent : result.amount;
   const scaled = result.spent !== undefined && result.spent !== result.amount;
   const capped = Object.keys(profile.rewards).some(key => state[key === 'recovery' ? 'energy' : key] === 100);
-  const title = entry.event ? game.EVENTS[entry.event].title : game.ACTIONS[entry.action].title;
-  showDialog('eventResult', title + ' · 结果', '<div class="investment-result"><span class="outcome-badge outcome-' + result.outcome + '">' + (profile.fixedIncome ? '工作完成' : INVESTMENT_OUTCOMES[result.outcome]) + '</span><p class="investment-spent">本次投入 <b>' + spent + ' ' + investmentUnit(result.resource) + '</b>' + (fitnessCost ? '，另消耗 <b>' + fitnessCost + ' 点体能</b>' : '') + '</p>' + (scaled ? '<p class="dialog-note">受体能挡位影响，实际投入以本次结算为准。</p>' : '') + '<p class="investment-story">' + h(result.description + extraFeedback(entry) + debtFeedback(entry)) + '</p><div class="investment-actual"><span>实际变化</span><b>' + h(changeText(entry.changes)) + '</b></div>' + (fitnessCost && entry.changes.fitness > 0 ? '<p class="dialog-note">体能 +' + entry.changes.fitness + ' 是扣除本次 ' + fitnessCost + ' 点消耗后的净变化。</p>' : '') + (capped ? '<p>部分属性已达上限，实际增加量以当前状态为准。</p>' : '') + '<p class="dialog-note">这次结果已经记入成长记录，继续或保存都不会重新结算。</p></div>', [{ id: 'eventContinue', text: state.pendingEvent?.id === 'military2' ? '继续军训汇演' : state.pendingEvent ? '处理下一个事件' : '继续安排' }]);
+  const title = entry.relationship ? entry.title : entry.event ? game.EVENTS[entry.event].title : game.ACTIONS[entry.action].title;
+  showDialog('eventResult', title + ' · 结果', '<div class="investment-result"><span class="outcome-badge outcome-' + result.outcome + '">' + (profile.fixedIncome ? '工作完成' : INVESTMENT_OUTCOMES[result.outcome]) + '</span><p class="investment-spent">本次投入 <b>' + spent + ' ' + investmentUnit(result.resource) + '</b>' + (fitnessCost ? '，另消耗 <b>' + fitnessCost + ' 点体能</b>' : '') + '</p>' + (scaled ? '<p class="dialog-note">受体能挡位影响，实际投入以本次结算为准。</p>' : '') + '<p class="investment-story">' + h(result.description + extraFeedback(entry) + debtFeedback(entry)) + '</p><div class="investment-actual"><span>实际变化</span><b>' + h(changeText(entry.changes)) + '</b></div>' + (entry.support?.companion ? '<p>' + h(supportText(entry)) + '</p>' : '') + (fitnessCost && entry.changes.fitness > 0 ? '<p class="dialog-note">体能 +' + entry.changes.fitness + ' 是扣除本次 ' + fitnessCost + ' 点消耗后的净变化。</p>' : '') + (capped ? '<p>部分属性已达上限，实际增加量以当前状态为准。</p>' : '') + '<p class="dialog-note">这次结果已经记入成长记录，继续或保存都不会重新结算。</p></div>', [{ id: 'eventContinue', text: state.pendingEvent?.id === 'military2' ? '继续军训汇演' : state.pendingEvent ? '处理下一个事件' : '继续安排' }]);
 
 }
 function needsBudget() {
@@ -1561,18 +2125,223 @@ const EXPERIENCE_LABELS = {
   military: '军训汇演完成', singer: '歌手大赛经历', trip: '返乡分享经历', contest: '学科竞赛经历',
   sportsMeet: '运动会经历', transfer: '转专业经历', portfolio: '个人作品展示', showcase: '校园小展演', dormMemory: '宿舍布置合影'
 };
+// 成长记录：把操作历史按学期与事件类型归档，并单独跟踪事件链进度。
+// 分类依据游戏规则：主线事件为军训流程；随机池中的事件记为突发事件；
+// 带 chain 的事件与申请/投入行动记为事件链；其余条件事件记为基础事件。
+const RECORD_CATEGORY_LABELS = {
+  action: '日常行动', basic: '基础事件', random: '突发事件', chain: '事件链', main: '主线事件', academic: '学业节点'
+};
+const RECORD_MAIN_EVENTS = ['military1', 'military2'];
+const RECORD_CHAIN_EFFECTS = { accept: '加入事件链', defer: '暂缓申请', postpone: '成果确认延期', complete: '完成事件链', abandon: '退出事件链' };
+let recordFilter = 'all';
+let recordEntriesCache = null;
+let recordEntriesState = null;
+let recordEntriesRevision = -1;
+function recordEventCategory(eventId) {
+  const event = game.EVENTS[eventId];
+  if (!event) return 'basic';
+  if (event.chain) return 'chain';
+  if (RECORD_MAIN_EVENTS.includes(eventId)) return 'main';
+  if ((game.RANDOM_POOL || []).includes(eventId)) return 'random';
+  return 'basic';
+}
+function recordCategoryBadge(category, chainId) {
+  return category === 'chain' && chainId ? '事件链 · ' + game.CHAIN_NAMES[chainId] : RECORD_CATEGORY_LABELS[category];
+}
+function buildRecordEntries() {
+  const entries = [];
+  for (const log of state.history) {
+    const operation = log.command && log.command.operation;
+    if (!operation || operation === 'updateExamAnswers') continue;
+    if (operation === 'executeAction' || operation === 'completeBasketball' || operation === 'resolveZhouNingProposal' && log.action !== 'zhouDialogue' || operation === 'chatWithNpc' || operation === 'interactWithZhouNing' || operation==='runNpcStory' || operation==='recordNpcDialogue' && log.dialogue?.kind==='meet' || operation==='resolveNpcProposal' && !!log.relationship) {
+      const action = ['executeAction', 'completeBasketball', 'resolveZhouNingProposal','resolveNpcProposal'].includes(operation) ? game.ACTIONS[log.action] : null;
+      const chainId = action && action.chain ? action.chain : null;
+      const place = action && action.place && game.PLACES[action.place] ? game.PLACES[action.place].title : '';
+      const notes = [place, supportText(log)];
+      if (log.relationship) notes.push(game.npcCast.profile(log.relationship.characterId||'zhouNing').name+' · 相识度 +' + log.relationship.gained + '（' + log.relationship.familiarity + '/100）');
+      if (log.investment) {
+        notes.push('投入 ' + log.investment.amount + ' ' + investmentUnit(log.investment.resource));
+        if (INVESTMENT_OUTCOMES[log.investment.outcome]) notes.push(INVESTMENT_OUTCOMES[log.investment.outcome]);
+      }
+      const category = chainId ? 'chain' : 'action';
+      entries.push({
+        term: log.term, revision: log.revision, category, chainId, kind: 'action',
+        title: log.title || log.identity || (action ? action.title : '') || '行动',
+        note: notes.filter(Boolean).join(' · '), changes: log.changes || null,
+        badge: recordCategoryBadge(category, chainId)
+      });
+      continue;
+    }
+    if (operation === 'submitEventChoice') {
+      const event = game.EVENTS[log.event];
+      const choice = event ? event.choices.find((item) => item.id === log.choice) : null;
+      const chainId = event && event.chain ? event.chain : null;
+      const category = recordEventCategory(log.event);
+      const notes = ['选择「' + (choice ? choice.title : (log.title || '先去校医院')) + '」', supportText(log)].filter(Boolean);
+      if (log.relationship) notes.push(game.npcCast.profile(log.relationship.characterId||'zhouNing').name+' · 相识度 +' + log.relationship.gained + '（' + log.relationship.familiarity + '/100）');
+      if (choice && choice.chainEffect && RECORD_CHAIN_EFFECTS[choice.chainEffect]) notes.push(RECORD_CHAIN_EFFECTS[choice.chainEffect]);
+      if (log.outcome) notes.push(log.outcome);
+      if (log.investment) {
+        notes.push('投入 ' + log.investment.amount + ' ' + investmentUnit(log.investment.resource));
+        if (INVESTMENT_OUTCOMES[log.investment.outcome]) notes.push(INVESTMENT_OUTCOMES[log.investment.outcome]);
+      }
+      entries.push({
+        term: log.term, revision: log.revision, category, chainId, kind: 'event',
+        title: event ? event.title : (log.title || '事件'),
+        note: notes.join(' · '), changes: log.changes || null,
+        badge: recordCategoryBadge(category, chainId)
+      });
+      continue;
+    }
+    entries.push({
+      term: log.term, revision: log.revision, category: 'academic', chainId: null, kind: 'academic',
+      title: log.title || operation,
+      note: operation === 'submitExam' && Number.isSafeInteger(log.examScore) ? '期末得分 ' + log.examScore : '',
+      changes: null, badge: RECORD_CATEGORY_LABELS.academic
+    });
+  }
+  return entries;
+}
+function recordEntries() {
+  if (recordEntriesCache && recordEntriesState === state && recordEntriesRevision === state.revision) return recordEntriesCache;
+  const entries = buildRecordEntries();
+  recordEntriesCache = entries;
+  recordEntriesState = state;
+  recordEntriesRevision = state.revision;
+  return entries;
+}
+function recordCounts(entries) {
+  const counts = { action: 0, event: 0, academic: 0 };
+  for (const entry of entries) {
+    if (entry.kind === 'action') counts.action += 1;
+    else if (entry.kind === 'academic') counts.academic += 1;
+    else counts.event += 1;
+  }
+  return counts;
+}
+function recordStatMarkup(value, label) {
+  return '<div class="record-stat"><b>' + h(value) + '</b><span>' + h(label) + '</span></div>';
+}
+function recordSummaryMarkup(entries) {
+  const counts = recordCounts(entries);
+  const passed = state.courses.filter((item) => item.passed).length;
+  return '<div class="record-stats">' + recordStatMarkup(entries.length, '条记录') + recordStatMarkup(counts.action, '次行动') + recordStatMarkup(counts.event, '个事件') + recordStatMarkup(state.experiences.length, '项经历') + '</div>' +
+    '<p class="record-summary-note">' + h(state.nickname) + ' · ' + h(game.TERM_NAMES[state.term - 1]) + ' · 已通过 <b>' + passed + ' / 8</b> 个学期 · 学业节点 <b>' + counts.academic + '</b> 条</p>';
+}
+function recordEntryMarkup(entry) {
+  const hasChanges = entry.changes && Object.values(entry.changes).some((value) => value !== 0);
+  return '<article class="record-entry is-' + entry.category + '">' +
+    '<div class="record-entry-head"><span class="record-badge is-' + entry.category + '">' + h(entry.badge) + '</span><b class="record-entry-title">' + h(entry.title) + '</b></div>' +
+    (entry.note ? '<p class="record-note">' + h(entry.note) + '</p>' : '') +
+    (hasChanges ? '<p class="record-changes">' + h(changeText(entry.changes)) + '</p>' : '') +
+    '</article>';
+}
+function recordTimelineMarkup(entries, options = {}) {
+  if (!entries.length) return '<p class="record-empty">' + h(options.empty || '还没有记录。') + '</p>';
+  let list = entries.slice();
+  let hidden = 0;
+  const limit = options.limit || 0;
+  if (limit && list.length > limit) { hidden = list.length - limit; list = list.slice(-limit); }
+  if (options.newestFirst) list.reverse();
+  const groups = new Map();
+  for (const entry of list) {
+    if (!groups.has(entry.term)) groups.set(entry.term, []);
+    groups.get(entry.term).push(entry);
+  }
+  const html = [...groups.entries()].map(([term, items]) => '<section class="record-term-group"><div class="record-term"><span>第 ' + term + ' 学期 · ' + h(game.TERM_NAMES[term - 1]) + '</span><small>' + items.length + ' 条</small></div>' + items.map(recordEntryMarkup).join('') + '</section>').join('');
+  return html + (hidden ? '<p class="record-more">另有 ' + hidden + ' 条更早记录未在此处展开，存档中仍完整保留。</p>' : '');
+}
+function recordChainStage(chain) {
+  if (chain.status === 'idle') return '未申请';
+  if (chain.status === 'deferred') return '暂缓申请';
+  if (chain.status === 'active') return chain.progress >= 2 ? '待成果确认 · 2/2 次投入' : '进行中 · 已投入 ' + chain.progress + '/2';
+  if (chain.status === 'completed') return '已完成 · 2/2 次投入';
+  return '未完成 · ' + chain.progress + '/2 次投入';
+}
+function recordChainDetail(id, chain, action) {
+  if (id === 'internship' && chain.status === 'active' && chain.positionId) {
+    const progress = game.internshipProgress(state);
+    return '累计投入：时间 ' + progress.workTime + ' / ' + progress.reqTime + ' · 精力 ' + progress.workEnergy + ' / ' + progress.reqEnergy
+      + (progress.met ? ' · 已达标，可以办理实习证明' : ' · 达标后可在南门办理实习证明');
+  }
+  if (chain.status === 'idle' || chain.status === 'deferred') {
+    const conditions = [];
+    if (action && action.minTerm) conditions.push('第 ' + action.minTerm + (action.maxTerm && action.maxTerm !== action.minTerm ? '～' + action.maxTerm : '') + ' 学期');
+    if (action && action.autumnOnly) conditions.push('仅秋季学期');
+    if (action && action.minPreparation) conditions.push('学习进度 ≥ ' + action.minPreparation);
+    if (action && action.minAverage) conditions.push('平均成绩 ≥ ' + action.minAverage);
+    const prefix = chain.status === 'deferred' ? '已选择暂缓，第 ' + chain.nextEligibleTerm + ' 学期可以再次申请' : '申请条件';
+    return (chain.status === 'deferred' ? prefix : prefix + '：' + (conditions.join(' · ') || '按学期开放'));
+  }
+  if (chain.status === 'active') {
+    if (chain.progress >= 2) return '两次投入已完成 · ' + (id === 'project' ? '下一学期' : '本学期起') + '等待成果确认事件';
+    return '第 ' + chain.deadline + ' 学期结算时检查进度，未完成会顺延（第 8 学期仍未完成则失败）';
+  }
+  if (chain.status === 'completed') return '第 ' + chain.startedTerm + ' 学期加入 · 已完成成果确认';
+  return '未完成成果确认 · 保留 ' + chain.progress + '/2 次投入记录';
+}
+function recordChainCardsMarkup(entries, detailed = false) {
+  return '<div class="record-block-title">事件链进度</div><div class="record-chain-list">' + Object.keys(game.CHAIN_NAMES).map((id) => {
+    const chain = state.chains[id];
+    const action = game.ACTIONS['apply' + id[0].toUpperCase() + id.slice(1)] || null;
+    const related = entries.filter((entry) => entry.chainId === id);
+    const last = related.at(-1);
+    const internship = id === 'internship' && chain.positionId ? game.internshipProgress(state) : null;
+    const filled = chain.status === 'completed' ? 2 : internship
+      ? Math.min(2, Math.floor(2 * Math.min(internship.reqTime ? internship.workTime / internship.reqTime : 1, internship.reqEnergy ? internship.workEnergy / internship.reqEnergy : 1)))
+      : Math.max(0, Math.min(2, chain.progress));
+    const progressLabel = internship ? '累计投入时间 ' + internship.workTime + ' / ' + internship.reqTime + '，精力 ' + internship.workEnergy + ' / ' + internship.reqEnergy : '已投入 ' + filled + ' / 2 次';
+    const segments = [0, 1].map((index) => '<span class="chain-seg' + (index < filled ? ' is-on' : '') + '"></span>').join('');
+    const trace = detailed && related.length ? '<ol class="chain-trace">' + related.slice(-8).map((entry) => '<li><span>第 ' + entry.term + ' 学期</span>' + h(entry.title) + '</li>').join('') + '</ol>' : '';
+    return '<article class="chain-card is-' + chain.status + '">' +
+      '<div class="chain-card-head"><b>' + h(game.CHAIN_NAMES[id]) + '</b><span class="chain-state">' + h(recordChainStage(chain)) + '</span></div>' +
+      '<div class="chain-progress" role="img" aria-label="' + h(progressLabel) + '">' + segments + '</div>' +
+      '<p class="chain-detail">' + h(recordChainDetail(id, chain, action)) + '</p>' +
+      '<p class="chain-last">' + (last ? '最近：第 ' + last.term + ' 学期 · ' + h(last.title) : '暂无相关记录') + '</p>' +
+      trace +
+      '</article>';
+  }).join('') + '</div>';
+}
+function renderRecordsPanel() {
+  const summary = $('#recordSummary');
+  const chains = $('#recordChains');
+  const timeline = $('#recordTimeline');
+  if (!summary && !chains && !timeline) return;
+  if (!state) {
+    if (summary) summary.innerHTML = '';
+    if (chains) chains.innerHTML = '';
+    if (timeline) timeline.innerHTML = '<p class="record-empty">入学后，安排的行动和遇到的事件会按学期自动归档。</p>';
+    return;
+  }
+  const entries = recordEntries();
+  const filtered = recordFilter === 'all' ? entries : entries.filter((entry) => entry.category === recordFilter);
+  if (summary) summary.innerHTML = recordSummaryMarkup(entries);
+  if (chains) chains.innerHTML = recordChainCardsMarkup(entries);
+  if (timeline) timeline.innerHTML = recordTimelineMarkup(filtered, { newestFirst: true, limit: 80, empty: '这个分类还没有记录。' });
+  document.querySelectorAll('[data-record-filter]').forEach((button) => {
+    const active = (button.dataset.recordFilter || 'all') === recordFilter;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+}
 function investmentRecord() {
   const entries = state.history.filter(entry => entry.investment).slice().reverse();
   return '<h3>投入与收获</h3>' + (entries.length ? entries.map(entry => '<article class="investment-record"><h4>' + game.TERM_NAMES[entry.term - 1] + ' · ' + h(entry.event ? game.EVENTS[entry.event].title : game.ACTIONS[entry.action].title) + '</h4><span class="outcome-badge outcome-' + entry.investment.outcome + '">' + INVESTMENT_OUTCOMES[entry.investment.outcome] + '</span><p>投入 ' + entry.investment.amount + ' ' + investmentUnit(entry.investment.resource) + '</p><p>' + h(entry.investment.description + extraFeedback(entry)) + '</p><div class="action-gain">' + h(changeText(entry.changes)) + '</div></article>').join('') : '<p>完成自主投入的行动后，这里会记下你的选择和结果。</p>');
 }
-// 事件链进度与毕业条件进度已迁入「手头的事」抽屉，「我的简历」升格为独立抽屉（renderResume），这里只留档案类内容。
-// 钱包节不包总标题：walletHistory 由钱包抽屉共用，节内 h3 由 budgetMarkup 与「历次学期拨款」充当。
-function growthRecord() {
+function growthRecord(includeRoutes = true, includeTimeline = false) {
   const purchases = state.history.filter(entry => entry.command.operation === 'purchaseGrowth');
   const upgrades = purchases.length ? '<h3>校园养成</h3><ul>' + purchases.map(entry => '<li>' + h(game.TERM_NAMES[entry.term - 1]) + '：' + h(entry.title) + '，支出 ' + (-entry.changes.money) + ' 元。' + h(game.GROWTH_NODES[entry.command.id].benefit) + '。</li>').join('') + '</ul>' : '';
   const milestones = state.history.filter(entry => game.ACTIONS[entry.action]?.experience).map(entry => '<h3>' + h(game.ACTIONS[entry.action].experienceTitle) + '</h3><p>' + h(game.TERM_NAMES[entry.term - 1] + ' · ' + ACTION_FLAVOR[entry.action]) + '</p><p>' + h(changeText(entry.changes)) + '</p>').join('');
   const practices = state.history.filter(entry => entry.action === 'hobbyPractice').length;
-  return upgrades + (practices ? '<h3>兴趣练习</h3><p>累计完成 ' + practices + ' 次兴趣练习。</p>' : '') + milestones + investmentRecord() + courseTable() + walletHistory();
+  const entries = recordEntries();
+  const counts = recordCounts(entries);
+  const passed = state.courses.filter((item) => item.passed).length;
+  return upgrades + (practices ? '<h3>兴趣练习</h3><p>累计完成 ' + practices + ' 次兴趣练习。</p>' : '') + milestones + '<h3>记录概览</h3><p>角色 <b>' + h(state.nickname) + '</b> · 共 <b>' + entries.length + '</b> 条记录：行动 ' + counts.action + ' 次 · 事件 ' + counts.event + ' 个 · 学业节点 ' + counts.academic + ' 条；校园经历 ' + state.experiences.length + ' 项，已通过 <b>' + passed + ' / 8</b> 个学期。</p>' +
+    recordChainCardsMarkup(entries, true) +
+    (includeTimeline ? '<h3>行动与事件时间线</h3>' + recordTimelineMarkup(entries, { empty: '还没有行动或事件记录。' }) : '') +
+    courseTable() + investmentRecord() + walletHistory() +
+    '<h3>校园经历</h3>' + (state.experiences.length ? '<ul>' + state.experiences.map((item) => '<li>' + game.TERM_NAMES[item.term - 1] + '：' + h(EXPERIENCE_LABELS[item.type] || '校园经历') + '</li>').join('') + '</ul>' : '<p>还没有拿得出手的经历。</p>') +
+    (includeRoutes ? '<h3>毕业条件进度</h3>' + game.evaluateEndings(state).options.filter((item) => !['notQualified', 'delayed'].includes(item.id)).map((item) => '<h4>' + h(item.title) + '</h4>' + requirementsMarkup(item.requirements)).join('') : '');
 }
 const ENDING_TEXT = {
   ordinary: '毕业典礼的台子搭在操场边上，学士服领到手的时候还带着消毒水味。你想起大一第一次进校门，行李箱的轮子在石板路上响了一路。四年的账算下来不复杂：八张成绩单、几场活动、一次体测、几个没说出口的遗憾。有人去了远方，有人留在北京，你选了最稳的一条路。稳妥不是妥协，是你一个学期一个学期攒出来的底气。银杏大道下个秋天还会金黄，只是看它的人换了一批。行李打包完，你在宿舍门口站了会儿，把钥匙放在了宿管阿姨的窗口。出门的时候，风里有北京秋天常有的那种凉。你回头看了一眼，楼还是那栋楼。',
@@ -1594,7 +2363,9 @@ function resumePhase() {
   if (!state) { showAdmission(); return; }
   state = game.resumeRequiredEvents(state);
   const last = state.history.at(-1);
+  if (last?.command.operation === 'completeBasketball' && last.relationship && acknowledgedResultRevision !== state.revision) { showBasketballResult(last); return; }
   if (last?.investment && acknowledgedResultRevision !== state.revision) { showEventResult(last); return; }
+  if (last?.relationship && acknowledgedResultRevision !== state.revision) { showRelationshipResult(last); return; }
   if (state.phase === 'eventPending') showEvent();
   else if (state.phase === 'examPending') showExam();
   else if (state.phase === 'summary') showSummary();
@@ -1602,7 +2373,7 @@ function resumePhase() {
   else if (state.phase === 'finished' || state.phase === 'ended') showResult();
   else if (needsBudget()) showBudget();
   else if (needsCourseSelection()) showCourseSelection();
-  else dialog.close();
+  else { dialog.close(); maybeZhouNingDirector(); }
 }
 function showLoad() {
   const info = saves.inspect();
@@ -1611,6 +2382,9 @@ function showLoad() {
 function loadGame(slotId, source = 'primary') {
   const result = saves.load(slotId, source);
   if (!result.ok) { showToast(result.reason); return; }
+  cancelZhouRequest();
+  zhouChatDraft = ''; zhouChatNotice = ''; zhouHistoryOpen = false;
+  cancelBasketball();
   closePlace();
   state = game.resumeRequiredEvents(result.state);
   activeSaveSlot = slotId;
@@ -1624,6 +2398,7 @@ function loadGame(slotId, source = 'primary') {
   clearTimeout(unlockTimer);
   uiLocked = false;
   failures.length = 0;
+  resetSeasonTracking();
   resetNpcSystem();
   audio?.play('load');
   audio?.startBgm();
@@ -1647,9 +2422,11 @@ $('#dialogBody').addEventListener('submit', (event) => {
   if (event.target.id === 'admissionForm') { event.preventDefault(); startGame(); }
   else if (event.target.id === 'loginForm') { event.preventDefault(); doLogin(); }
   else if (event.target.id === 'npcChatForm') { event.preventDefault(); sendNpcChat(); }
+  else if (event.target.id === 'zhouChatForm') { event.preventDefault(); sendZhouChat(); }
   else if (event.target.id === 'courseForm') { event.preventDefault(); submitCourseSelection(event.target); }
   else if (event.target.id === 'examForm') { event.preventDefault(); submitExamForm(event.target); }
 });
+$('#dialogBody').addEventListener('input', event => { if (event.target.id === 'zhouChatInput') zhouChatDraft = event.target.value; });
 $('#dialogBody').addEventListener('change', (event) => {
   const examForm = event.target.closest('#examForm');
   if (examForm && dialogMode === 'exam' && state?.phase === 'examPending') {
@@ -1673,6 +2450,7 @@ function completeAction(id, revision, investment, extra, positionId) {
   $('#actionFeedback').textContent = positionNote + (result.entry.investment?.description || ACTION_FLAVOR[result.entry.action] || result.entry.title + '完成') + extraFeedback(result.entry) + ' ' + changeText(result.changes) + (state.time === 0 ? ' 时间用完了，回地图结束这个学期吧。' : '');
   if (result.entry.investment) showEventResult(result.entry);
   else if (state.phase === 'eventPending') showEvent();
+  else maybeZhouNingDirector();
 }
 function offerActionExtra(id, revision, investment) {
   const extra = game.getActionExtra(id);
@@ -1715,6 +2493,8 @@ function showPositionPicker() {
 }
 $('#actionList').addEventListener('click', (event) => {
   const button = event.target.closest('button');
+  if (button?.dataset.characterOpen && !dialog.open) { showCharacter(button.dataset.characterOpen); return; }
+  if (button?.dataset.zhouOpen && !dialog.open) { showCharacter('zhouNing'); return; }
   // 南门的两级入口：先选“兼职赚钱 / 实习求职”，再进入具体行动卡；返回只回到分流页。
   if (button?.dataset.gateSection) {
     if (dialog.open || !Object.hasOwn(GATE_SECTIONS, button.dataset.gateSection)) return;
@@ -1732,6 +2512,7 @@ $('#actionList').addEventListener('click', (event) => {
   if (button?.dataset.actionInvestmentPreset) { updateActionInvestment(button.dataset.actionInvestmentPreset, Number(button.dataset.amount)); return; }
   if (!button || game.ACTIONS[button.dataset.action]?.place !== activePlace || dialog.open) return;
   const id = button.dataset.action;
+  if (game.ACTIONS[id]?.minigame === 'basketball') { startBasketball(); return; }
   if (id === 'applyInternship') { showPositionPicker(); return; }
   const investment = actionDraft(id);
   if (!offerActionExtra(id, button.dataset.revision, investment)) completeAction(id, button.dataset.revision, investment);
@@ -1739,6 +2520,75 @@ $('#actionList').addEventListener('click', (event) => {
 $('#dialogBody').addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
+  if (button.dataset.vnUi) {
+    const command = button.dataset.vnUi;
+    if (uiLocked) return;
+    if (command === 'profile') {
+      zhouHistoryOpen = false;
+      zhouView.profileOpen = !zhouView.profileOpen;
+      if (lastVisualNovel) { const scene = lastVisualNovel; showVisualNovel(scene.mode, scene.title, scene.speech, scene.choices, scene.options); }
+      return;
+    }
+    if (command === 'history') {
+      zhouHistoryOpen = !zhouHistoryOpen; zhouView.profileOpen = false;
+      if (lastVisualNovel) { const scene = lastVisualNovel; showVisualNovel(scene.mode, scene.title, scene.speech, scene.choices, scene.options); }
+      return;
+    }
+    if (command === 'prompt') { sendZhouChat(button.dataset.vnPrompt); return; }
+    if (command === 'acceptProposal' || command === 'declineProposal') { answerZhouProposal(command === 'acceptProposal' ? 'accept' : 'decline', button.dataset.proposalRevision); return; }
+    if (command === 'save') { showSave(); return; }
+    if (command === 'close') { cancelZhouRequest(); acknowledgedResultRevision = state.revision; resumePhase(); return; }
+    if (command === 'continue') {
+      acknowledgedResultRevision = state.revision;
+      if (state.phase === 'playing' && !needsCourseSelection()) showZhouNing(); else resumePhase();
+      return;
+    }
+    if (command === 'deepTalk' || command === 'presentation') {
+      const type = command === 'deepTalk' ? 'talk' : 'presentation';
+      const result = runCommand('interactWithZhouNing', type, button.dataset.revision, undefined, undefined, { characterVersion: 2 });
+      if (result) { if (type === 'talk') showRelationshipResult(result.entry); else showEvent(); }
+      return;
+    }
+    if(command==='story'){
+      if(activeNpcId==='zhouNing'){const r=runCommand('runNpcStory',{npcId:activeNpcId,choice:'start'},state.revision);if(r)showEvent();}
+      else{zhouView.screen='story';zhouView.text=null;showZhouNing({preserve:true});}return;
+    }
+    if(command==='storyChoice'){const r=runCommand('runNpcStory',{npcId:activeNpcId,choice:button.dataset.storyChoice},state.revision);if(r){acknowledgedResultRevision=state.revision;showRelationshipResult(r.entry);}return;}
+    if (command === 'confirmActivity') {
+      if (zhouView.activity === 'basketball') { startBasketball({ companionId: activeNpcId }); return; }
+      const profile = game.getActionInvestment(state, zhouView.activity);
+      const amount = zhouView.amount ?? profile?.default;
+      const result = runCommand('executeAction', zhouView.activity, button.dataset.revision, undefined, amount, { companionId: activeNpcId, characterVersion: 2 });
+      if (result) {
+        audio?.play(ACTION_SOUNDS[zhouView.activity] || 'success');
+        if (result.entry.investment) showEventResult(result.entry); else showRelationshipResult(result.entry);
+      }
+      return;
+    }
+    zhouView.text = null;
+    if (command === 'home') zhouView.screen = 'home';
+    else if (command === 'groups') zhouView.screen = 'groups';
+    else if (command === 'group') { zhouView.group = button.dataset.vnGroup; zhouView.screen = 'activities'; }
+    else if (command === 'backActivities') zhouView.screen = 'activities';
+    else if (command === 'activity' && Object.hasOwn(game.relationshipRules.ACTIVITIES, button.dataset.vnActivity)) { zhouView.activity = button.dataset.vnActivity; zhouView.amount = undefined; zhouView.screen = 'activity'; }
+    else if (command === 'tier') zhouView.amount = Number(button.dataset.vnAmount);
+    else if (command === 'topics') zhouView.screen = 'topics';
+    else if (command === 'topic') { zhouView.screen = 'topics'; zhouView.text = game.relationshipRules.dialogue(state, button.dataset.vnTopic); }
+    showZhouNing({ preserve: true });
+    return;
+  }
+  if(button.dataset.eventNpc){const r=runCommand('attachNpcToEvent',button.dataset.eventNpc,button.dataset.revision,button.dataset.instance);if(r)showEvent();return;}
+  if (button.dataset.zhouStudy) {
+    const result = runCommand('executeAction', 'selfStudy', button.dataset.revision, undefined, Number(button.dataset.zhouStudy), { companionId: 'zhouNing' });
+    if (result) { audio?.play('study'); showEventResult(result.entry); }
+    return;
+  }
+  if (button.dataset.dialogAction === 'zhouTalk' || button.dataset.dialogAction === 'zhouPresentation') {
+    const type = button.dataset.dialogAction === 'zhouTalk' ? 'talk' : 'presentation';
+    const result = runCommand('interactWithZhouNing', type, button.dataset.revision, undefined, undefined, { characterVersion: 2 });
+    if (result) { if (type === 'presentation') showEvent(); else showRelationshipResult(result.entry); }
+    return;
+  }
   if (button.id === 'smsSendButton') { requestSmsCode(); return; }
   if (dialogMode === 'exam' && state?.phase === 'examPending') {
     if (button.dataset.examQuestion !== undefined) { focusExamQuestion(Number(button.dataset.examQuestion)); return; }
@@ -1775,7 +2625,9 @@ $('#dialogBody').addEventListener('click', (event) => {
     $('#actionFeedback').textContent = feedback;
     if (state.phase === 'ended') { saveCurrent(true); showResult(); }
     else if (result.entry.investment) showEventResult(result.entry);
+    else if (result.entry.relationship) showRelationshipResult(result.entry);
     else if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; }
+    else if (pending.id === 'zhouNingPresentation') { showZhouNing({ text: '好，我们改天再安排。今天也可以聊点别的。' }); }
     else if (needsCourseSelection()) { showCourseSelection(); $('#dialogNotice').textContent = feedback; }
     else { dialog.close(); showToast(feedback); }
   } else if (button.dataset.ending) {
@@ -1797,6 +2649,11 @@ $('#dialogButtons').addEventListener('click', (event) => {
   if (id === 'resume') { if (['finished', 'ended'].includes(dialogMode)) dialog.close(); else if (dialogMode === 'enrollment') showTutorial(); else resumePhase(); }
   else if (id === 'positionClose' && dialogMode === 'positionPicker') { dialog.close(); }
   else if (id === 'eventContinue' && dialogMode === 'eventResult') { acknowledgedResultRevision = state.revision; resumePhase(); }
+  else if (id === 'relationshipContinue' && dialogMode === 'relationshipResult') {
+    acknowledgedResultRevision = state.revision;
+    if (state.phase === 'playing' && !needsCourseSelection()) showZhouNing(); else resumePhase();
+  }
+  else if (id === 'basketballContinue' && dialogMode === 'basketballResult') { acknowledgedResultRevision = state.revision; resumePhase(); }
   else if (id === 'admission') showAdmission();
   else if (id === 'loginPrompt') { loginSkipped = false; try { storage?.removeItem(LOGIN_SKIP_KEY); } catch (_) {} showLogin(); }
   else if (id === 'switchAccount') {
@@ -1832,8 +2689,12 @@ $('#dialogButtons').addEventListener('click', (event) => {
   else if (id === 'backToEvent' && dialogMode === 'confirmEnding') { terminalChoice = null; showEvent(); }
   else if (id === 'restart') askRestart();
   else if (id === 'confirmRestart') {
+    cancelZhouRequest();
+    zhouChatDraft = ''; zhouChatNotice = ''; zhouHistoryOpen = false;
+    cancelBasketball();
     closePlace();
     resetNpcSystem();
+    clearSeasonEffects();
     audio?.stopBgm();
     state = null;
     renderGrowth();
@@ -1851,6 +2712,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
   }
 });
 hotspots.forEach((hotspot) => hotspot.addEventListener('click', () => openPlace(hotspot.dataset.place, hotspot)));
+$('#relationshipList')?.addEventListener('click', event=>{const b=event.target.closest('[data-character-open]');if(b&&!dialog.open)showCharacter(b.dataset.characterOpen);});
 const npcLayer = $('#npcLayer');
 if (npc && npcLayer) {
   npcLayer.addEventListener('click', (event) => {
@@ -1867,6 +2729,8 @@ $('#backButton').addEventListener('click', () => {
   }
   closePlace();
 });
+$('#basketballQuit')?.addEventListener('click', () => basketballSession?.finish());
+basketballDialog?.addEventListener('cancel', (event) => { if (basketballSession) event.preventDefault(); });
 $('#endTermButton').addEventListener('click', requestEndTerm);
 $('#saveButton').addEventListener('click', showSave);
 $('#dialogSave').addEventListener('click', showSave);
@@ -1874,15 +2738,57 @@ $('#loadButton').addEventListener('click', showLoad);
 $('#helpButton').addEventListener('click', () => { if (state) showTutorial(); });
 $('#backgroundButton').addEventListener('click', () => { if (state) showBackground(); });
 $('#restartButton').addEventListener('click', () => { if (state) askRestart(); });
-$('#historyButton').addEventListener('click', () => { if (state) showDialog('history', '四年成长记录', growthRecord(), [{ id: 'resume', text: '继续安排' }]); });
+$('#historyButton').addEventListener('click', () => { if (state) showDialog('history', '成长记录', growthRecord(true, true), [{ id: 'resume', text: '继续安排' }]); });
 for (const selector of ['#mapStats', '#placeStats']) $(selector).addEventListener('click', event => {
   if (state && !uiLocked && event.target.closest('[data-wallet-budget]')) showDialog('wallet', '钱包收支', walletHistory(), [{ id: 'resume', text: '继续安排' }]);
 });
 
+document.querySelectorAll('[data-record-filter]').forEach((button) => {
+  button.addEventListener('click', () => {
+    recordFilter = button.dataset.recordFilter || 'all';
+    renderRecordsPanel();
+  });
+});
+
+document.querySelectorAll('[data-attr]').forEach((node) => {
+  const open = (event) => {
+    if (event) event.stopPropagation();
+    showAttrPopover(node.dataset.attr, node);
+  };
+  node.addEventListener('click', open);
+  node.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(event); }
+  });
+});
+
 const avatarButton = $('#playerAvatar');
-if (avatarButton && typeof avatarButton.addEventListener === 'function') avatarButton.addEventListener('click', pickAvatar);
-const changeAvatarButton = $('#changeAvatarButton');
-if (changeAvatarButton && typeof changeAvatarButton.addEventListener === 'function') changeAvatarButton.addEventListener('click', pickAvatar);
+if (avatarButton && typeof avatarButton.addEventListener === 'function') {
+  avatarButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    showPopover(openPopoverName === 'avatar' ? null : 'avatar');
+  });
+}
+const playerNameButton = $('#playerName');
+if (playerNameButton && typeof playerNameButton.addEventListener === 'function') {
+  playerNameButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    showPopover(openPopoverName === 'name' ? null : 'name');
+  });
+}
+const popoverChangeAvatar = $('#popoverChangeAvatar');
+if (popoverChangeAvatar && typeof popoverChangeAvatar.addEventListener === 'function') popoverChangeAvatar.addEventListener('click', pickAvatar);
+const popoverResetAvatar = $('#popoverResetAvatar');
+if (popoverResetAvatar && typeof popoverResetAvatar.addEventListener === 'function') popoverResetAvatar.addEventListener('click', resetAvatar);
+const nameSaveButton = $('#nameSaveButton');
+if (nameSaveButton && typeof nameSaveButton.addEventListener === 'function') nameSaveButton.addEventListener('click', submitNickname);
+const nameCancelButton = $('#nameCancelButton');
+if (nameCancelButton && typeof nameCancelButton.addEventListener === 'function') nameCancelButton.addEventListener('click', closePopovers);
+const nameInput = $('#nameInput');
+if (nameInput && typeof nameInput.addEventListener === 'function') {
+  nameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); submitNickname(); }
+  });
+}
 const avatarInput = $('#avatarInput');
 if (avatarInput && typeof avatarInput.addEventListener === 'function') {
   avatarInput.addEventListener('change', () => {
@@ -1891,11 +2797,31 @@ if (avatarInput && typeof avatarInput.addEventListener === 'function') {
     try { avatarInput.value = ''; } catch (_) {}
   });
 }
+const motionButton = $('#motionButton');
+if (motionButton && typeof motionButton.addEventListener === 'function') {
+  motionButton.addEventListener('click', () => {
+    motionOn = !motionOn;
+    applyMotion();
+    try { window.localStorage.setItem(MOTION_KEY, motionOn ? '1' : '0'); } catch (_) {}
+  });
+}
+const hotspotButton = $('#hotspotButton');
+if (hotspotButton && typeof hotspotButton.addEventListener === 'function') {
+  hotspotButton.addEventListener('click', () => {
+    hotspotsOn = !hotspotsOn;
+    applyHotspots();
+    try { window.localStorage.setItem(HOTSPOT_KEY, hotspotsOn ? '1' : '0'); } catch (_) {}
+  });
+}
+const resetAvatarButton = $('#resetAvatarButton');
+if (resetAvatarButton && typeof resetAvatarButton.addEventListener === 'function') resetAvatarButton.addEventListener('click', resetAvatar);
 loadAvatar();
+loadPreferences();
 
 document.querySelectorAll('.app-menu-button').forEach((button) => {
   button.addEventListener('click', (event) => {
     event.stopPropagation();
+    closePopovers();
     setPanel(openPanelName === button.dataset.panel ? null : button.dataset.panel);
   });
 });
@@ -1958,6 +2884,14 @@ document.addEventListener('click', (event) => {
 });
 window.addEventListener('resize', syncBarHeight);
 syncBarHeight();
+document.addEventListener('click', (event) => {
+  if (!openPopoverName) return;
+  const target = event.target;
+  if (target && typeof target.closest === 'function' && (target.closest('.profile-popover') || target.closest('#playerAvatar') || target.closest('#playerName'))) return;
+  closePopovers();
+});
+const versionNote = $('#versionNote');
+if (versionNote) versionNote.textContent = '版本 ' + (game.RULES.appVersion || '未知') + ' · 规则 v' + (game.RULES.version || '—') + ' · 存档格式 v' + (game.RULES.saveFormatVersion || '—');
 $('#exportLogButton').addEventListener('click', () => { if (state) exportLog(); });
 const soundButton = $('#soundButton');
 if (audio) {
@@ -1984,6 +2918,7 @@ dialog.addEventListener('cancel', (event) => {
 });
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape') return;
+  if (openPopoverName) { closePopovers(); return; }
   if (openPanelName) { closePanel(); return; }
   if (activePlace && !dialog.open) closePlace();
 });

@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="北交人生">
   <meta name="format-detection" content="telephone=no">
-  <link rel="stylesheet" href="styles.css?v=20261105-growth-contrast">
+  <link rel="stylesheet" href="styles.css?v=20261105-qin-npc-merge">
 </head>
 <body>
   <main class="game-shell" aria-label="北交人生校园地图">
@@ -63,6 +63,12 @@
           <span class="pin-ring"><span class="pin-core"></span></span>
           <span class="pin-label">红果园宾馆</span>
         </button>
+
+        <div class="season-overlay" id="seasonOverlay" hidden aria-hidden="true">
+          <div class="season-tint"></div>
+          <div class="weather-particles" id="weatherParticles"></div>
+          <div class="weather-flash"></div>
+        </div>
       </div>
 
       <header class="app-bar" id="appBar">
@@ -70,41 +76,43 @@
           <button class="avatar" id="playerAvatar" type="button" aria-label="更换头像" title="点击更换头像">北</button>
           <input id="avatarInput" type="file" accept="image/*" hidden>
           <div class="player-meta">
-            <b class="player-name" id="playerName">等待入学</b>
+            <button class="player-name" id="playerName" type="button" title="修改昵称">等待入学</button>
             <span class="player-sub" id="playerLabel">北交人生 · 等待入学</span>
           </div>
           <div class="player-chips">
             <span class="term-chip"><span class="term-dot"></span><span id="termLabel">大一上 · 第 1 学期</span></span>
-            <span class="resource-chip" id="timeLabel">时间 12 / 12</span>
+            <span class="season-chip" id="seasonLabel" data-season="none" title="当前季节">—</span>
+            <span class="resource-chip is-clickable" id="timeLabel" data-attr="time" role="button" tabindex="0">时间 12 / 12</span>
+            <span class="resource-chip is-clickable" id="moneyLabel" data-attr="money" role="button" tabindex="0">钱包 1000 元</span>
           </div>
         </div>
 
         <div class="vitals" aria-label="角色状态条">
-          <div class="vital" data-vital="energy">
+          <div class="vital" data-vital="energy" data-attr="energy" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">⚡</span>
             <span class="vital-label">精力</span>
             <span class="vital-track"><i id="barEnergy" style="width:80%"></i></span>
             <b class="vital-value" id="valueEnergy">80</b>
           </div>
-          <div class="vital" data-vital="mood">
+          <div class="vital" data-vital="mood" data-attr="mood" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">☀</span>
             <span class="vital-label">心情</span>
             <span class="vital-track"><i id="barMood" style="width:70%"></i></span>
             <b class="vital-value" id="valueMood">70</b>
           </div>
-          <div class="vital" data-vital="fitness">
+          <div class="vital" data-vital="fitness" data-attr="fitness" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">◎</span>
             <span class="vital-label">体能</span>
             <span class="vital-track"><i id="barFitness" style="width:50%"></i></span>
             <b class="vital-value" id="valueFitness">50</b>
           </div>
-          <div class="vital" data-vital="social">
+          <div class="vital" data-vital="social" data-attr="social" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">☺</span>
             <span class="vital-label">社交</span>
             <span class="vital-track"><i id="barSocial" style="width:20%"></i></span>
             <b class="vital-value" id="valueSocial">20</b>
           </div>
-          <div class="vital vital-learning" data-vital="learning">
+          <div class="vital vital-learning" data-vital="learning" data-attr="learning" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">✎</span>
             <span class="vital-label">学习</span>
             <span class="vital-track"><i id="barPreparation" style="width:0%"></i></span>
@@ -112,16 +120,53 @@
           </div>
         </div>
 
-        <nav class="app-menu" id="appMenu" aria-label="功能导航">
+
+
+<nav class="app-menu" id="appMenu" aria-label="功能导航">
           <button type="button" class="app-menu-button" data-panel="status" aria-expanded="false">角色</button>
           <button type="button" class="app-menu-button" data-panel="term" aria-expanded="false">学业</button>
           <button type="button" class="app-menu-button" data-panel="goals" aria-expanded="false">手头的事<span class="menu-badge" id="advisoryBadge" hidden></span></button>
           <button type="button" class="app-menu-button" data-panel="resume" aria-expanded="false">简历</button>
+          <button type="button" class="app-menu-button" data-panel="relationships" aria-expanded="false">关系</button>
           <button type="button" class="app-menu-button" data-panel="records" aria-expanded="false">记录</button>
           <button type="button" class="app-menu-button" data-panel="saves" aria-expanded="false">存档</button>
           <button type="button" class="app-menu-button" data-panel="settings" aria-expanded="false">设置</button>
         </nav>
       </header>
+
+      <div class="season-notice" id="seasonNotice" hidden role="status" aria-live="polite"></div>
+
+<div class="profile-popover" id="avatarPopover" hidden aria-label="头像">
+          <div class="profile-popover-head">
+            <span class="avatar avatar-large" id="avatarPopoverImage" aria-hidden="true">北</span>
+            <div class="profile-popover-meta">
+              <b id="popoverName">张三</b>
+              <span id="popoverMajor">信息类学院 · 计算机科学与技术</span>
+            </div>
+          </div>
+          <div class="profile-popover-actions">
+            <button class="utility-button" id="popoverChangeAvatar" type="button">更换头像</button>
+            <button class="utility-button" id="popoverResetAvatar" type="button">恢复默认</button>
+          </div>
+        </div>
+
+        <div class="profile-popover attr-popover" id="attrPopover" hidden aria-label="属性说明">
+          <div class="attr-popover-head"><b id="attrTitle">精力</b><span class="attr-popover-value" id="attrValue">80 / 100</span></div>
+          <p class="attr-popover-status" id="attrStatus"></p>
+          <div class="attr-popover-section"><h4>获得方法</h4><p id="attrHow"></p></div>
+          <div class="attr-popover-section"><h4>具体用途</h4><p id="attrWhy"></p></div>
+        </div>
+        <div class="profile-popover name-popover" id="namePopover" hidden aria-label="修改昵称">
+          <label for="nameInput">修改昵称</label>
+          <input id="nameInput" maxlength="24" autocomplete="off" placeholder="2～12 个字符">
+          <p class="name-popover-hint" id="nameError" role="alert"></p>
+          <div class="profile-popover-actions">
+            <button class="utility-button" id="nameSaveButton" type="button">保存</button>
+            <button class="utility-button" id="nameCancelButton" type="button">取消</button>
+          </div>
+        </div>
+
+
 
       <nav class="growth-rail" aria-label="校园养成入口">
         <button type="button" id="growthToggle" aria-controls="panelGrowth" aria-expanded="false" hidden>
@@ -154,14 +199,21 @@
             </section>
           </div>
         </section>
-        <section class="app-panel" id="panelStatus" data-panel-name="status" hidden aria-label="角色状态">
-          <h3 class="app-panel-title">角色状态</h3>
+        <section class="app-panel" id="panelStatus" data-panel-name="status" hidden aria-label="角色">
+          <h3 class="app-panel-title">角色</h3>
+          <div class="profile-card">
+            <span class="avatar avatar-large" id="profileAvatar" aria-hidden="true">北</span>
+            <div class="profile-card-meta">
+              <b id="profileCardName">等待入学</b>
+              <span id="profileCardMajor">北交人生 · 等待入学</span>
+            </div>
+          </div>
+          <div class="panel-list" id="profileBrief"></div>
+          <p class="app-panel-note">点击顶部状态条可以查看每项属性的获取方式和作用。</p>
           <p class="app-panel-note" id="energyLabel">精力 80 / 100</p>
           <div class="status-grid" id="mapStats"></div>
           <p class="fitness-warning" id="fitnessWarning" hidden></p>
-          <div class="preparation-row"><label for="preparationMeter">本学期学习进度 <b id="preparationValue">0 / 100</b></label><progress id="preparationMeter" max="100" value="0"></progress><span>期末成绩来源</span></div>
-          <div class="panel-grid-2">
-            <button class="utility-button" id="changeAvatarButton" type="button">更换头像</button>
+          <div class="panel-actions">
             <button class="utility-button" id="backgroundButton" type="button">入学背景</button>
           </div>
         </section>
@@ -191,10 +243,30 @@
           <p class="app-panel-note">简历收录实习、项目、竞赛、社团、个人作品、校园展演和宿舍纪念，其他校园经历收进附注。</p>
         </section>
 
+        <section class="app-panel" id="panelRelationships" data-panel-name="relationships" hidden aria-label="人物关系网">
+          <h3 class="app-panel-title">人物关系网</h3>
+          <div id="relationshipList"></div>
+        </section>
+
         <section class="app-panel" id="panelRecords" data-panel-name="records" hidden aria-label="成长记录">
           <h3 class="app-panel-title">成长记录</h3>
-          <p class="app-panel-note">投入与收获、八学期成绩与钱包流水，都在这份记录里。</p>
-          <button class="history-button" id="historyButton" type="button">查看成长记录</button>
+          <div class="record-summary" id="recordSummary"></div>
+          <p class="app-panel-note record-legend">按学期归档：日常行动；基础事件由学期、成绩或状态条件触发；突发事件在日常行动中随机出现；事件链记录项目 / 社团 / 实习的申请、投入与成果确认；学业节点记录选课、考试与结算。</p>
+          <div class="record-chains" id="recordChains"></div>
+          <div class="record-toolbar">
+            <span class="record-toolbar-title">时间线</span>
+            <div class="record-filters" id="recordFilters" role="tablist" aria-label="记录类型筛选">
+              <button type="button" class="record-filter is-active" data-record-filter="all" role="tab" aria-selected="true">全部</button>
+              <button type="button" class="record-filter" data-record-filter="action" role="tab" aria-selected="false">行动</button>
+              <button type="button" class="record-filter" data-record-filter="basic" role="tab" aria-selected="false">基础</button>
+              <button type="button" class="record-filter" data-record-filter="random" role="tab" aria-selected="false">突发</button>
+              <button type="button" class="record-filter" data-record-filter="chain" role="tab" aria-selected="false">事件链</button>
+              <button type="button" class="record-filter" data-record-filter="main" role="tab" aria-selected="false">主线</button>
+              <button type="button" class="record-filter" data-record-filter="academic" role="tab" aria-selected="false">学业</button>
+            </div>
+          </div>
+          <div class="record-timeline" id="recordTimeline"></div>
+          <button class="history-button" id="historyButton" type="button">查看完整成长记录</button>
         </section>
 
         <section class="app-panel" id="panelSaves" data-panel-name="saves" hidden aria-label="存档">
@@ -211,9 +283,13 @@
           <h3 class="app-panel-title">设置</h3>
           <div class="status-controls">
             <button class="utility-button" id="soundButton" type="button">声音:开</button>
+            <button class="utility-button" id="motionButton" type="button" aria-pressed="false">动画效果:开</button>
+            <button class="utility-button" id="hotspotButton" type="button" aria-pressed="false">热点提示:开</button>
+            <button class="utility-button" id="resetAvatarButton" type="button">恢复默认头像</button>
             <button class="utility-button" id="helpButton" type="button">玩法说明</button>
             <button class="utility-button" id="restartButton" type="button">重新开始</button>
           </div>
+          <p class="app-panel-note" id="versionNote">版本信息</p>
           <div id="debugPanel" hidden><p id="debugSummary"></p><button type="button" class="utility-button" id="exportLogButton">导出复现日志</button></div>
         </section>
       </div>
@@ -241,6 +317,20 @@
       <div class="place-stamp" aria-hidden="true">CAMPUS<br><span>北交人生</span></div>
     </section>
 
+    <dialog class="basketball-dialog" id="basketballDialog" aria-label="投篮小游戏">
+      <div class="basketball-shell">
+        <div class="basketball-hud">
+          <div class="basketball-companion" id="basketballCompanionNotice" hidden><img src="assets/characters/zhou-ning-casual-v1.png" alt="周宁"><span>周宁在场边帮你捡球<br><small>一起活动的经历将在结束时记下</small></span></div>
+          <div class="basketball-stat"><span>时间</span><b id="basketballTime">60</b></div>
+          <div class="basketball-stat"><span>得分</span><b id="basketballScore">0</b></div>
+          <div class="basketball-stat"><span>命中</span><b id="basketballHits">0</b></div>
+          <button type="button" class="basketball-quit" id="basketballQuit">结束本局</button>
+        </div>
+        <canvas id="basketballCanvas" tabindex="0" aria-label="移动鼠标调整瞄准，点击直接投篮；键盘方向键调整，空格出手"></canvas>
+        <p class="basketball-help">移动鼠标调整瞄准，点击直接投篮；距离越远力度越大，每 0.5 秒最多出手一次。</p>
+      </div>
+    </dialog>
+
     <dialog class="term-dialog" id="termDialog" aria-labelledby="dialogTitle">
       <div class="dialog-kicker">北交人生 · 学期回顾</div>
       <button type="button" class="dialog-save utility-button" id="dialogSave" hidden>保存当前进度</button>
@@ -251,15 +341,25 @@
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </main>
-  <script src="config.js?v=20261104-growth-branches"></script>
-  <script src="courses.js?v=20261104-growth-branches"></script>
-  <script src="rng.js?v=20261104-growth-branches"></script>
-  <script src="state-validation.js?v=20261104-growth-branches"></script>
-  <script src="game.js?v=20261104-growth-branches"></script>
-  <script src="save.js?v=20261104-growth-branches"></script>
-  <script src="audio.js?v=20261104-growth-branches"></script>
-  <script src="sms.js?v=20261104-growth-branches"></script>
-  <script src="npc.js?v=20261104-growth-branches"></script>
-  <script src="app.js?v=20261104-growth-branches"></script>
+  <script src="config.js?v=20261105-qin-npc-merge"></script>
+  <script src="courses.js?v=20261105-qin-npc-merge"></script>
+  <script src="rng.js?v=20261105-qin-npc-merge"></script>
+  <script src="relationships.js?v=20261105-qin-npc-merge"></script>
+  <script src="npc-cast.js?v=20261105-qin-npc-merge"></script>
+  <script src="npc-support.js?v=20261105-qin-npc-merge"></script>
+  <script src="character-agent.js?v=20261105-qin-npc-merge"></script>
+  <script src="npc-director.js?v=20261105-qin-npc-merge"></script>
+  <script src="npc-game.js?v=20261105-qin-npc-merge"></script>
+  <script src="character-scene.js?v=20261105-qin-npc-merge"></script>
+  <script src="state-validation.js?v=20261105-qin-npc-merge"></script>
+  <script src="game.js?v=20261105-qin-npc-merge"></script>
+  <script src="save.js?v=20261105-qin-npc-merge"></script>
+  <script src="audio.js?v=20261105-qin-npc-merge"></script>
+  <script src="sms.js?v=20261105-qin-npc-merge"></script>
+  <script src="npc.js?v=20261105-qin-npc-merge"></script>
+  <script src="season.js?v=20261105-qin-npc-merge"></script>
+  <script src="vendor/planck.min.js?v=20261105-qin-npc-merge"></script>
+  <script src="basketball.js?v=20261105-qin-npc-merge"></script>
+  <script src="app.js?v=20261105-qin-npc-merge"></script>
 </body>
 </html>
