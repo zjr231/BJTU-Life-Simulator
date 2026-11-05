@@ -250,6 +250,15 @@
   function growthRests(state, purchased, term) {
     return growthActionCount(state, 'rest', purchased, term);
   }
+  function growthRequirements(state, id) {
+    if (!own(GROWTH_NODES, id)) return [];
+    const prereq = GROWTH_NODES[id].prereq || {};
+    return [
+      ...(prereq.minTerm ? [{ type: 'term', label: '第 ' + prereq.minTerm + ' 学期开始开放', current: state?.term || 0, target: prereq.minTerm }] : []),
+      ...(prereq.nodes || []).map(nodeId => ({ type: 'node', id: nodeId, label: '持有' + GROWTH_NODES[nodeId].title, current: state?.growth?.purchased[nodeId] ? 1 : 0, target: 1 })),
+      ...Object.entries(prereq.actionCounts || {}).map(([actionId, target]) => ({ type: 'action', id: actionId, label: '累计' + (actionId === 'rest' ? '休息' : ACTIONS[actionId].title), current: state ? growthActionCount(state, actionId) : 0, target }))
+    ].map(item => ({ ...item, met: item.current >= item.target }));
+  }
   function nodeTermStartBonuses(node) {
     const bonuses = {};
     for (const item of node.effects) {
@@ -268,13 +277,11 @@
     if (grant?.budget && !grant.budgetChosen) return { ok: false, reason: '请先确认本学期生活预算' };
     const node = GROWTH_NODES[id];
     if (node.effects.some(item => item.kind === 'termStart') && state.term === RULES.terms) return { ok: false, reason: '已是最后一学期，没有后续开学收益' };
-    if (node.prereq?.minTerm && state.term < node.prereq.minTerm) return { ok: false, reason: '第 ' + node.prereq.minTerm + ' 学期开始开放' };
-    if (node.prereq?.actionCounts) {
-      for (const [actionId, required] of Object.entries(node.prereq.actionCounts)) {
-        const done = growthActionCount(state, actionId);
-        const label = actionId === 'rest' ? '休息' : (ACTIONS[actionId]?.title || actionId);
-        if (done < required) return { ok: false, reason: '需要累计完成 ' + required + ' 次' + label + '（当前 ' + done + ' 次）' };
-      }
+    const missing = growthRequirements(state, id).find(item => !item.met);
+    if (missing) {
+      if (missing.type === 'term') return { ok: false, reason: missing.label };
+      if (missing.type === 'node') return { ok: false, reason: '需要先' + missing.label };
+      return { ok: false, reason: '需要累计完成 ' + missing.target + ' 次' + missing.label.slice(2) + '（当前 ' + missing.current + ' 次）' };
     }
     if (state.money < node.price) return { ok: false, reason: '余额不足，还差 ' + (node.price - state.money) + ' 元' };
     return { ok: true };
@@ -288,7 +295,7 @@
       const restItem = node.effects.find(item => item.kind === 'action' && item.actions.includes('rest'));
       const openingBonuses = nodeTermStartBonuses(node);
       // 兼容字段：requiredRests / openingEnergy / restsPerTerm / remainingRests 供旧界面与既有测试使用。
-      return { ...node, purchased: record, available: check.ok, reason: check.reason || '',
+      return { ...node, purchased: record, available: check.ok, reason: check.reason || '', requirements: growthRequirements(state, node.id),
         requiredRests: node.prereq?.actionCounts?.rest, openingEnergy: openingBonuses.energy,
         restsPerTerm: restItem?.perTerm,
         remainingUses: perTermItems.length && record ? Math.min(...perTermItems.map(item => Math.max(0, item.perTerm - growthActionUses(state, item.actions, record, state.term)))) : null,
@@ -331,6 +338,8 @@
     if (state.phase !== 'playing') return { ok: false, reason: '现在这个阶段还不能行动' };
     const baseAction = getAction(state, id);
     if (isSick(state) && id !== 'treatment') return { ok: false, reason: ILLNESS_REASON };
+    if (baseAction.requiresGrowth && !state.growth?.purchased[baseAction.requiresGrowth]) return { ok: false, reason: '请先在校园养成中购买' + GROWTH_NODES[baseAction.requiresGrowth].title };
+    if (baseAction.experience && state.experiences.some(item => item.type === baseAction.experience)) return { ok: false, reason: '本局已经完成' + baseAction.experienceTitle + '，可在简历中查看' };
     if (baseAction.sickOnly && !isSick(state)) return { ok: false, reason: '现在身体没有不适，不需要就诊' };
     const profile = getActionInvestment(state, id);
     if (!profile && requestedAmount !== undefined) return { ok: false, reason: '这个行动不需要设置投入' };
@@ -371,7 +380,7 @@
     if (action.preparation && !action.chain && state.preparation >= 100) return { ok: false, reason: '本学期学习进度已满' };
     const check = resourceCheck(state, action);
     if (!check.ok) return check;
-    if (!action.chain && !Object.values(previewChanges(state, action)).some((value) => value > 0)) return { ok: false, reason: '这项行动的收益已经到头了' };
+    if (!action.chain && !action.experience && !action.growthProgress && !Object.values(previewChanges(state, action)).some((value) => value > 0)) return { ok: false, reason: '这项行动的收益已经到头了' };
     return { ok: true, reason: '' };
   }
   function getActionExtra(id) {
@@ -554,6 +563,7 @@
       extraRecord = { id: extra.id, title: extra.title, price, bonuses, skipped: !purchased };
     }
     let next = { ...applyChanges(state, changes, action), rng, counts: { ...state.counts, [id]: (state.counts[id] || 0) + 1 } };
+    if (action.experience) next.experiences = [...state.experiences, { type: action.experience, term: state.term }];
     if (action.kind === 'work') {
       const previous = state.chains[action.chain];
       // 实习累计「档位名义投入」（时间取档位固定耗时、精力取玩家选择的档位量）。
@@ -1254,7 +1264,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, growthAvailability, growthStatus, purchaseGrowth, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, budgetPlan, currentGrant, activeBudget, housingFor, placeFor, placeDescription, applyDormEventBonus, eventChoiceEffect, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, chooseBudget, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, advisories, ADVISORIES, resume, RESUME, COMPANIES, POSITIONS, positionAvailability, REAPPLY_GAP, internshipRequirementMet, internshipProgress, settleInternship, setTargetPosition, REQUIREMENT_LABELS, TIER_LABELS, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, growthRequirements, growthAvailability, growthStatus, purchaseGrowth, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, budgetPlan, currentGrant, activeBudget, housingFor, placeFor, placeDescription, applyDormEventBonus, eventChoiceEffect, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, availability, previewChanges, executeAction, eventAvailability, submitEventChoice, previewSettlement, selectCourses, chooseBudget, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, advisories, ADVISORIES, resume, RESUME, COMPANIES, POSITIONS, positionAvailability, REAPPLY_GAP, internshipRequirementMet, internshipProgress, settleInternship, setTargetPosition, REQUIREMENT_LABELS, TIER_LABELS, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

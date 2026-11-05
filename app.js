@@ -16,7 +16,7 @@ const mathText = (value) => {
 const hotspots = [...document.querySelectorAll('.map-hotspot')];
 const audio = typeof CampusAudio !== 'undefined' ? CampusAudio : null;
 const PLACE_SOUNDS = { think: 'study', library: 'study', yifu: 'study', dorm: 'relax', ginkgo: 'relax', track: 'sport', activity: 'opportunity', gate: 'opportunity', hospital: 'info', auditorium: 'info', hotel: 'info' };
-const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport', treatment: 'success' };
+const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', showPortfolio: 'success', hobbyPractice: 'relax', campusShowcase: 'fanfare', decorateDorm: 'success', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport', treatment: 'success' };
 const dialog = $('#termDialog');
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
@@ -88,6 +88,10 @@ const ACTION_FLAVOR = {
   walk: '一圈走下来，步子轻了些。',
   applyProject: '申请递出去了，接下来等回复。',
   projectWork: '改完最后一版方案，会议室的灯熄了。',
+  showPortfolio: '你把做过的尝试讲给同学听，也记下了新的建议。这份个人作品已收进简历。',
+  hobbyPractice: '这次练习有了新的进步，展演准备又往前走了一步。',
+  campusShowcase: '台下的掌声落下，你把这次校园小展演收进简历。',
+  decorateDorm: '收纳摆好了，合影也拍好了，这张照片收进了你和室友的宿舍纪念。',
   applyClub: '报名表交了出去，招新群里已经热闹起来。',
   clubWork: '海报贴完，签到表也理好了。',
   applyInternship: '材料交了上去，接下来是等。',
@@ -401,6 +405,11 @@ function renderResume() {
 }
 // 像素图标统一使用全站五色板：纸 #f7f2e8 / 金 #f2d04b / 深绿 #597d58 / 绿 #4a8a5c / 墨 #162b27（+ 木色 #b99164）。
 const GROWTH_ICONS = {
+  guitar: '<path fill="#b99164" d="M12 24h18v16H12z"/><path fill="#f2d04b" d="M16 19h10v9H16z"/><path fill="#597d58" d="M25 7h7v21h-7z"/><path fill="#f7f2e8" d="M27 10h2v24h-2z"/><path fill="#162b27" d="M18 28h6v6h-6z"/><path fill="#4a8a5c" d="M23 5h11v7H23z"/>',
+  stage: '<path fill="#597d58" d="M6 8h36v4H6z"/><path fill="#4a8a5c" d="M6 12h8v23H6zm28 0h8v23h-8z"/><path fill="#f2d04b" d="M17 12h5v4h-5zm9 0h5v4h-5z"/><path fill="#f7f2e8" d="M22 20h5v6h-5z"/><path fill="#b99164" d="M17 29h15v4H17zM8 35h32v6H8z"/><path fill="#162b27" d="M22 26h5v9h-5z"/>',
+  photo: '<path fill="#b99164" d="M5 8h29v29H5z"/><path fill="#f7f2e8" d="M9 12h21v21H9z"/><path fill="#597d58" d="M12 23h6v7h-6zm10 0h5v7h-5z"/><path fill="#f2d04b" d="M13 16h4v5h-4zm9 0h4v5h-4zM34 10h8v10h-8z"/><path fill="#162b27" d="M37 20h3v15h-3z"/><path fill="#4a8a5c" d="M32 35h12v4H32z"/>',
+  tools: '<path fill="#b99164" d="M6 19h36v21H6z"/><path fill="#f2d04b" d="M6 19h36v5H6z"/><path fill="#597d58" d="M15 10h18v5H15zm-3 5h5v6h-5zm19 0h5v6h-5z"/><path fill="#f7f2e8" d="M21 26h6v8h-6z"/><path fill="#4a8a5c" d="M9 7h4v12H9zm27 1h4v11h-4z"/>',
+  portfolio: '<path fill="#597d58" d="M6 8h30v34H6z"/><path fill="#b99164" d="M12 6h28v33H12z"/><path fill="#f7f2e8" d="M16 10h20v25H16z"/><path fill="#4a8a5c" d="M19 14h6v7h-6z"/><path fill="#f2d04b" d="M27 14h6v7h-6z"/><path fill="#162b27" d="M19 25h14v2H19zm0 5h10v2H19z"/><path fill="#f2d04b" d="M32 33h10v9H32z"/><path fill="#f7f2e8" d="M35 35h4v4h-4z"/>',
   bed: '<path fill="#b99164" d="M5 19h4v21H5zm34 5h4v16h-4zM9 32h30v5H9z"/><path fill="#f7f2e8" d="M9 19h11v8H9z"/><path fill="#597d58" d="M21 22h18v10H9v-5h12z"/><path fill="#4a8a5c" d="M24 22h15v4H24z"/><path fill="#b99164" d="M5 17h4v4H5zm34 5h4v4h-4z"/>',
   books: '<path fill="#b99164" d="M6 36h36v4H6z"/><path fill="#4a8a5c" d="M8 14h7v22H8z"/><path fill="#f7f2e8" d="M9 17h5v2H9zm0 12h5v2H9z"/><path fill="#597d58" d="M17 10h7v26h-7z"/><path fill="#f7f2e8" d="M18 14h5v2h-5zm0 16h5v2h-5z"/><path fill="#b99164" d="m26 17 6-2 6 19-6 2z"/><path fill="#4a8a5c" d="M35 8h4v13h-4zM31 9h4v6h-4zm8-4h4v8h-4z"/><path fill="#b99164" d="M32 21h10v7H32z"/>',
   alarm: '<path fill="#b99164" d="M13 8h22v4H13zM9 12h30v24H9zM13 36h22v4H13zM6 15h3v18H6zm33 0h3v18h-3zM11 39h5v4h-5zm21 0h5v4h-5z"/><path fill="#f7f2e8" d="M13 16h22v16H13zM17 12h14v24H17z"/><path fill="#162b27" d="M23 16h3v11h-3zm3 8h6v3h-6zM23 30h3v3h-3z"/><path fill="#597d58" d="M6 7h10v4H6zm26 0h10v4H32zM20 4h8v4h-8z"/>',
@@ -428,6 +437,20 @@ function growthNodeMarkup(node) {
     + '<span class="growth-node-frame">' + growthIcon(node) + '<span class="growth-node-price">' + (node.purchased ? '已拥有 ✓' : node.price + ' 元') + '</span></span>'
     + '<span class="growth-node-name">' + h(node.title) + '</span><span class="growth-node-status">' + status.label + '</span></button>';
 }
+function growthRequirementText(item) {
+  return item.label + (item.type === 'action' ? ' ' + Math.min(item.current, item.target) + ' / ' + item.target + ' 次' : '');
+}
+function growthUnlockMarkup(node) {
+  if (!node.unlocks?.length) return '';
+  return node.unlocks.map(id => {
+    const action = game.ACTIONS[id];
+    const place = game.PLACES[action.place].title;
+    const gains = Object.fromEntries(['social', 'mood'].filter(key => action[key]).map(key => [key, action[key]]));
+    const quota = action.experience ? '本局一次' : '每学期最多 ' + action.limit + ' 次';
+    return '<p class="growth-action-note">' + h(action.title + ' · ' + place + '；基础消耗 ' + costs(action) + '，基础收获 ' + changeText(gains) + '，按体能档位结算。' + quota + '。') + '</p>'
+      + (node.purchased ? '<button type="button" class="growth-visit-button" data-growth-place="' + action.place + '"' + (state.phase !== 'playing' || uiLocked || dialog.open ? ' disabled' : '') + '>前往' + h(place) + '</button>' : '');
+  }).join('');
+}
 function renderGrowth() {
   const toggle = $('#growthToggle');
   if (toggle) toggle.hidden = !state;
@@ -442,20 +465,25 @@ function renderGrowth() {
   const status = growthNodeState(selected);
   const routine = board.nodes.find(node => node.id === 'routine');
   const restProgress = Math.min(board.restCount, routine.requiredRests);
+  const unlockedAction = selected.unlocks?.length ? game.ACTIONS[selected.unlocks[0]] : null;
   $('#growthOverview').innerHTML = '<div><span>可支配余额</span><b>' + state.money + '<small> 元</small></b></div><div><span>本局已拥有</span><b>' + board.ownedCount + '<small> / ' + board.nodes.length + ' 项</small></b></div>';
   let detail = selected.requiredRests ? '累计休息 ' + Math.min(board.restCount, selected.requiredRests) + ' / ' + selected.requiredRests + ' 次' : '无需额外前置';
   if (selected.purchased) {
     detail = game.TERM_NAMES[selected.purchased.term - 1] + '已购入 · ' + (selected.openingEnergy
       ? (state.term > selected.purchased.term ? '开学精力加成已生效' : '下学期开始生效')
+      : unlockedAction ? (unlockedAction.experience
+        ? (state.experiences.some(item => item.type === unlockedAction.experience) ? unlockedAction.experienceTitle + '已完成，可在简历中查看' : '已解锁' + unlockedAction.title + '，本局一次')
+        : '本学期' + unlockedAction.title + '剩余 ' + Math.max(0, unlockedAction.limit - (state.counts[selected.unlocks[0]] || 0)) + ' 次')
       : selected.remainingUses !== null && selected.remainingUses !== undefined ? '本学期加成剩余 ' + selected.remainingUses + ' 次' : '加成持续生效');
   }
+  const requirements = selected.requirements.length && !selected.purchased ? '<ul class="growth-requirements">' + selected.requirements.map(item => '<li class="' + (item.met ? 'is-met' : '') + '">' + (item.met ? '✓ ' : '○ ') + h(growthRequirementText(item)) + '</li>').join('') + '</ul>' : '';
   $('#growthDetails').innerHTML = '<div class="growth-selected-icon is-' + status.type + '">' + growthIcon(selected) + '</div>'
     + '<p class="growth-category">' + h(selected.category) + ' / 本局持续</p><h4>' + h(selected.title) + '</h4>'
     + '<p class="growth-selection-state is-' + status.type + '">' + status.label + '</p>'
     + '<p class="growth-description">' + h(selected.description) + '</p>'
     + '<div class="growth-detail-block"><span>长期收益</span><p class="growth-benefit">' + h(selected.benefit) + '</p></div>'
-    + '<div class="growth-detail-block"><span>' + (selected.purchased ? '持有状态' : '解锁条件') + '</span><p class="growth-detail">' + h(detail) + '</p></div>'
-    + (!selected.purchased && !selected.available ? '<p class="growth-reason">' + h(selected.reason) + '</p>' : '');
+    + '<div class="growth-detail-block"><span>' + (selected.purchased ? '持有状态' : '解锁条件') + '</span>' + (requirements || '<p class="growth-detail">' + h(detail) + '</p>') + '</div>'
+    + (!selected.purchased && !selected.available ? '<p class="growth-reason">' + h(selected.reason) + '</p>' : '') + growthUnlockMarkup(selected);
   $('#growthPurchase').innerHTML = '<button type="button" class="growth-buy-button" data-growth-buy="' + selected.id + '" data-revision="' + state.revision + '"'
     + (selected.purchased || !selected.available || uiLocked || dialog.open ? ' disabled' : '') + '>'
     + (selected.purchased ? '已拥有 · 无需重复添置' : '确认添置 <span>' + selected.price + ' 元</span>') + '</button>';
@@ -463,8 +491,10 @@ function renderGrowth() {
   const branchSubtitle = {
     clothing: '穿戴升级 · 一次性添置',
     food: '吃好一点 · 一次性添置',
-    housing: '宿舍好物 · 一次性添置',
+    housing: '寝具与兴趣角 → 室友交流 → 共同布置与合影',
     transport: '出行装备 · 一次性添置',
+    learning: '基础工具 → 个人作品计划 · 自学与项目的积累',
+    interest: '入门器材 → 两次兴趣练习 → 校园小展演',
     habit: '完成行动 · 解锁下一步计划'
   };
   const tabs = $('#growthTabs');
@@ -488,7 +518,8 @@ function renderGrowth() {
       + growthNodeMarkup(routine) + '</div></section>';
   } else {
     const nodes = board.nodes.filter(node => node.dimension === dimension.id).map(growthNodeMarkup).join('');
-    $('#growthNodes').innerHTML = '<section class="growth-branch">' + heading + '<div class="growth-branch-row">' + nodes + '</div></section>';
+    const progress = dimensionNodes.filter(node => node.unlocks?.length && node.requirements.length).map(node => '<div class="growth-branch-progress" aria-label="' + h(node.title + '前置进度') + '">' + node.requirements.map(item => '<span class="' + (item.met ? 'is-met' : '') + '">' + (item.met ? '✓ ' : '○ ') + h(growthRequirementText(item)) + '</span>').join('') + '</div>').join('');
+    $('#growthNodes').innerHTML = '<section class="growth-branch">' + heading + '<div class="growth-branch-row">' + nodes + '</div>' + progress + '</section>';
   }
 }
 // 头像：点击可上传本地图片，压缩后存本地（只影响界面，不进存档格式）。
@@ -632,7 +663,7 @@ function positionFeedback(entry) {
 }
 function extraFeedback(entry) {
   const extra = entry.extra ? (entry.extra.skipped ? ' 本次基础收获已达到上限，未购买额外项目，也未扣费。' : ' 额外消费：' + entry.extra.title + ' −' + entry.extra.price + ' 元，额外收获 ' + changeText(entry.extra.bonuses) + '。') : '';
-  return extra + (entry.growthBonuses ? ' 校园养成额外恢复：' + changeText(entry.growthBonuses) + '（已计入本次收获）。' : '');
+  return extra + (entry.growthBonuses ? (entry.action === 'selfStudy' ? ' 基础工具额外收获：' : ' 校园养成额外恢复：') + changeText(entry.growthBonuses) + '（已计入本次收获）。' : '');
 }
 function costs(effect) {
   return [(effect.time ? '时间 −' + effect.time : ''), (effect.energy ? '精力 −' + effect.energy : ''), (effect.money ? '钱包 −' + effect.money + ' 元' : ''), (effect.mood < 0 ? '心情 −' + Math.min(state.mood, Math.abs(effect.mood)) : ''), (effect.fitnessCost ? '体能 −' + effect.fitnessCost + '（消耗）' : '')].filter(Boolean).join(' · ') || '不消耗资源';
@@ -654,7 +685,7 @@ function renderActions() {
       ? '<p class="action-position' + (internship.met ? ' is-met' : '') + '">累计投入：时间 ' + internship.workTime + ' / ' + internship.reqTime + ' · 精力 ' + internship.workEnergy + ' / ' + internship.reqEnergy + (internship.met ? ' · 门槛已达标，可办证明' : '') + '</p>'
         + (internship.met ? '<button type="button" class="settle-internship" data-settle-internship="1" data-revision="' + state.revision + '"' + (uiLocked ? ' disabled' : '') + '>办理实习证明</button>' : '')
       : '';
-    return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div>' + positionLine + progressLine + '<p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>确认' + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
+    return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.experience ? '本局 ' + (state.experiences.some(item => item.type === action.experience) ? 1 : 0) + ' / 1 次' : action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div>' + positionLine + progressLine + '<p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>确认' + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
   }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
 }
 // 地点插画：按建筑名取 assets/places 下对应的矢量图；锚点与地图热点坐标一致。
@@ -1419,7 +1450,7 @@ function showEndings() {
 const EXPERIENCE_LABELS = {
   project: '校园项目完成', club: '社团活动经历', internship: '实习经历完成', fitnessTest: '体测体验达标',
   military: '军训汇演完成', singer: '歌手大赛经历', trip: '返乡分享经历', contest: '学科竞赛经历',
-  sportsMeet: '运动会经历', transfer: '转专业经历'
+  sportsMeet: '运动会经历', transfer: '转专业经历', portfolio: '个人作品展示', showcase: '校园小展演', dormMemory: '宿舍布置合影'
 };
 function investmentRecord() {
   const entries = state.history.filter(entry => entry.investment).slice().reverse();
@@ -1430,7 +1461,9 @@ function investmentRecord() {
 function growthRecord() {
   const purchases = state.history.filter(entry => entry.command.operation === 'purchaseGrowth');
   const upgrades = purchases.length ? '<h3>校园养成</h3><ul>' + purchases.map(entry => '<li>' + h(game.TERM_NAMES[entry.term - 1]) + '：' + h(entry.title) + '，支出 ' + (-entry.changes.money) + ' 元。' + h(game.GROWTH_NODES[entry.command.id].benefit) + '。</li>').join('') + '</ul>' : '';
-  return upgrades + investmentRecord() + courseTable() + walletHistory();
+  const milestones = state.history.filter(entry => game.ACTIONS[entry.action]?.experience).map(entry => '<h3>' + h(game.ACTIONS[entry.action].experienceTitle) + '</h3><p>' + h(game.TERM_NAMES[entry.term - 1] + ' · ' + ACTION_FLAVOR[entry.action]) + '</p><p>' + h(changeText(entry.changes)) + '</p>').join('');
+  const practices = state.history.filter(entry => entry.action === 'hobbyPractice').length;
+  return upgrades + (practices ? '<h3>兴趣练习</h3><p>累计完成 ' + practices + ' 次兴趣练习。</p>' : '') + milestones + investmentRecord() + courseTable() + walletHistory();
 }
 const ENDING_TEXT = {
   ordinary: '毕业典礼的台子搭在操场边上，学士服领到手的时候还带着消毒水味。你想起大一第一次进校门，行李箱的轮子在石板路上响了一路。四年的账算下来不复杂：八张成绩单、几场活动、一次体测、几个没说出口的遗憾。有人去了远方，有人留在北京，你选了最稳的一条路。稳妥不是妥协，是你一个学期一个学期攒出来的底气。银杏大道下个秋天还会金黄，只是看它的人换了一批。行李打包完，你在宿舍门口站了会儿，把钥匙放在了宿管阿姨的窗口。出门的时候，风里有北京秋天常有的那种凉。你回头看了一眼，楼还是那栋楼。',
@@ -1750,6 +1783,12 @@ $('#growthToggle')?.addEventListener('click', (event) => {
   if (openPanelName === 'growth') $('#growthTitle').focus({ preventScroll: true });
 });
 $('#growthClose')?.addEventListener('click', closePanel);
+$('#growthDetails')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-growth-place]');
+  if (!button || !state || uiLocked || dialog.open || !Object.hasOwn(game.PLACES, button.dataset.growthPlace)) return;
+  event.stopPropagation();
+  openPlace(button.dataset.growthPlace);
+});
 $('#growthTabs')?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-growth-dimension]');
   if (!button || !state) return;

@@ -651,6 +651,12 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .growth-detail-block > span { display: block; margin-bottom: 8px; color: var(--growth-muted); font-size: 11px; letter-spacing: .14em; }
 .growth-benefit { margin: 0; font-size: 16px; line-height: 1.8; color: var(--growth-ink); }
 .growth-detail { margin: 0; font-size: 12px; line-height: 1.8; color: rgba(251, 245, 223, .82); }
+.growth-requirements { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; color: var(--growth-muted); font-size: 12px; line-height: 1.8; }
+.growth-branch-progress { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(244, 234, 210, .12); font-size: 12px; line-height: 1.8; color: var(--growth-muted); }
+.growth-branch-progress .is-met, .growth-requirements .is-met { color: #7fb98a; }
+.growth-action-note { margin: 14px 0; font-size: 12px; line-height: 1.8; color: var(--growth-muted); }
+.growth-visit-button { width: 100%; min-height: 44px; margin-bottom: 12px; border: 1px solid var(--growth-gold); border-radius: 10px; background: rgba(244, 215, 124, .08); color: var(--growth-gold); font-size: 13px; cursor: pointer; }
+.growth-visit-button:disabled { opacity: .5; cursor: default; }
 .growth-reason { margin: 0 0 18px; padding: 10px 12px; border-left: 2px solid rgba(244, 215, 124, .55); background: rgba(244, 215, 124, .07); font-size: 12px; line-height: 1.7; color: rgba(251, 245, 223, .85); }
 .growth-overview { display: grid; gap: 2px; margin: auto 0 14px; padding-top: 24px; }
 .growth-overview > div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 12px; background: rgba(244, 234, 210, .06); border-radius: 8px; }

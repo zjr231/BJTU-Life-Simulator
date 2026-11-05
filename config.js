@@ -15,7 +15,7 @@
   };
   // 校园养成单品：一次性购买、本局持续。effects 只做正向追加加成，
   // 在行动结算的倍率/体能档位缩放之后应用；perTerm 按"购买后本学期原始行动次数"计数。
-  // prereq 支持 minTerm 与 actionCounts（累计行动次数，跨学期）。
+  // prereq 支持 minTerm、nodes（已购节点）与 actionCounts（累计行动次数，跨学期）。
   const GROWTH_NODES = {
     bedding: {
       id: 'bedding', icon: 'bed', dimension: 'housing', category: '生活改善', title: '舒适寝具', price: 300,
@@ -64,14 +64,44 @@
       description: '办好学生优惠公交卡，去实习点的路上能省则省。', benefit: '每次实习工作额外 +2 点心情，每学期前四次',
       prereq: { minTerm: 3 },
       effects: [{ kind: 'action', actions: ['internshipWork'], bonuses: { mood: 2 }, perTerm: 4 }]
+    },
+    studyTools: {
+      id: 'studyTools', icon: 'tools', dimension: 'learning', category: '学习与实践', title: '基础工具', price: 200,
+      description: '整理好笔记本、文具和常用工具，让每次自主学习都有清楚的起点。', benefit: '购买后，每学期前两次自学各额外增加 1 点学习进度',
+      effects: [{ kind: 'action', actions: ['selfStudy'], bonuses: { preparation: 1 }, perTerm: 2 }]
+    },
+    portfolioPlan: {
+      id: 'portfolioPlan', icon: 'portfolio', dimension: 'learning', category: '学习与实践', title: '个人作品计划', price: 500,
+      description: '把自学和项目中的尝试整理成个人作品，在逸夫楼向同学展示你的思路与成果。', benefit: '开启逸夫楼的“整理并展示个人作品”，本局可完成一次并留下作品经历',
+      prereq: { nodes: ['studyTools'], actionCounts: { selfStudy: 2, projectWork: 2 } },
+      effects: [], unlocks: ['showPortfolio']
+    },
+    hobbyGear: {
+      id: 'hobbyGear', icon: 'guitar', dimension: 'interest', category: '兴趣与活动', title: '入门器材', price: 150,
+      description: '一套入门乐器与绘画小工具，带去活动中心，给课余生活留点练习的时间。', benefit: '开放学生活动中心的兴趣练习，每学期最多两次，累计两次可解锁展演计划',
+      effects: [], unlocks: ['hobbyPractice']
+    },
+    showcasePlan: {
+      id: 'showcasePlan', icon: 'stage', dimension: 'interest', category: '兴趣与活动', title: '校园展演计划', price: 300,
+      description: '把练习过的小作品带到活动中心，与同学分享一次属于自己的校园舞台。', benefit: '开放校园小展演，本局可完成一次，留下展演经历',
+      prereq: { nodes: ['hobbyGear'], actionCounts: { hobbyPractice: 2 } },
+      effects: [], unlocks: ['campusShowcase']
+    },
+    dormDecor: {
+      id: 'dormDecor', icon: 'photo', dimension: 'housing', category: '生活与空间', title: '宿舍共同布置', price: 300,
+      description: '和室友商量好灯光、收纳与合影的位置，让住过的宿舍多一点共同生活的痕迹。', benefit: '开放宿舍的共同布置与合影，本局可完成一次，留下宿舍纪念',
+      prereq: { nodes: ['bedding', 'hobbyCorner'], actionCounts: { chat: 2 } },
+      effects: [], unlocks: ['decorateDorm']
     }
   };
-  // 养成面板的分组顺序；习惯分支没有对应预算维度，单独列出。
+  // 养成面板的分组顺序；学习、兴趣与习惯没有对应预算维度，单独列出。
   const GROWTH_DIMENSIONS = [
     { id: 'clothing', label: '衣', title: '衣着与形象' },
     { id: 'food', label: '食', title: '三餐与饮食' },
-    { id: 'housing', label: '住', title: '住宿与休息' },
+    { id: 'housing', label: '住', title: '生活与空间' },
     { id: 'transport', label: '行', title: '通勤与出行' },
+    { id: 'learning', label: '学习', title: '学习与实践' },
+    { id: 'interest', label: '兴趣', title: '兴趣与活动' },
     { id: 'habit', label: '习惯', title: '习惯养成' }
   ];
   // Fitness tiers scale the costs/rewards of non-health actions and events.
@@ -201,6 +231,10 @@
     walk: { place: 'ginkgo', title: '散步', description: '沿着银杏大道慢慢走，脑子里什么都不装。', time: 1, energy: 0, fitnessCost: 0, money: 0, recovery: 10, mood: 10, limit: 3 },
     applyProject: { place: 'yifu', title: '申请校园项目', description: '把简历和想法递到老师桌上。老师说：回去等消息。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 2, maxTerm: 6, minPreparation: 40, chain: 'project', kind: 'apply' },
     projectWork: { place: 'yifu', title: '项目投入', description: '例会开到晚上，方案改到第七版，白板上的箭头越画越多。', time: 2, energy: 15, fitnessCost: 3, money: 0, preparation: 10, chain: 'project', kind: 'work', limit: 2 },
+    showPortfolio: { place: 'yifu', title: '整理并展示个人作品', description: '把自学笔记和项目尝试排成作品页，讲清楚做法，也认真听一听同学的建议。完成后记入个人作品经历。', time: 1, energy: 8, fitnessCost: 2, money: 0, social: 3, mood: 3, requiresGrowth: 'portfolioPlan', experience: 'portfolio', experienceTitle: '个人作品展示', hint: '购买个人作品计划后开放，本局一次；精力、体能与收益按当前体能档位结算。' },
+    hobbyPractice: { place: 'activity', title: '兴趣练习', description: '在活动中心找一个角落，练一段旋律或补完一幅画，进步不大，却让今天多了一点期待。', time: 1, energy: 5, fitnessCost: 1, money: 0, mood: 4, requiresGrowth: 'hobbyGear', growthProgress: true, limit: 2, hint: '购买入门器材后开放，每学期最多两次；心情已满仍可练习并累计展演前置进度。' },
+    campusShowcase: { place: 'activity', title: '校园小展演', description: '把练过的片段和作品分享给同学，掌声响起时，才发现平时的积累也能站到台前。', time: 1, energy: 8, fitnessCost: 2, money: 0, social: 4, mood: 6, requiresGrowth: 'showcasePlan', experience: 'showcase', experienceTitle: '校园小展演', hint: '购买校园展演计划后开放，本局一次；完成后记入简历，歌手大赛仍按原流程参加。' },
+    decorateDorm: { place: 'dorm', title: '共同布置与合影', description: '室友搬来收纳盒，你贴好照片，最后挤进同一个镜头，把住过的地方变成共同的纪念。', time: 1, energy: 5, fitnessCost: 1, money: 0, social: 2, mood: 3, requiresGrowth: 'dormDecor', experience: 'dormMemory', experienceTitle: '宿舍布置合影', hint: '购买宿舍共同布置后开放，本局一次；不再收取材料费，完成后留下宿舍纪念。' },
     applyClub: { place: 'activity', title: '参与社团招新', description: '百团大战的摊位一眼望不到头。报名表递出去，扫码进群。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 1, maxTerm: 6, autumnOnly: true, chain: 'club', kind: 'apply' },
     clubWork: { place: 'activity', title: '社团投入', description: '搬桌子、贴海报、盯签到，忙到嗓子发干。', time: 1, energy: 8, fitnessCost: 2, money: 0, social: 8, chain: 'club', kind: 'work', limit: 2 },
     applyInternship: { place: 'gate', title: '申请实习岗位', description: '南门布告栏贴满了岗位：先挑一个够得着的，把成绩单和简历装进同一个文件袋。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 3, maxTerm: 7, chain: 'internship', kind: 'apply' },
@@ -893,13 +927,16 @@
       }
     }
   };
-  // 我的简历：resume(state) 的四栏标题与其他经历的折叠文案（docs/公司库与岗位库-20261103.md 一期）。
+  // 个人作品单独展示；岗位要件继续按实习、项目、竞赛、社团四类经历判定。
   const RESUME = {
     sections: [
       { id: 'internship', title: '实习经历' },
       { id: 'project', title: '项目经历' },
       { id: 'contest', title: '竞赛经历' },
-      { id: 'club', title: '社团经历' }
+      { id: 'club', title: '社团经历' },
+      { id: 'portfolio', title: '个人作品' },
+      { id: 'showcase', title: '兴趣与展演' },
+      { id: 'dormMemory', title: '宿舍纪念' }
     ],
     othersNote: '另有：{list}，共 {count} 项校园经历。'
   };
