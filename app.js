@@ -34,6 +34,7 @@ let activeSaveSlot = null;
 let saveTarget = null;
 let state = null;
 let activePlace = null;
+let gateSection = null;
 let budgetDraft = null;
 let budgetDraftTerm = null;
 let lastHotspot = null;
@@ -477,13 +478,14 @@ function renderGrowth() {
       : selected.remainingUses !== null && selected.remainingUses !== undefined ? '本学期加成剩余 ' + selected.remainingUses + ' 次' : '加成持续生效');
   }
   const requirements = selected.requirements.length && !selected.purchased ? '<ul class="growth-requirements">' + selected.requirements.map(item => '<li class="' + (item.met ? 'is-met' : '') + '">' + (item.met ? '✓ ' : '○ ') + h(growthRequirementText(item)) + '</li>').join('') + '</ul>' : '';
+  const hasUnmetRequirement = selected.requirements.some(item => !item.met);
   $('#growthDetails').innerHTML = '<div class="growth-selected-icon is-' + status.type + '">' + growthIcon(selected) + '</div>'
     + '<p class="growth-category">' + h(selected.category) + ' / 本局持续</p><h4>' + h(selected.title) + '</h4>'
     + '<p class="growth-selection-state is-' + status.type + '">' + status.label + '</p>'
     + '<p class="growth-description">' + h(selected.description) + '</p>'
-    + '<div class="growth-detail-block"><span>长期收益</span><p class="growth-benefit">' + h(selected.benefit) + '</p></div>'
-    + '<div class="growth-detail-block"><span>' + (selected.purchased ? '持有状态' : '解锁条件') + '</span>' + (requirements || '<p class="growth-detail">' + h(detail) + '</p>') + '</div>'
-    + (!selected.purchased && !selected.available ? '<p class="growth-reason">' + h(selected.reason) + '</p>' : '') + growthUnlockMarkup(selected);
+    + '<div class="growth-detail-block is-benefit"><span>长期收益</span><p class="growth-benefit">' + h(selected.benefit) + '</p></div>'
+    + '<div class="growth-detail-block is-status"><span>' + (selected.purchased ? '持有状态' : '解锁条件') + '</span>' + (requirements || '<p class="growth-detail">' + h(detail) + '</p>') + '</div>'
+    + (!selected.purchased && !selected.available && !hasUnmetRequirement ? '<p class="growth-reason">' + h(selected.reason) + '</p>' : '') + growthUnlockMarkup(selected);
   $('#growthPurchase').innerHTML = '<button type="button" class="growth-buy-button" data-growth-buy="' + selected.id + '" data-revision="' + state.revision + '"'
     + (selected.purchased || !selected.available || uiLocked || dialog.open ? ' disabled' : '') + '>'
     + (selected.purchased ? '已拥有 · 无需重复添置' : '确认添置 <span>' + selected.price + ' 元</span>') + '</button>';
@@ -511,7 +513,7 @@ function renderGrowth() {
   if (dimension.id === 'habit') {
     const restProgress = Math.min(board.restCount, routine.requiredRests);
     const complete = restProgress >= routine.requiredRests;
-    $('#growthNodes').innerHTML = '<section class="growth-branch">' + heading + '<div class="growth-branch-row">'
+    $('#growthNodes').innerHTML = '<section class="growth-branch" data-dimension="' + dimension.id + '">' + heading + '<div class="growth-branch-row">'
       + '<div class="growth-milestone' + (complete ? ' is-complete' : '') + '"><span class="growth-milestone-frame">'
       + '<svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 32h28M13 32V18h22v14M13 22h8v-4M9 32v6m30-6v6M26 10h10l-10 7h10"/></svg>'
       + '<b>' + restProgress + ' / ' + routine.requiredRests + '</b></span><span class="growth-node-name">累计休息</span><span class="growth-node-status">' + (complete ? '条件已达成 ✓' : '完成 3 次休息') + '</span></div>'
@@ -519,7 +521,7 @@ function renderGrowth() {
   } else {
     const nodes = board.nodes.filter(node => node.dimension === dimension.id).map(growthNodeMarkup).join('');
     const progress = dimensionNodes.filter(node => node.unlocks?.length && node.requirements.length).map(node => '<div class="growth-branch-progress" aria-label="' + h(node.title + '前置进度') + '">' + node.requirements.map(item => '<span class="' + (item.met ? 'is-met' : '') + '">' + (item.met ? '✓ ' : '○ ') + h(growthRequirementText(item)) + '</span>').join('') + '</div>').join('');
-    $('#growthNodes').innerHTML = '<section class="growth-branch">' + heading + '<div class="growth-branch-row">' + nodes + '</div>' + progress + '</section>';
+    $('#growthNodes').innerHTML = '<section class="growth-branch" data-dimension="' + dimension.id + '">' + heading + '<div class="growth-branch-row">' + nodes + '</div>' + progress + '</section>';
   }
 }
 // 头像：点击可上传本地图片，压缩后存本地（只影响界面，不进存档格式）。
@@ -668,9 +670,115 @@ function extraFeedback(entry) {
 function costs(effect) {
   return [(effect.time ? '时间 −' + effect.time : ''), (effect.energy ? '精力 −' + effect.energy : ''), (effect.money ? '钱包 −' + effect.money + ' 元' : ''), (effect.mood < 0 ? '心情 −' + Math.min(state.mood, Math.abs(effect.mood)) : ''), (effect.fitnessCost ? '体能 −' + effect.fitnessCost + '（消耗）' : '')].filter(Boolean).join(' · ') || '不消耗资源';
 }
+const GATE_SECTIONS = {
+  partTime: {
+    title: '兼职赚钱',
+    description: '校内勤工助学，按投入档位结算固定报酬。',
+    actions: ['work']
+  },
+  internship: {
+    title: '实习求职',
+    description: '先选岗位申请，再积累实习投入，达标后办理证明。',
+    actions: ['applyInternship', 'internshipWork', 'jobPreparation']
+  }
+};
+const GATE_ICONS = {
+  partTime: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M3 10h18"></path><path d="M16 14h2"></path></svg>',
+  internship: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5h8v2"></path><path d="M3 12h18"></path></svg>'
+};
+function gateInternshipStatus() {
+  const chain = state.chains.internship || {};
+  const progress = game.internshipProgress(state);
+  const pendingOffer = state.pendingEvent?.id === 'internshipOffer'
+    || (state.eventQueue || []).some((item) => item.id === 'internshipOffer');
+  if (chain.status === 'missed') return { label: '未完成', tone: 'is-missed', detail: '本段实习没有办成证明' };
+  if (chain.status === 'completed') return { label: '已完成', tone: 'is-done', detail: '可在下学期再次申请下一段' };
+  if (chain.status === 'active') {
+    return { label: '进行中', tone: 'is-active',
+      detail: progress ? '累计投入 时间 ' + progress.workTime + ' / ' + progress.reqTime + ' · 精力 ' + progress.workEnergy + ' / ' + progress.reqEnergy : '已接受岗位邀请' };
+  }
+  if (chain.status === 'deferred') return { label: '已延期', tone: 'is-locked', detail: '第 ' + (chain.nextEligibleTerm || state.term + 1) + ' 学期可再申请' };
+  if (pendingOffer) return { label: '等待回复', tone: 'is-active', detail: '岗位已投递，等通知' };
+  if (state.term < game.ACTIONS.applyInternship.minTerm) return { label: '第 ' + game.ACTIONS.applyInternship.minTerm + ' 学期起开放', tone: 'is-locked', detail: '先把本学期安排好' };
+  if (chain.positionId) return { label: '已申请', tone: 'is-active', detail: '等岗位回复' };
+  return { label: '未开始', tone: 'is-locked', detail: '选一个够得着的岗位' };
+}
+function gateEntryMarkup(id) {
+  const section = GATE_SECTIONS[id];
+  const used = state.counts.work || 0;
+  const summary = id === 'partTime'
+    ? { label: used >= game.ACTIONS.work.limit ? '本学期已满' : '本学期 ' + used + ' / ' + game.ACTIONS.work.limit + ' 次',
+        tone: used >= game.ACTIONS.work.limit ? 'is-locked' : 'is-active', detail: '固定报酬 100 / 200 / 300 元' }
+    : gateInternshipStatus();
+  return '<button type="button" class="gate-entry" data-gate-section="' + id + '">'
+    + '<span class="gate-entry-icon" aria-hidden="true">' + GATE_ICONS[id] + '</span>'
+    + '<span class="gate-entry-body"><span class="gate-entry-title">' + h(section.title) + '</span>'
+    + '<span class="gate-entry-desc">' + h(section.description) + '</span>'
+    + '<span class="gate-entry-meta ' + summary.tone + '">' + h(summary.label) + '</span>'
+    + (summary.detail ? '<span class="gate-entry-detail">' + h(summary.detail) + '</span>' : '')
+    + '</span><span class="gate-entry-arrow" aria-hidden="true">→</span></button>';
+}
+function gateHubMarkup() {
+  return gateEntryMarkup('partTime') + gateEntryMarkup('internship');
+}
+function gateSectionPanelMarkup(section, stepsMarkup) {
+  return '<div class="gate-section-panel"><div class="gate-section-copy"><h3>' + h(section.title) + '</h3><p>' + h(section.description) + '</p></div>'
+    + (stepsMarkup || '') + '</div>';
+}
+function updateBackButton() {
+  const button = $('#backButton');
+  if (!button) return;
+  button.innerHTML = '<span aria-hidden="true">←</span> ' + (activePlace === 'gate' && gateSection ? '返回南门' : '返回地图');
+}
+function internshipSteps() {
+  const chain = state.chains.internship || {};
+  const progress = game.internshipProgress(state);
+  const hasExperience = state.experiences.some((item) => item.type === 'internship');
+  const pendingOffer = state.pendingEvent?.id === 'internshipOffer'
+    || (state.eventQueue || []).some((item) => item.id === 'internshipOffer');
+  const applied = !!chain.positionId || chain.status === 'active' || chain.status === 'completed'
+    || chain.status === 'missed' || chain.status === 'deferred' || pendingOffer;
+  const settled = chain.status === 'completed' && hasExperience;
+  const steps = [];
+  if (chain.status === 'missed') steps.push({ state: 'is-missed', label: '未通过', detail: '' });
+  else if (chain.status === 'deferred') steps.push({ state: 'is-done', label: '已延期', detail: '第 ' + (chain.nextEligibleTerm || state.term + 1) + ' 学期可再申请' });
+  else if (pendingOffer) steps.push({ state: 'is-done', label: '等待回复', detail: '岗位已投递' });
+  else if (applied) steps.push({ state: 'is-done', label: '已申请', detail: '' });
+  else if (state.term < game.ACTIONS.applyInternship.minTerm) steps.push({ state: 'is-locked', label: '第 ' + game.ACTIONS.applyInternship.minTerm + ' 学期开放', detail: '' });
+  else steps.push({ state: 'is-current', label: '待申请', detail: '先选岗位再投递' });
+  if (chain.status === 'active') {
+    if (progress?.met) steps.push({ state: 'is-done', label: '已达标', detail: '时间 ' + progress.workTime + ' / ' + progress.reqTime + ' · 精力 ' + progress.workEnergy + ' / ' + progress.reqEnergy });
+    else steps.push({ state: 'is-current', label: '进行中', detail: progress ? '时间 ' + progress.workTime + ' / ' + progress.reqTime + ' · 精力 ' + progress.workEnergy + ' / ' + progress.reqEnergy : '' });
+  } else if (settled) steps.push({ state: 'is-done', label: '已完成', detail: '' });
+  else steps.push({ state: 'is-locked', label: '申请后开放', detail: '' });
+  if (settled) steps.push({ state: 'is-done', label: '已办理', detail: '' });
+  else if (chain.status === 'active' && progress?.met) steps.push({ state: 'is-current', label: '可办理', detail: '点卡片内按钮' });
+  else steps.push({ state: 'is-locked', label: '达标后开放', detail: '' });
+  return steps;
+}
+function internshipStepsMarkup() {
+  const labels = ['申请岗位', '实习投入', '办理证明'];
+  return '<ol class="chain-steps" aria-label="实习事件链">' + internshipSteps().map((step, index) =>
+    '<li class="chain-step ' + step.state + '"><span class="chain-dot" aria-hidden="true">' + (step.state === 'is-done' ? '✓' : index + 1) + '</span>'
+    + '<b>' + labels[index] + '</b><small>' + h(step.label) + '</small>'
+    + (step.detail ? '<em>' + h(step.detail) + '</em>' : '') + '</li>').join('') + '</ol>';
+}
 function renderActions() {
-  const actions = Object.keys(game.ACTIONS).filter((id) => game.ACTIONS[id].place === activePlace);
-  $('#actionList').innerHTML = actions.length ? actions.map((id) => {
+  updateBackButton();
+  if (activePlace === 'gate' && !gateSection) {
+    $('#actionList').innerHTML = gateHubMarkup();
+    return;
+  }
+  let actions = Object.keys(game.ACTIONS).filter((id) => game.ACTIONS[id].place === activePlace);
+  let prefix = '';
+  if (activePlace === 'gate' && GATE_SECTIONS[gateSection]) {
+    const section = GATE_SECTIONS[gateSection];
+    actions = section.actions.filter((id) => game.ACTIONS[id]?.place === 'gate');
+    prefix = gateSectionPanelMarkup(section, gateSection === 'internship' ? internshipStepsMarkup() : '');
+  }
+  // 南门兼职区只有一张卡，铺满整行避免右侧留空。
+  const wideCard = activePlace === 'gate' && actions.length === 1;
+  $('#actionList').innerHTML = prefix + (actions.length ? actions.map((id) => {
     const action = game.getAction(state, id);
     const profile = game.getActionInvestment(state, id);
     const amount = actionDraft(id);
@@ -685,8 +793,8 @@ function renderActions() {
       ? '<p class="action-position' + (internship.met ? ' is-met' : '') + '">累计投入：时间 ' + internship.workTime + ' / ' + internship.reqTime + ' · 精力 ' + internship.workEnergy + ' / ' + internship.reqEnergy + (internship.met ? ' · 门槛已达标，可办证明' : '') + '</p>'
         + (internship.met ? '<button type="button" class="settle-internship" data-settle-internship="1" data-revision="' + state.revision + '"' + (uiLocked ? ' disabled' : '') + '>办理实习证明</button>' : '')
       : '';
-    return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.experience ? '本局 ' + (state.experiences.some(item => item.type === action.experience) ? 1 : 0) + ' / 1 次' : action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div>' + positionLine + progressLine + '<p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>确认' + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
-  }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
+    return '<article class="action-card' + (wideCard ? ' is-wide' : '') + '"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.experience ? '本局 ' + (state.experiences.some(item => item.type === action.experience) ? 1 : 0) + ' / 1 次' : action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div>' + positionLine + progressLine + '<p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>确认' + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
+  }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>');
 }
 // 地点插画：按建筑名取 assets/places 下对应的矢量图；锚点与地图热点坐标一致。
 const PLACE_ART = {
@@ -762,6 +870,7 @@ function openPlace(key, hotspot) {
   if (!Object.hasOwn(game.PLACES, key)) return;
   audio?.play(PLACE_SOUNDS[key]);
   activePlace = key;
+  gateSection = null;
   lastHotspot = hotspot;
   const place = game.placeFor(state, key);
   $('#placeTitle').textContent = place.title;
@@ -1606,6 +1715,14 @@ function showPositionPicker() {
 }
 $('#actionList').addEventListener('click', (event) => {
   const button = event.target.closest('button');
+  // 南门的两级入口：先选“兼职赚钱 / 实习求职”，再进入具体行动卡；返回只回到分流页。
+  if (button?.dataset.gateSection) {
+    if (dialog.open || !Object.hasOwn(GATE_SECTIONS, button.dataset.gateSection)) return;
+    gateSection = button.dataset.gateSection;
+    renderActions();
+    $('#backButton').focus({ preventScroll: true });
+    return;
+  }
   // 达标后的「办理实习证明」按钮也在行动卡内，必须先于地点/行动校验处理。
   if (button?.dataset.settleInternship) {
     const result = runCommand('settleInternship', null, button.dataset.revision);
@@ -1742,7 +1859,14 @@ if (npc && npcLayer) {
   });
   npcTick();
 }
-$('#backButton').addEventListener('click', closePlace);
+$('#backButton').addEventListener('click', () => {
+  if (activePlace === 'gate' && gateSection) {
+    gateSection = null;
+    renderActions();
+    return;
+  }
+  closePlace();
+});
 $('#endTermButton').addEventListener('click', requestEndTerm);
 $('#saveButton').addEventListener('click', showSave);
 $('#dialogSave').addEventListener('click', showSave);

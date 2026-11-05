@@ -57,9 +57,49 @@ test('学期总结显示预留4800与期末零扣费，旧版总结仍展示300�
 test('勤工档位在确认前明确固定100/200/300元报酬', () => {
   const ui = app();
   ui.start();
-  ui.evaluate('dialog.close(); activePlace = "gate"; renderActions()');
+  ui.evaluate('dialog.close(); activePlace = "gate"; gateSection = "partTime"; renderActions()');
   const html = ui.element('#actionList').innerHTML;
   for (const amount of [100, 200, 300]) assert.match(html, new RegExp('固定报酬 \\+' + amount + ' 元'));
+});
+
+test('南门分流入口与实习事件链指示器', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = { ...state, term: 3 }; openPlace("gate")');
+  const hub = ui.element('#actionList').innerHTML;
+  assert.match(hub, /data-gate-section="partTime"/);
+  assert.match(hub, /data-gate-section="internship"/);
+  assert.doesNotMatch(hub, /action-card/);
+  // 兼职赚钱：只有勤工助学；顶部按钮变为“返回南门”，点击后回到两个入口
+  ui.click('#actionList', { gateSection: 'partTime' });
+  assert.match(ui.element('#actionList').innerHTML, /校内勤工助学/);
+  assert.doesNotMatch(ui.element('#actionList').innerHTML, /申请实习岗位/);
+  assert.match(ui.element('#backButton').innerHTML, /返回南门/);
+  ui.click('#backButton');
+  assert.match(ui.element('#backButton').innerHTML, /返回地图/);
+  assert.match(ui.element('#actionList').innerHTML, /data-gate-section="internship"/);
+  // 实习求职：三步指示器 + 三张卡
+  ui.click('#actionList', { gateSection: 'internship' });
+  assert.match(ui.element('#backButton').innerHTML, /返回南门/);
+  const idle = ui.element('#actionList').innerHTML;
+  assert.match(idle, /chain-steps/);
+  assert.match(idle, /待申请/);
+  assert.match(idle, /申请后开放/);
+  assert.match(idle, /达标后开放/);
+  assert.match(idle, /申请实习岗位/);
+  assert.match(idle, /实习投入/);
+  assert.match(idle, /求职准备/);
+  // 进行中：申请已完成、投入进行中、证明未解锁
+  ui.evaluate('state = { ...state, term: 5, chains: { ...state.chains, internship: { status: "active", progress: 0, startedTerm: 5, deadline: 6, nextEligibleTerm: 1, reviewAfter: 5, positionId: "qiandu_testdev", workTime: 2, workEnergy: 15, milestoneSeen: false } } }; renderActions()');
+  const active = ui.element('#actionList').innerHTML;
+  assert.match(active, /已申请/);
+  assert.match(active, /进行中/);
+  assert.match(active, /达标后开放/);
+  // 已完成：三步全部完成
+  ui.evaluate('state = { ...state, chains: { ...state.chains, internship: { ...state.chains.internship, status: "completed" } }, experiences: [{ type: "internship", term: 5, positionId: "qiandu_testdev" }] }; renderActions()');
+  const done = ui.element('#actionList').innerHTML;
+  assert.match(done, /已完成/);
+  assert.match(done, /已办理/);
 });
 
 test('校园卡赔偿余额不足时归还入口可用，界面明确说明待还金额', () => {
@@ -1124,11 +1164,15 @@ test('所有地点的日常行动及固定、可调事件都不展示收益预�
   ui.start();
   const original = ui.evaluate('JSON.stringify(state)');
   for (const place of Object.keys(game.PLACES)) {
-    ui.evaluate('openPlace(' + JSON.stringify(place) + ')');
-    const html = ui.element('#actionList').innerHTML;
-    assert.doesNotMatch(html, /预计|预期|平均收益|常见|八成|action-gain|investment-preview|学习进度 \+|社交 \+|心情 \+|体能 \+/);
-    assert.doesNotMatch(html, /type="range"|type="number"/);
-    assert.ok(html.includes('action-cost'));
+    const sections = place === 'gate' ? ['partTime', 'internship'] : [null];
+    for (const section of sections) {
+      ui.evaluate('openPlace(' + JSON.stringify(place) + ')');
+      if (section) ui.evaluate('gateSection = ' + JSON.stringify(section) + '; renderActions()');
+      const html = ui.element('#actionList').innerHTML;
+      assert.doesNotMatch(html, /预计|预期|平均收益|常见|八成|action-gain|investment-preview|学习进度 \+|社交 \+|心情 \+|体能 \+/);
+      assert.doesNotMatch(html, /type="range"|type="number"/);
+      assert.ok(html.includes('action-cost'));
+    }
   }
   assert.equal(ui.evaluate('JSON.stringify(state)'), original);
   for (const id of ['roommateCare', 'military1', 'projectOffer']) {
@@ -1346,7 +1390,7 @@ test('南门岗位库：浏览、锁定意向、带岗位申请与存档往返',
   assert.equal(saves.createSlotService(storage).save(state, 2).ok, true);
   const ui = app(storage);
   ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
-  ui.evaluate('dialog.close(); activePlace = "gate"; renderActions()');
+  ui.evaluate('dialog.close(); activePlace = "gate"; gateSection = "internship"; renderActions()');
   ui.click('#actionList', { action: 'applyInternship', revision: String(ui.evaluate('state.revision')) });
   assert.equal(ui.evaluate('dialogMode'), 'positionPicker');
   const html = ui.element('#dialogBody').innerHTML;
@@ -1382,7 +1426,7 @@ test('南门岗位库：浏览、锁定意向、带岗位申请与存档往返',
 test('岗位门槛不达标时申请按钮禁用并显示原因', () => {
   const ui = app();
   ui.start();
-  ui.evaluate('dialog.close(); activePlace = "gate"; renderActions()');
+  ui.evaluate('dialog.close(); activePlace = "gate"; gateSection = "internship"; renderActions()');
   ui.click('#actionList', { action: 'applyInternship', revision: String(ui.evaluate('state.revision')) });
   assert.equal(ui.evaluate('dialogMode'), 'positionPicker');
   const html = ui.element('#dialogBody').innerHTML;
@@ -1395,7 +1439,7 @@ test('实习投入卡显示累计进度，达标后出现「办理实习证明�
   const ui = app();
   ui.start();
   // 进行中未达标：有进度行、无办证明按钮
-  ui.evaluate('state = CampusGame.createGame({ nickname: "岗位测试", seed: "positions-test", legacyEconomy: true }); state.term = 5; state.chains.internship = { status: "active", progress: 0, startedTerm: 5, deadline: 6, nextEligibleTerm: 1, reviewAfter: 5, positionId: "qiandu_testdev", workTime: 2, workEnergy: 15, milestoneSeen: false }; dialog.close(); activePlace = "gate"; renderActions()');
+  ui.evaluate('state = CampusGame.createGame({ nickname: "岗位测试", seed: "positions-test", legacyEconomy: true }); state.term = 5; state.chains.internship = { status: "active", progress: 0, startedTerm: 5, deadline: 6, nextEligibleTerm: 1, reviewAfter: 5, positionId: "qiandu_testdev", workTime: 2, workEnergy: 15, milestoneSeen: false }; dialog.close(); activePlace = "gate"; gateSection = "internship"; renderActions()');
   const incomplete = ui.element('#actionList').innerHTML;
   assert.match(incomplete, /累计投入：时间 2 \/ 4/);
   assert.match(incomplete, /维护回归用例集/, '三档按钮来自岗位 workPlans');
