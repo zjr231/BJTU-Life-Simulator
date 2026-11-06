@@ -179,10 +179,33 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .place-status { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 22px 0 14px; padding: 14px 16px; border: 1px solid #ffffff29; background: rgba(15, 38, 31, .8); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-radius: 6px; font-size: 12px; }
 .place-status b { font-size: 17px; color: #f4d36b; }
 .action-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 18px; }
+.action-card.action-accordion { grid-column: 1 / -1; overflow: hidden; padding: 0; }
+.action-accordion[open] { border-color: #d8cfb7; }
+.action-accordion-head { display: flex; align-items: center; gap: 14px; padding: 16px 20px; list-style: none; cursor: pointer; }
+.action-accordion-head::-webkit-details-marker { display: none; }
+.action-accordion-head:hover { background: #f1ebdc; }
+.action-accordion-head:focus-visible { outline: 2px solid #8a6a1f; outline-offset: -3px; }
+.action-accordion-icon { flex: 0 0 auto; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: #e3ead8; color: #35513b; }
+.action-accordion-icon svg { width: 21px; height: 21px; }
+.action-accordion-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.action-accordion-copy b { font-size: 18px; color: var(--ink); }
+.action-accordion-copy small { font-size: 11px; color: #7a857d; }
+.action-accordion-state { flex: 0 0 auto; padding: 4px 8px; border-radius: 999px; background: #e3ead8; font-size: 10px; font-weight: 800; color: #2f5a3c; }
+.action-accordion-state.is-locked { background: #e8e4da; color: #8b9188; }
+.action-accordion-arrow { flex: 0 0 auto; font-size: 20px; line-height: 1; color: #8a6a1f; transition: transform .2s ease; }
+.action-accordion[open] .action-accordion-arrow { transform: rotate(90deg); }
+.action-accordion-body { padding: 2px 20px 20px; border-top: 1px solid #e2dcc8; }
+.action-accordion-body > p:first-child { margin-top: 16px; }
+@media (max-width: 720px) {
+  .action-accordion-head { gap: 10px; padding: 14px; }
+  .action-accordion-icon { width: 34px; height: 34px; }
+  .action-accordion-icon svg { width: 18px; height: 18px; }
+  .action-accordion-copy b { font-size: 16px; }
+  .action-accordion-state { font-size: 9px; }
+  .action-accordion-body { padding: 0 14px 16px; }
+}
 .action-card, .unavailable-card { background: #f7f2e8; color: var(--ink); border: 1px solid #ffffff60; padding: 22px; border-radius: 8px; box-shadow: 0 10px 30px #092b2420; }
-.action-card-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .action-card h3, .unavailable-card h3 { margin: 0; font-size: 20px; }
-.action-count { color: #65716a; font-size: 11px; white-space: nowrap; }
 .action-card p, .unavailable-card p { font-size: 13px; line-height: 1.8; color: #59665d; }
 .action-cost, .action-gain { font-size: 13px; line-height: 1.8; }
 .action-cost { color: #96643d; }
@@ -231,7 +254,6 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .action-position.is-met { border-left-color: #4a8a5c; background: #e7f0e2; color: #2f5a3c; }
 .settle-internship { display: block; width: 100%; margin: 0 0 10px; padding: 10px; border: 1px solid #4a8a5c; border-radius: 4px; background: #4a8a5c; color: #fdfcf7; font-size: 13px; font-weight: 700; cursor: pointer; }
 .settle-internship:disabled { opacity: .55; cursor: wait; }
-.action-card.is-wide { grid-column: 1 / -1; }
 /* 南门：兼职 / 实习分流入口与实习事件链 */
 .gate-entry { display: flex; align-items: flex-start; gap: 16px; width: 100%; padding: 22px; border: 1px solid #ffffff60; border-radius: 8px; background: #f7f2e8; color: var(--ink); font: inherit; text-align: left; box-shadow: 0 10px 30px #092b2420; cursor: pointer; transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
 .gate-entry:hover { transform: translateY(-2px); border-color: #4a8a5c66; box-shadow: 0 14px 34px #092b2426; }
@@ -297,7 +319,6 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
   .place-status { gap: 10px 14px; }
   .action-list { grid-template-columns: 1fr; gap: 14px; }
   .action-card { padding: 18px; }
-  .action-card-top { flex-wrap: wrap; }
   .term-dialog { padding: 22px; }
 }
 

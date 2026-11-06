@@ -113,6 +113,19 @@ test('校园卡赔偿余额不足时归还入口可用，界面明确说明待�
   assert.match(ui.element('#actionFeedback').textContent, /赔偿待还 40 元/);
 });
 
+test('地点行动按单个行动折叠，不共用分区展开框', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("dorm")');
+  const html = ui.element('#actionList').innerHTML;
+  assert.match(html, /details class="action-card action-accordion" data-action-id="chat">/);
+  assert.match(html, /details class="action-card action-accordion" data-action-id="rest">/);
+  assert.match(html, /室友交流/);
+  assert.match(html, /休息调整/);
+  assert.doesNotMatch(html, /place-action-section/);
+  assert.doesNotMatch(html, /action-accordion[^>]* open/);
+});
+
 test('学习先询问可选资料；确认前不扣费，购买后仅加2点且不会重复提交', () => {
   const ui = app();
   ui.start();

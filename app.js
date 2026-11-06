@@ -19,6 +19,21 @@ const basketballGame = typeof CampusBasketball !== 'undefined' ? CampusBasketbal
 const seasonal = typeof CampusSeason !== 'undefined' ? CampusSeason : null;
 const PLACE_SOUNDS = { think: 'study', library: 'study', yifu: 'study', dorm: 'relax', ginkgo: 'relax', track: 'sport', activity: 'opportunity', gate: 'opportunity', hospital: 'info', auditorium: 'info', hotel: 'info' };
 const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', showPortfolio: 'success', hobbyPractice: 'relax', campusShowcase: 'fanfare', decorateDorm: 'success', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport', basketball: 'sport', treatment: 'success' };
+const ACTION_CATEGORIES = {
+  study: ['study', 'tutoring', 'selfStudy', 'furtherStudy', 'projectWork', 'showPortfolio'],
+  work: ['work', 'jobPreparation', 'applyProject', 'applyInternship', 'internshipWork'],
+  social: ['chat', 'applyClub', 'clubWork', 'campusShowcase', 'decorateDorm', 'hobbyPractice', 'alumniVolunteer', 'show'],
+  sport: ['exercise', 'gym', 'teamSport', 'basketball', 'soloSport'],
+  rest: ['rest', 'walk', 'checkup', 'sickVisit', 'treatment']
+};
+const ACTION_CATEGORY_INDEX = Object.fromEntries(Object.entries(ACTION_CATEGORIES).flatMap(([category, ids]) => ids.map((id) => [id, category])));
+const ACTION_ICONS = {
+  study: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M4 5.5v15M8 7h8M8 11h6"></path></svg>',
+  work: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5h8v2M3 12h18M10 12v2h4v-2"></path></svg>',
+  social: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-3 2.5-5 6-5s6 2 6 5M16 5a3 3 0 0 1 0 6M18 15c2 .6 3 2.3 3 5"></path></svg>',
+  sport: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M5 6c3 2 4 5 4 6s-1 4-4 6M19 6c-3 2-4 5-4 6s1 4 4 6M3 12h18"></path></svg>',
+  rest: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"></path></svg>'
+};
 const dialog = $('#termDialog');
 const basketballDialog = $('#basketballDialog');
 const debug = new URLSearchParams(location.search).get('debug') === '1';
@@ -38,6 +53,7 @@ let saveTarget = null;
 let state = null;
 let activePlace = null;
 let gateSection = null;
+const openActionCards = new Set();
 let budgetDraft = null;
 let budgetDraftTerm = null;
 let lastHotspot = null;
@@ -1159,6 +1175,53 @@ function internshipStepsMarkup() {
     + '<b>' + labels[index] + '</b><small>' + h(step.label) + '</small>'
     + (step.detail ? '<em>' + h(step.detail) + '</em>' : '') + '</li>').join('') + '</ol>';
 }
+function actionCategory(id) {
+  return ACTION_CATEGORY_INDEX[id] || 'work';
+}
+function bindActionAccordions() {
+  $('#actionList')?.querySelectorAll('details.action-accordion').forEach((details) => {
+    details.addEventListener('toggle', () => {
+      const id = details.dataset.actionId;
+      if (details.open) openActionCards.add(id);
+      else openActionCards.delete(id);
+    });
+  });
+}
+function actionAccordionMarkup(id) {
+  const action = game.getAction(state, id);
+  const profile = game.getActionInvestment(state, id);
+  const amount = actionDraft(id);
+  const preview = profile && game.previewActionInvestment(state, id, amount);
+  const check = game.availability(state, id, amount);
+  // 实习投入卡显示当前岗位，让岗位库的选择在实习期间持续可见。
+  const currentPosition = id === 'internshipWork' && game.POSITIONS[state.chains.internship.positionId] ? game.POSITIONS[state.chains.internship.positionId] : null;
+  const positionLine = currentPosition ? '<p class="action-position">当前岗位：' + h(game.COMPANIES[currentPosition.company].name) + ' · ' + h(currentPosition.title) + ' <em>T' + currentPosition.tier + '</em> · 办证明时结算段收入 ' + currentPosition.rewards.income + ' 元 · 求职准备 ' + currentPosition.rewards.jobPreparation + '</p>' : '';
+  // 三期：累计投入进度 + 达标后的「办理实习证明」（达标后仍可继续投入赚日薪）。
+  const internship = id === 'internshipWork' ? game.internshipProgress(state) : null;
+  const progressLine = internship
+    ? '<p class="action-position' + (internship.met ? ' is-met' : '') + '">累计投入：时间 ' + internship.workTime + ' / ' + internship.reqTime + ' · 精力 ' + internship.workEnergy + ' / ' + internship.reqEnergy + (internship.met ? ' · 门槛已达标，可办证明' : '') + '</p>'
+      + (internship.met ? '<button type="button" class="settle-internship" data-settle-internship="1" data-revision="' + state.revision + '"' + (uiLocked ? ' disabled' : '') + '>办理实习证明</button>' : '')
+    : '';
+  const count = action.experience ? '本局 ' + (state.experiences.some(item => item.type === action.experience) ? 1 : 0) + ' / 1 次' : action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排';
+  const costText = costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id));
+  return '<details class="action-card action-accordion" data-action-id="' + id + '"' + (openActionCards.has(id) ? ' open' : '') + '>'
+    + '<summary class="action-accordion-head">'
+    + '<span class="action-accordion-icon" aria-hidden="true">' + ACTION_ICONS[actionCategory(id)] + '</span>'
+    + '<span class="action-accordion-copy"><b>' + h(action.title) + '</b><small>' + h(count) + '</small></span>'
+    + '<span class="action-accordion-state ' + (check.ok ? 'is-ready' : 'is-locked') + '">' + (check.ok ? '可安排' : '暂不可安排') + '</span>'
+    + '<span class="action-accordion-arrow" aria-hidden="true">›</span>'
+    + '</summary>'
+    + '<div class="action-accordion-body">'
+    + positionLine + progressLine
+    + '<p>' + h(profile ? profile.description : action.description) + '</p>'
+    + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '')
+    + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '')
+    + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costText) + '</div>'
+    + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '')
+    + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>' + (action.minigame ? '开始' : '确认') + h(action.title) + '</button>'
+    + '<div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div>'
+    + '</div></details>';
+}
 function renderActions() {
   updateBackButton();
   if (activePlace === 'gate' && !gateSection) {
@@ -1172,25 +1235,11 @@ function renderActions() {
     actions = section.actions.filter((id) => game.ACTIONS[id]?.place === 'gate');
     prefix = gateSectionPanelMarkup(section, gateSection === 'internship' ? internshipStepsMarkup() : '');
   }
-  // 南门兼职区只有一张卡，铺满整行避免右侧留空。
-  const wideCard = activePlace === 'gate' && actions.length === 1;
-  $('#actionList').innerHTML = prefix + (actions.length ? actions.map((id) => {
-    const action = game.getAction(state, id);
-    const profile = game.getActionInvestment(state, id);
-    const amount = actionDraft(id);
-    const preview = profile && game.previewActionInvestment(state, id, amount);
-    const check = game.availability(state, id, amount);
-    // 实习投入卡显示当前岗位，让岗位库的选择在实习期间持续可见。
-    const currentPosition = id === 'internshipWork' && game.POSITIONS[state.chains.internship.positionId] ? game.POSITIONS[state.chains.internship.positionId] : null;
-    const positionLine = currentPosition ? '<p class="action-position">当前岗位：' + h(game.COMPANIES[currentPosition.company].name) + ' · ' + h(currentPosition.title) + ' <em>T' + currentPosition.tier + '</em> · 办证明时结算段收入 ' + currentPosition.rewards.income + ' 元 + 求职准备 ' + currentPosition.rewards.jobPreparation + '</p>' : '';
-    // 三期：累计投入进度 + 达标后的「办理实习证明」（达标后仍可继续投入赚日薪）。
-    const internship = id === 'internshipWork' ? game.internshipProgress(state) : null;
-    const progressLine = internship
-      ? '<p class="action-position' + (internship.met ? ' is-met' : '') + '">累计投入：时间 ' + internship.workTime + ' / ' + internship.reqTime + ' · 精力 ' + internship.workEnergy + ' / ' + internship.reqEnergy + (internship.met ? ' · 门槛已达标，可办证明' : '') + '</p>'
-        + (internship.met ? '<button type="button" class="settle-internship" data-settle-internship="1" data-revision="' + state.revision + '"' + (uiLocked ? ' disabled' : '') + '>办理实习证明</button>' : '')
-      : '';
-    return '<article class="action-card' + (wideCard ? ' is-wide' : '') + '"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.experience ? '本局 ' + (state.experiences.some(item => item.type === action.experience) ? 1 : 0) + ' / 1 次' : action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div>' + positionLine + progressLine + '<p>' + h(profile ? profile.description : action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '') + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '') + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costs(preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id))) + '</div>' + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '') + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>' + (action.minigame ? '开始' : '确认') + h(action.title) + '</button><div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
-  }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>');
+  const body = actions.length
+    ? actions.map(actionAccordionMarkup).join('')
+    : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
+  $('#actionList').innerHTML = prefix + body;
+  bindActionAccordions();
   for(const id of game.npcCast.known(state)){const p=game.npcCast.profile(id);$('#actionList').innerHTML+='<article class="action-card relationship-library-card"><h3>联系'+h(p.name)+'</h3><p>聊聊近况，或者商量一个共同安排。</p><button type="button" data-character-open="'+id+'">联系'+h(p.name)+'</button></article>';}
 }
 function renderRelationshipsPanel() {
@@ -1458,6 +1507,7 @@ function openPlace(key, hotspot) {
   audio?.play(PLACE_SOUNDS[key]);
   activePlace = key;
   gateSection = null;
+  openActionCards.clear();
   lastHotspot = hotspot;
   finishCoach('map-place');
   const place = game.placeFor(state, key);
@@ -2015,6 +2065,11 @@ function maybeShowActionCoach() {
   if (state.history.some((entry) => entry.command.operation === 'executeAction' || entry.command.operation === 'completeBasketball')) return;
   const target = document.querySelector('#actionList .action-card button:not(:disabled)');
   if (!target) return;
+  const accordion = target.closest?.('details.action-accordion');
+  if (accordion) {
+    accordion.open = true;
+    openActionCards.add(accordion.dataset.actionId);
+  }
   showCoachStep('action-confirm', '#actionList .action-card button:not(:disabled)', '选好投入档位后，确认行动。');
 }
 
