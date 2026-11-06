@@ -87,6 +87,7 @@ const COACH_STEPS = ['start-new', 'map-place', 'action-confirm', 'semester-end']
 let coachProgress = {};
 try { coachProgress = JSON.parse(storage?.getItem(COACH_KEY)) || {}; } catch (_) { coachProgress = {}; }
 let activeCoach = null;
+let termUnlockQueue = [];
 const eventDrafts = new Map();
 const actionDrafts = new Map();
 let pendingActionExtra = null;
@@ -345,7 +346,7 @@ function showBudget() {
   }
   const plan = game.budgetPlan(budgetDraft);
   const affordable = !!plan && plan.costs.total - grant.livingCost <= state.money;
-  const body = '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。确认本学期的基础费用并选择住宿档位，确认后进入选课。</p>' + termUnlockMarkup() + budgetPickerMarkup() + budgetSummaryMarkup() + '<p id="budgetError" class="action-reason" role="alert"></p>';
+  const body = '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。确认本学期的基础费用并选择住宿档位，确认后进入选课。</p>' + budgetPickerMarkup() + budgetSummaryMarkup() + '<p id="budgetError" class="action-reason" role="alert"></p>';
   showDialog('budget', '学期生活预算', body, [{ id: 'budgetConfirm', text: '确认预算', disabled: !affordable }]);
 }
 function selectBudgetTier(dimension, tierId) {
@@ -986,25 +987,32 @@ function semesterNextStep() {
   return '点击地图地点开始安排行动';
 }
 
-function termUnlockItems(term = state?.term) {
+function termUnlockSteps(term = state?.term) {
   if (!state || !Number.isInteger(term) || term <= 1) return [];
-  const items = [];
+  const steps = new Map();
+  const add = (selector, key, text, hint) => {
+    const existing = steps.get(selector);
+    if (existing) {
+      existing.parts.push(text);
+      if (!existing.hint) existing.hint = hint;
+    } else {
+      steps.set(selector, { id: 'term-unlock:' + term + ':' + key, selector, parts: [text], hint });
+    }
+  };
+  const actionsByPlace = new Map();
   for (const action of Object.values(game.ACTIONS)) {
     if (action.minTerm !== term || action.requiresGrowth) continue;
     if (action.autumnOnly && term % 2 === 0) continue;
-    items.push('行动「' + action.title + '」');
+    actionsByPlace.set(action.place, [...(actionsByPlace.get(action.place) || []), action.title]);
   }
-  for (const node of Object.values(game.GROWTH_NODES)) {
-    if (node.prereq?.minTerm === term) items.push('养成「' + node.title + '」');
+  for (const [place, titles] of actionsByPlace) {
+    add('.hotspot-' + place, 'action:' + place, '本学期新解锁行动：' + titles.join('、') + '。', '点击「' + (game.PLACES[place]?.title || place) + '」查看。');
   }
+  const growth = Object.values(game.GROWTH_NODES).filter(node => node.prereq?.minTerm === term).map(node => node.title);
+  if (growth.length) add('#growthToggle', 'growth', '本学期新解锁养成单品：' + growth.join('、') + '。', '点击「校园养成」查看。');
   const positions = Object.values(game.POSITIONS).filter(item => item.window?.[0] === term).length;
-  if (positions) items.push('南门岗位库 ' + positions + ' 个实习岗位');
-  return items;
-}
-function termUnlockMarkup(term = state?.term) {
-  const items = termUnlockItems(term);
-  if (!items.length) return '';
-  return '<div class="term-unlocks"><b>本学期新解锁</b><ul>' + items.map(item => '<li>' + h(item) + '</li>').join('') + '</ul><p>可在行动、校园养成或南门岗位库中查看。</p></div>';
+  if (positions) add('.hotspot-gate', 'positions', '南门岗位库新增 ' + positions + ' 个实习岗位。', '点击「南门」查看。');
+  return [...steps.values()].map(step => ({ id: step.id, selector: step.selector, text: step.parts.join('') + step.hint }));
 }
 
 function updateSemesterDock() {
@@ -1550,6 +1558,7 @@ function openPlace(key, hotspot) {
   openActionCards.clear();
   lastHotspot = hotspot;
   finishCoach('map-place');
+  if (activeCoach?.id.startsWith('term-unlock:')) finishCoach(activeCoach.id);
   const place = game.placeFor(state, key);
   $('#placeTitle').textContent = place.title;
   $('#placeKicker').textContent = '主校区 · ' + place.kicker;
@@ -2035,12 +2044,18 @@ function hideCoach() {
 
 function finishCoach(id) {
   if (!id || !activeCoach || activeCoach.id !== id) return;
+  const next = activeCoach.onFinish;
   coachProgress[id] = 1;
   saveCoachProgress();
   hideCoach();
+  if (typeof next === 'function') setTimeout(next, 220);
 }
 
 function skipAllCoach() {
+  if (activeCoach && activeCoach.id.startsWith('term-unlock:')) coachProgress[activeCoach.id] = 1;
+  for (const step of termUnlockQueue) coachProgress[step.id] = 1;
+  termUnlockQueue = [];
+  for (const id of Object.keys(coachProgress)) if (id.startsWith('term-unlock:')) coachProgress[id] = 1;
   for (const id of COACH_STEPS) coachProgress[id] = 1;
   saveCoachProgress();
   hideCoach();
@@ -2074,14 +2089,14 @@ function positionCoach() {
   bubble.classList.toggle('is-below', !above);
 }
 
-function showCoachStep(id, selector, text) {
+function showCoachStep(id, selector, text, onFinish) {
   if (coachDone(id) || activeCoach || dialog.open) return;
   const target = document.querySelector(selector);
   if (!target) return;
   const layer = $('#coachLayer');
   const bubble = $('#coachBubble');
   if (!layer || !bubble) return;
-  activeCoach = { id, target };
+  activeCoach = { id, target, onFinish };
   target.classList.add('coach-target');
   $('#coachText').textContent = text;
   layer.hidden = false;
@@ -2117,6 +2132,25 @@ function maybeShowEndTermCoach() {
   if (!state || activePlace || dialog.open || activeCoach || coachDone('semester-end')) return;
   if (!state.history.some((entry) => entry.command.operation === 'executeAction' || entry.command.operation === 'completeBasketball')) return;
   showCoachStep('semester-end', '#endTermQuick', '本学期还可以继续安排；准备结束时，从这里参加考试。');
+}
+
+function maybeShowTermUnlockCoach() {
+  if (!state || state.phase !== 'playing' || activePlace || dialog.open || activeCoach) return;
+  if (termUnlockQueue.length) { showNextTermUnlockCoach(); return; }
+  const steps = termUnlockSteps(state.term).filter(step => !coachDone(step.id) && document.querySelector(step.selector));
+  if (!steps.length) return;
+  termUnlockQueue = steps;
+  showNextTermUnlockCoach();
+}
+
+function showNextTermUnlockCoach() {
+  if (!termUnlockQueue.length || activeCoach || dialog.open || activePlace) return;
+  while (termUnlockQueue.length) {
+    const step = termUnlockQueue.shift();
+    if (coachDone(step.id) || !document.querySelector(step.selector)) continue;
+    showCoachStep(step.id, step.selector, step.text, showNextTermUnlockCoach);
+    if (activeCoach) return;
+  }
 }
 
 function showAdmission() {
@@ -2355,7 +2389,7 @@ function showCourseSelection() {
   if ((state.selectedCourses || []).length) { resumePhase(); return; }
   const options = game.coursesForTerm(state.term, state.background.id, state.background.major);
   const cards = options.map((course) => '<label class="course-card"><input type="checkbox" name="course" value="' + h(course.id) + '"><span class="course-main"><b>' + h(course.name) + '</b><span class="course-meta">' + h(game.SUBJECTS[course.subject]) + ' · ' + course.credits + ' 学分</span><span class="course-desc">' + h(course.description) + '</span></span></label>').join('');
-  showDialog('courseSelection', '开学选课', '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。从本学期可选课程中选择 3 门，期末考试会覆盖这些课程。</p>' + termUnlockMarkup() + budgetMarkup() + '<form id="courseForm"><p class="course-count" id="courseCount">已选 0 / 3 门</p><div class="course-list">' + cards + '</div><p id="courseError" class="action-reason" role="alert"></p><button type="submit">确认选课</button></form><p class="dialog-note">每学期 3 门课；期末考试 5 题，每题 20 分。定量课程按主题随机生成计算题，其余课程从对应学科题库抽题。总评 = 平时分 40% + 考试 60%。</p>');
+  showDialog('courseSelection', '开学选课', '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。从本学期可选课程中选择 3 门，期末考试会覆盖这些课程。</p>' + budgetMarkup() + '<form id="courseForm"><p class="course-count" id="courseCount">已选 0 / 3 门</p><div class="course-list">' + cards + '</div><p id="courseError" class="action-reason" role="alert"></p><button type="submit">确认选课</button></form><p class="dialog-note">每学期 3 门课；期末考试 5 题，每题 20 分。定量课程按主题随机生成计算题，其余课程从对应学科题库抽题。总评 = 平时分 40% + 考试 60%。</p>');
 }
 function submitCourseSelection(form) {
   const ids = [...form.querySelectorAll('input[name="course"]:checked')].map((input) => input.value);
@@ -2365,7 +2399,7 @@ function submitCourseSelection(form) {
   audio?.play('success');
   const names = ids.map((id) => game.courseById(id).name).join('、');
   if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = '选课完成：' + names; }
-  else { dialog.close(); showToast('选课完成：' + names); }
+  else { dialog.close(); showToast('选课完成：' + names); setTimeout(maybeShowTermUnlockCoach, 220); }
 }
 function showExam() {
   if (!state || state.phase !== 'examPending' || !state.exam) { resumePhase(); return; }
@@ -2715,7 +2749,7 @@ function resumePhase() {
   else if (state.phase === 'finished' || state.phase === 'ended') showResult();
   else if (needsBudget()) showBudget();
   else if (needsCourseSelection()) showCourseSelection();
-  else { dialog.close(); maybeZhouNingDirector(); setTimeout(() => { maybeShowMapCoach(); maybeShowEndTermCoach(); }, 180); }
+  else { dialog.close(); maybeZhouNingDirector(); setTimeout(() => { maybeShowMapCoach(); maybeShowTermUnlockCoach(); maybeShowEndTermCoach(); }, 180); }
 }
 function showLoad() {
   const info = saves.inspect();
@@ -3183,6 +3217,7 @@ document.querySelectorAll('.advisory-close').forEach((button) => button.addEvent
 $('#growthToggle')?.addEventListener('click', (event) => {
   event.stopPropagation();
   if (!state || dialog.open) return;
+  if (activeCoach?.id.startsWith('term-unlock:')) finishCoach(activeCoach.id);
   setPanel(openPanelName === 'growth' ? null : 'growth');
   if (openPanelName === 'growth') $('#growthTitle').focus({ preventScroll: true });
 });

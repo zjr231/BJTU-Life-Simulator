@@ -309,18 +309,22 @@ test('养成侧栏余额不足不能扣款，弹窗期间忽略购买，休息�
   assert.match(ui.element('#dialogBody').innerHTML, /校园养成额外恢复：精力 \+3/);
 });
 
-test('进入新学期时提示新解锁的行动、养成与南门岗位', () => {
+test('新学期解锁以聚光灯指向行动、养成与南门岗位', () => {
   const ui = growthUi();
-  const items = ui.evaluate('termUnlockItems(3).join("|")');
-  assert.match(items, /行动「申请实习岗位」/);
-  assert.match(items, /养成「通勤公交卡」/);
-  assert.match(items, /南门岗位库 7 个实习岗位/);
-  assert.equal(ui.evaluate('termUnlockMarkup(1)'), '');
-  assert.match(ui.evaluate('termUnlockMarkup(3)'), /本学期新解锁/);
-  ui.evaluate('state.term = 3; state.economy = null; state.selectedCourses = []; state.history = []; renderState(); showCourseSelection()');
+  const steps = ui.evaluate('termUnlockSteps(3)');
+  assert.equal(steps.length, 2);
+  const gate = steps.find(step => step.selector === '.hotspot-gate');
+  assert.match(gate.text, /行动：申请实习岗位/);
+  assert.match(gate.text, /南门岗位库新增 7 个实习岗位/);
+  const growth = steps.find(step => step.selector === '#growthToggle');
+  assert.match(growth.text, /养成单品：通勤公交卡/);
+  assert.equal(ui.evaluate('termUnlockSteps(1).length'), 0);
+  ui.evaluate('state.term = 3; state.economy = null; state.selectedCourses = []; state.history = []; renderState(); maybeShowTermUnlockCoach()');
+  assert.equal(ui.evaluate('activeCoach.id'), 'term-unlock:3:action:gate');
+  assert.match(ui.element('#coachText').textContent, /申请实习岗位/);
+  ui.evaluate('hideCoach(); termUnlockQueue = []; state.selectedCourses = []; showCourseSelection()');
   assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
-  assert.match(ui.element('#dialogBody').innerHTML, /本学期新解锁/);
-  assert.match(ui.element('#dialogBody').innerHTML, /申请实习岗位/);
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /term-unlocks|本学期新解锁/);
 });
 
 function app(storage = memory(), withSms = false, withNpc = false, autoStart = true) {
