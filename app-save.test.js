@@ -10,7 +10,7 @@ const game = require('./game.js');
 const saves = require('./save.js');
 const sms = require('./sms.js');
 
-test('家庭预算在入学、开学选课、钱包与成长记录中展示；打开收支不重复拨款', () => {
+test('家庭预算在入学、钱包与成长记录中展示；选课页不再重复预算；打开收支不重复拨款', () => {
   const ui = app();
   ui.start();
   let seed = 'budget-ui-0';
@@ -30,7 +30,7 @@ test('家庭预算在入学、开学选课、钱包与成长记录中展示；�
   assert.match(enrollment, /基础通勤 <b>400 元/);
   assert.match(enrollment, /1200 元/);
   ui.evaluate('showCourseSelection()');
-  assert.match(ui.element('#dialogBody').innerHTML, /默认预留/);
+  assert.equal(ui.evaluate('dialogMode'), 'budget', '未确认预算时仍先进入预算页');
   ui.evaluate('dialog.close()');
   const before = JSON.stringify(ui.evaluate('state'));
   ui.click('#mapStats', { walletBudget: '1' });
@@ -844,6 +844,7 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
   assert.match(ui.element('#dialogBody').innerHTML, /id="courseForm"/);
   assert.match(ui.element('#dialogBody').innerHTML, /course-card/);
   assert.match(ui.element('#dialogBody').innerHTML, /学分/);
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /本学期生活预算|默认预留|开学可支配资金/);
   const ids = ui.evaluate('CampusGame.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map((course) => course.id)');
   ui.evaluate('state = CampusGame.selectCourses(state, ' + JSON.stringify(ids) + ', { expectedRevision: state.revision }).state; renderState(); dialog.close()');
   ui.click('#endTermButton');
