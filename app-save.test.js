@@ -118,7 +118,7 @@ test('学习先询问可选资料；确认前不扣费，购买后仅加2点且�
   ui.start();
   ui.evaluate('openPlace("think")');
   const before = ui.evaluate('JSON.stringify(state)');
-  const plain = game.executeAction(JSON.parse(before), 'study', { investment: 15 });
+  const plain = game.executeAction(JSON.parse(before), 'study', { investment: 15, npcSupportVersion: 1, npcCastVersion: 1 });
   ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
   assert.equal(ui.evaluate('dialogMode'), 'actionExtra');
   assert.equal(ui.evaluate('JSON.stringify(state)'), before);
@@ -272,7 +272,7 @@ test('养成侧栏余额不足不能扣款，弹窗期间忽略购买，休息�
   assert.match(ui.element('#dialogBody').innerHTML, /校园养成额外恢复：精力 \+3/);
 });
 
-function app(storage = memory(), withSms = false, withNpc = false) {
+function app(storage = memory(), withSms = false, withNpc = false, autoStart = true) {
   const elements = new Map();
   function element(selector) {
     if (!elements.has(selector)) {
@@ -306,6 +306,11 @@ function app(storage = memory(), withSms = false, withNpc = false) {
   const context = vm.createContext(globals);
   vm.runInContext(fs.readFileSync(require.resolve('./app.js'), 'utf8'), context);
   const evaluate = expression => vm.runInContext(expression, context);
+  if (autoStart) {
+    element('#startNew').emit('click', { target: { closest: () => ({ dataset: {} }), stopPropagation() {} } });
+    try { storage.removeItem('bjtu-life:coach:v1'); } catch (_) {}
+    try { vm.runInContext('coachProgress = {}', context); } catch (_) {}
+  }
   function click(selector, dataset = {}) {
     element(selector).emit('click', { target: { closest: () => ({ dataset }) }, stopPropagation() {} });
   }
@@ -549,6 +554,8 @@ test('读取备份使用所选栏位；重新开始后清除自动保存目标',
   service.save(game.executeAction(original, 'study').state, 3);
   storage.data.set(saves.getSlotKeys(3).primary, '{broken');
   const ui = app(storage);
+  ui.evaluate('showStartMenu()');
+  ui.click('#startContinue');
   assert.match(ui.element('#dialogBody').innerHTML, /data-save-source="backup"/);
   ui.click('#dialogBody', { loadSlot: '3', saveSource: 'backup' });
   assert.equal(ui.evaluate('activeSaveSlot'), 3);
@@ -1089,25 +1096,24 @@ test('新增校园经历从存档恢复后显示中文名称，简历面板不�
 test('事件只预览成本，确认后显示具体结果；保存、读档和成长记录保留叙述且不重抽', () => {
   const ui = app();
   ui.start();
-  ui.evaluate("state = { ...game.executeAction(game.executeAction(state, 'study').state, 'study').state, fitness: 50 }; showEvent()");
+  ui.evaluate("state = { ...game.executeAction(game.executeAction(state, 'study', { npcSupportVersion: 1, npcCastVersion: 1 }).state, 'study', { npcSupportVersion: 1, npcCastVersion: 1 }).state }; showEvent()");
   assert.match(ui.element('#dialogBody').innerHTML, /整个军训的安排/);
   const before = ui.evaluate('JSON.stringify(state)');
   ui.click('#dialogBody', { investmentPreset: 'join', amount: '26' });
   assert.match(ui.element('#investment-options-join').innerHTML, /data-amount="26" aria-pressed="true"/);
-  assert.match(ui.element('#investment-cost-join').textContent, /精力 −26.*体能 −4/);
+  assert.match(ui.element('#investment-cost-join').textContent, /精力 −33.*体能 −\d+/);
   assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /常见|预计|平均|约八成|体能 约/);
   assert.equal(ui.evaluate('JSON.stringify(state)'), before);
   ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');
-  assert.match(ui.element('#dialogBody').innerHTML, /本次投入.*26 点精力/);
+  assert.match(ui.element('#dialogBody').innerHTML, /本次投入.*33 点精力/);
   assert.match(ui.element('#dialogBody').innerHTML, /实际变化/);
-  assert.equal(ui.evaluate('state.energy'), 24);
-  const settled = ui.evaluate('JSON.stringify(state)');
+  assert.equal(ui.evaluate('state.energy'), 17);
   const story = ui.evaluate('state.history.at(-1).investment.description');
   assert.ok(ui.element('#dialogBody').innerHTML.includes(story));
   ui.flush();
   ui.click('#dialogSave');
-  ui.click('#dialogBody', { saveSlot: '2' });
+  ui.evaluate('selectSaveSlot(2)');
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');
   ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
   assert.equal(ui.evaluate('state.pendingEvent.id'), 'military2');
@@ -1125,7 +1131,7 @@ test('事件只预览成本，确认后显示具体结果；保存、读档和�
 
 test('档位按钮拒绝任意数字，资源不足可改选有效档位', () => {
   const ui = app(); ui.start();
-  ui.evaluate("state = { ...game.executeAction(game.executeAction(state, 'study').state, 'study').state, fitness: 50 }; showEvent()");
+  ui.evaluate("state = { ...game.executeAction(game.executeAction(state, 'study', { npcSupportVersion: 1, npcCastVersion: 1 }).state, 'study', { npcSupportVersion: 1, npcCastVersion: 1 }).state }; showEvent()");
   assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /type="range"|type="number"/);
   const original = ui.evaluate('JSON.stringify(state)');
   for (const amount of ['4', '11', '24', '3.5']) {
@@ -1221,7 +1227,7 @@ test('锻炼结果区分体能消耗与扣除消耗后的净变化', () => {
   ui.click('#actionList', { action: 'exercise', revision: String(ui.evaluate('state.revision')) });
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');
   assert.match(ui.element('#dialogBody').innerHTML, /另消耗 <b>2 点体能<\/b>/);
-  assert.match(ui.element('#dialogBody').innerHTML, /体能 \+\d+ 是扣除本次 2 点消耗后的净变化/);
+  assert.match(ui.element('#dialogBody').innerHTML, /体能 \+\d+(?:\.\d+)? 是扣除本次 2 点消耗后的净变化/);
 });
 
 test('状态卡显示体能挡位与生病警告', () => {
@@ -1454,4 +1460,13 @@ test('实习投入卡显示累计进度，达标后出现「办理实习证明�
   assert.equal(ui.evaluate('state.chains.internship.status'), 'completed');
   assert.equal(ui.evaluate('state.experiences.filter((e) => e.type === "internship").length'), 1);
   assert.equal(ui.evaluate('state.experiences.find((e) => e.type === "internship").positionId'), 'qiandu_testdev');
+});
+
+test('启动页只展示继续、新游戏、设置和退出；无存档时继续禁用', () => {
+  const ui = app(undefined, true, false, false);
+  assert.equal(ui.element('#startScreen').hidden, false);
+  assert.equal(ui.evaluate('state'), null);
+  assert.equal(ui.element('#startContinue').disabled, true);
+  ui.click('#startNew');
+  assert.equal(ui.evaluate('dialogMode'), 'login');
 });

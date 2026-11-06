@@ -9,10 +9,41 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="北交人生">
   <meta name="format-detection" content="telephone=no">
-  <link rel="stylesheet" href="styles.css?v=20261105-qin-npc-merge">
+  <link rel="stylesheet" href="styles.css?v=20261106-p0">
 </head>
 <body>
-  <main class="game-shell" aria-label="北交人生校园地图">
+  <section class="start-screen" id="startScreen" aria-label="北交人生启动页">
+    <div class="start-glow" aria-hidden="true"></div>
+    <div class="start-card">
+      <p class="start-kicker">BJTU LIFE SIMULATOR</p>
+      <h1>北交人生</h1>
+      <p class="start-lead">四年，从今天开始。每一次安排都会留下痕迹。</p>
+      <div class="start-menu">
+        <button type="button" class="start-action is-primary" id="startContinue">
+          <span>继续游戏</span><small id="startContinueNote">读取存档</small>
+        </button>
+        <button type="button" class="start-action" id="startNew">
+          <span>新游戏</span><small>从入学开始</small>
+        </button>
+        <button type="button" class="start-action" id="startSettings">
+          <span>设置</span><small>声音、动画与玩法说明</small>
+        </button>
+        <button type="button" class="start-action is-quiet" id="startExit">
+          <span>退出</span><small>关闭页面</small>
+        </button>
+      </div>
+      <section class="start-settings" id="startSettingsPanel" hidden aria-label="启动设置">
+        <button type="button" class="utility-button" id="startSoundButton">声音:开</button>
+        <button type="button" class="utility-button" id="startMotionButton">动画效果:开</button>
+        <button type="button" class="utility-button" id="startHelpButton">玩法说明</button>
+        <button type="button" class="utility-button" id="startResetTips">重置新手提示</button>
+        <button type="button" class="utility-button" id="startSettingsBack">返回</button>
+      </section>
+      <p class="start-status" id="startStatus" role="status"></p>
+      <p class="start-version" id="startVersion"></p>
+    </div>
+  </section>
+  <main class="game-shell" id="gameShell" aria-label="北交人生校园地图">
     <section class="map-screen" id="mapScreen">
       <div class="map-layer" id="mapLayer">
         <img class="map-art" src="assets/campus-map-reference.png" alt="北交大主校区地点交互地图">
@@ -135,6 +166,15 @@
       </header>
 
       <div class="season-notice" id="seasonNotice" hidden role="status" aria-live="polite"></div>
+
+      <aside class="semester-dock" id="semesterDock" hidden aria-label="学期进度与结束学期" aria-live="polite">
+        <div class="semester-dock-copy">
+          <span class="semester-dock-urgent" id="semesterDockUrgent" hidden>时间已用完</span>
+          <b id="semesterDockTerm">第 1 学期</b>
+          <small id="semesterDockNext">点击地图地点开始安排行动</small>
+        </div>
+        <button type="button" id="endTermQuick">结束学期并考试</button>
+      </aside>
 
 <div class="profile-popover" id="avatarPopover" hidden aria-label="头像">
           <div class="profile-popover-head">
@@ -341,25 +381,35 @@
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </main>
-  <script src="config.js?v=20261105-qin-npc-merge"></script>
-  <script src="courses.js?v=20261105-qin-npc-merge"></script>
-  <script src="rng.js?v=20261105-qin-npc-merge"></script>
-  <script src="relationships.js?v=20261105-qin-npc-merge"></script>
-  <script src="npc-cast.js?v=20261105-qin-npc-merge"></script>
-  <script src="npc-support.js?v=20261105-qin-npc-merge"></script>
-  <script src="character-agent.js?v=20261105-qin-npc-merge"></script>
-  <script src="npc-director.js?v=20261105-qin-npc-merge"></script>
-  <script src="npc-game.js?v=20261105-qin-npc-merge"></script>
-  <script src="character-scene.js?v=20261105-qin-npc-merge"></script>
-  <script src="state-validation.js?v=20261105-qin-npc-merge"></script>
-  <script src="game.js?v=20261105-qin-npc-merge"></script>
-  <script src="save.js?v=20261105-qin-npc-merge"></script>
-  <script src="audio.js?v=20261105-qin-npc-merge"></script>
-  <script src="sms.js?v=20261105-qin-npc-merge"></script>
-  <script src="npc.js?v=20261105-qin-npc-merge"></script>
-  <script src="season.js?v=20261105-qin-npc-merge"></script>
-  <script src="vendor/planck.min.js?v=20261105-qin-npc-merge"></script>
-  <script src="basketball.js?v=20261105-qin-npc-merge"></script>
-  <script src="app.js?v=20261105-qin-npc-merge"></script>
+  <div class="coach-layer" id="coachLayer" hidden aria-live="polite">
+    <div class="coach-spotlight" id="coachSpotlight" aria-hidden="true"></div>
+    <div class="coach-bubble" id="coachBubble">
+      <p id="coachText"></p>
+      <div class="coach-actions">
+        <button type="button" class="coach-skip" id="coachSkip">跳过</button>
+        <button type="button" id="coachNext">下一步</button>
+      </div>
+    </div>
+  </div>
+  <script src="config.js?v=20261106-p0"></script>
+  <script src="courses.js?v=20261106-p0"></script>
+  <script src="rng.js?v=20261106-p0"></script>
+  <script src="relationships.js?v=20261106-p0"></script>
+  <script src="npc-cast.js?v=20261106-p0"></script>
+  <script src="npc-support.js?v=20261106-p0"></script>
+  <script src="character-agent.js?v=20261106-p0"></script>
+  <script src="npc-director.js?v=20261106-p0"></script>
+  <script src="npc-game.js?v=20261106-p0"></script>
+  <script src="character-scene.js?v=20261106-p0"></script>
+  <script src="state-validation.js?v=20261106-p0"></script>
+  <script src="game.js?v=20261106-p0"></script>
+  <script src="save.js?v=20261106-p0"></script>
+  <script src="audio.js?v=20261106-p0"></script>
+  <script src="sms.js?v=20261106-p0"></script>
+  <script src="npc.js?v=20261106-p0"></script>
+  <script src="season.js?v=20261106-p0"></script>
+  <script src="vendor/planck.min.js?v=20261106-p0"></script>
+  <script src="basketball.js?v=20261106-p0"></script>
+  <script src="app.js?v=20261106-p0"></script>
 </body>
 </html>

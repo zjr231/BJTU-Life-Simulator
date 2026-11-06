@@ -66,6 +66,11 @@ let commandSequence = 0;
 let savedRevision = -1;
 let savedAt = '';
 let saveNotice = '';
+const COACH_KEY = 'bjtu-life:coach:v1';
+const COACH_STEPS = ['start-new', 'map-place', 'action-confirm', 'semester-end'];
+let coachProgress = {};
+try { coachProgress = JSON.parse(storage?.getItem(COACH_KEY)) || {}; } catch (_) { coachProgress = {}; }
+let activeCoach = null;
 const eventDrafts = new Map();
 const actionDrafts = new Map();
 let pendingActionExtra = null;
@@ -683,6 +688,7 @@ function applyMotion() {
     button.textContent = '动画效果:' + (motionOn ? '开' : '关');
     button.setAttribute('aria-pressed', motionOn ? 'true' : 'false');
   }
+  updateStartMotionButton();
 }
 function applyHotspots() {
   if (document.body && document.body.classList) document.body.classList.toggle('hide-hotspot-rings', !hotspotsOn);
@@ -919,6 +925,47 @@ function renderSeasonEffects() {
   const particles = $('#weatherParticles');
   if (particles) particles.innerHTML = seasonParticleMarkup(info);
 }
+function endTermButtonLabel() {
+  if (!state) return '结束学期';
+  if (state.phase === 'playing' && state.time <= 0) return '现在参加期末考试';
+  return ({ eventPending: '处理当前事件', examPending: '继续期末考试', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果', ended: '查看本局结局' })[state.phase]
+    || ((state.selectedCourses || []).length ? '结束学期并考试' : '结束学期');
+}
+
+function semesterNextStep() {
+  if (!state) return '';
+  if (state.phase === 'eventPending') return '先处理当前校园事件';
+  if (state.phase === 'examPending') return '继续完成期末考试';
+  if (state.phase === 'summary') return '查看学期总结';
+  if (state.phase === 'endingChoice') return '选择毕业方向';
+  if (state.phase === 'finished' || state.phase === 'ended') return '查看本局结果';
+  if (state.time <= 0) return '时间已用完，准备期末考试';
+  const board = game.advisories(state);
+  const items = board.groups.filter((group) => group.id !== 'settled').flatMap((group) => group.items);
+  const urgent = items.find((entry) => entry.urgent);
+  if (urgent) return urgent.title;
+  const duty = board.groups.find((group) => group.id === 'duties')?.items[0];
+  if (duty) return duty.title;
+  const window = board.groups.find((group) => group.id === 'windows')?.items[0];
+  if (window) return window.title;
+  return '点击地图地点开始安排行动';
+}
+
+function updateSemesterDock() {
+  const dock = $('#semesterDock');
+  if (!dock) return;
+  dock.hidden = !state;
+  if (!state) return;
+  $('#semesterDockTerm').textContent = game.TERM_NAMES[state.term - 1] + ' · 时间 ' + state.time + ' / 12';
+  const urgent = state.phase === 'playing' && state.time <= 0;
+  const urgentBadge = $('#semesterDockUrgent');
+  if (urgentBadge) urgentBadge.hidden = !urgent;
+  $('#semesterDockNext').textContent = urgent ? '时间已用完，现在必须参加期末考试' : '下一步：' + semesterNextStep();
+  $('#endTermQuick').textContent = endTermButtonLabel();
+  dock.classList.toggle('is-urgent', urgent);
+  dock.setAttribute('data-urgent', urgent ? 'true' : 'false');
+}
+
 function renderState() {
   if (!state) return;
   $('#playerLabel').textContent = (state.background.college ? state.background.college + ' · ' : '') + state.background.major;
@@ -981,7 +1028,8 @@ function renderState() {
   renderAdvisories();
   renderResume();
   renderGrowth();
-  $('#endTermButton').textContent = ({ eventPending: '处理当前事件', examPending: '继续期末考试', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果', ended: '查看本局结局' })[state.phase] || (selectedIds.length ? '结束学期并考试' : '结束学期');
+  $('#endTermButton').textContent = endTermButtonLabel();
+  updateSemesterDock();
   $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
   renderRecordsPanel();
   renderRelationshipsPanel();
@@ -1411,6 +1459,7 @@ function openPlace(key, hotspot) {
   activePlace = key;
   gateSection = null;
   lastHotspot = hotspot;
+  finishCoach('map-place');
   const place = game.placeFor(state, key);
   $('#placeTitle').textContent = place.title;
   $('#placeKicker').textContent = '主校区 · ' + place.kicker;
@@ -1432,6 +1481,7 @@ function openPlace(key, hotspot) {
   lockBodyScroll();
   renderState();
   $('#backButton').focus();
+  setTimeout(maybeShowActionCoach, 360);
 }
 function closePlace() {
   const placeScreen = $('#placeScreen');
@@ -1446,6 +1496,7 @@ function closePlace() {
   unlockBodyScroll();
   activePlace = null;
   if (!dialog.open) lastHotspot?.focus();
+  if (!dialog.open) setTimeout(maybeShowEndTermCoach, 220);
 }
 function resetNpcSystem() {
   if (!npc) return;
@@ -1792,16 +1843,196 @@ function finishSave(slotId) {
   resumePhase();
   showToast(result.warning || '已保存到栏位 ' + slotId);
 }
+function startMenuHasSave() {
+  const info = saves.inspect();
+  return info.slots.some((slot) => slot.ok && ((slot.primary.ok && !slot.primary.empty) || (slot.backup.ok && !slot.backup.empty)));
+}
+
+function updateStartMenu() {
+  const startContinue = $('#startContinue');
+  const note = $('#startContinueNote');
+  if (!startContinue) return;
+  const hasSave = startMenuHasSave();
+  startContinue.disabled = !hasSave;
+  if (note) note.textContent = hasSave ? '读取存档' : '暂无存档';
+  const version = $('#startVersion');
+  if (version) version.textContent = '版本 ' + (game.RULES.appVersion || '未知') + ' · 规则 v' + (game.RULES.version || '?');
+  updateStartSoundButton();
+  updateStartMotionButton();
+}
+
+function updateStartSoundButton() {
+  const button = $('#startSoundButton');
+  if (!button) return;
+  if (!audio) { button.hidden = true; return; }
+  button.hidden = false;
+  button.textContent = '声音:' + (audio.isEnabled() ? '开' : '关');
+  button.setAttribute('aria-pressed', audio.isEnabled() ? 'true' : 'false');
+}
+
+function updateStartMotionButton() {
+  const button = $('#startMotionButton');
+  if (!button) return;
+  button.textContent = '动画效果:' + (motionOn ? '开' : '关');
+  button.setAttribute('aria-pressed', motionOn ? 'true' : 'false');
+}
+
+function hideStartMenu() {
+  const start = $('#startScreen');
+  const shell = $('#gameShell');
+  if (start) start.hidden = true;
+  if (shell) shell.inert = false;
+  hideCoach();
+}
+
+function showStartMenu() {
+  const start = $('#startScreen');
+  const shell = $('#gameShell');
+  if (dialog.open) dialog.close();
+  dialogMode = null;
+  openPanelName = null;
+  closePopovers();
+  closePanel();
+  if (start) start.hidden = false;
+  if (shell) shell.inert = true;
+  const dock = $('#semesterDock');
+  if (dock && !state) dock.hidden = true;
+  const settings = $('#startSettingsPanel');
+  if (settings) settings.hidden = true;
+  const status = $('#startStatus');
+  if (status) status.textContent = '';
+  updateStartMenu();
+  maybeShowStartCoach();
+}
+
+function startNewGame() {
+  finishCoach('start-new');
+  showAdmission();
+}
+
+function startContinueGame() {
+  if (!startMenuHasSave()) return;
+  showLoad();
+}
+
+function toggleStartSettings() {
+  const panel = $('#startSettingsPanel');
+  if (!panel) return;
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) $('#startSoundButton')?.focus({ preventScroll: true });
+}
+
+function startExitGame() {
+  const status = $('#startStatus');
+  try { window.close(); } catch (_) {}
+  if (status) status.textContent = '浏览器不允许自动关闭页面，请直接关闭标签页。';
+}
+
+function coachDone(id) {
+  return !!coachProgress[id];
+}
+
+function saveCoachProgress() {
+  try { storage?.setItem(COACH_KEY, JSON.stringify(coachProgress)); } catch (_) {}
+}
+
+function hideCoach() {
+  const layer = $('#coachLayer');
+  if (activeCoach?.target) activeCoach.target.classList.remove('coach-target');
+  activeCoach = null;
+  if (layer) layer.hidden = true;
+}
+
+function finishCoach(id) {
+  if (!id || !activeCoach || activeCoach.id !== id) return;
+  coachProgress[id] = 1;
+  saveCoachProgress();
+  hideCoach();
+}
+
+function skipAllCoach() {
+  for (const id of COACH_STEPS) coachProgress[id] = 1;
+  saveCoachProgress();
+  hideCoach();
+}
+
+function positionCoach() {
+  if (!activeCoach) return;
+  const layer = $('#coachLayer');
+  const target = activeCoach.target;
+  const bubble = $('#coachBubble');
+  const spotlight = $('#coachSpotlight');
+  if (!layer || !bubble || !spotlight || !target || target.isConnected === false || typeof target.getBoundingClientRect !== 'function' || typeof bubble.getBoundingClientRect !== 'function') {
+    hideCoach();
+    return;
+  }
+  const rect = target.getBoundingClientRect();
+  if (!rect.width || !rect.height) { hideCoach(); return; }
+  const pad = 6;
+  spotlight.style.left = Math.max(4, rect.left - pad) + 'px';
+  spotlight.style.top = Math.max(4, rect.top - pad) + 'px';
+  spotlight.style.width = (rect.width + pad * 2) + 'px';
+  spotlight.style.height = (rect.height + pad * 2) + 'px';
+  const bubbleRect = bubble.getBoundingClientRect();
+  const gap = 14;
+  const above = rect.top > bubbleRect.height + gap + 12;
+  const top = above ? rect.top - bubbleRect.height - gap : rect.bottom + gap;
+  const left = Math.max(12, Math.min(rect.left + rect.width / 2 - bubbleRect.width / 2, window.innerWidth - bubbleRect.width - 12));
+  bubble.style.left = left + 'px';
+  bubble.style.top = Math.max(12, Math.min(top, window.innerHeight - bubbleRect.height - 12)) + 'px';
+  bubble.classList.toggle('is-above', above);
+  bubble.classList.toggle('is-below', !above);
+}
+
+function showCoachStep(id, selector, text) {
+  if (coachDone(id) || activeCoach || dialog.open) return;
+  const target = document.querySelector(selector);
+  if (!target) return;
+  const layer = $('#coachLayer');
+  const bubble = $('#coachBubble');
+  if (!layer || !bubble) return;
+  activeCoach = { id, target };
+  target.classList.add('coach-target');
+  $('#coachText').textContent = text;
+  layer.hidden = false;
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(positionCoach);
+  else setTimeout(positionCoach, 0);
+}
+
+function maybeShowStartCoach() {
+  if (coachDone('start-new')) return;
+  if (startMenuHasSave()) return;
+  showCoachStep('start-new', '#startNew', '第一次来？先创建角色，开始你的第一学期。');
+}
+
+function maybeShowMapCoach() {
+  if (!state || activePlace || dialog.open || activeCoach || coachDone('map-place')) return;
+  showCoachStep('map-place', '.hotspot-think', '点击一个地点，开始安排今天的行动。');
+}
+
+function maybeShowActionCoach() {
+  if (!state || !activePlace || dialog.open || activeCoach || coachDone('map-place') || coachDone('action-confirm')) return;
+  if (state.history.some((entry) => entry.command.operation === 'executeAction' || entry.command.operation === 'completeBasketball')) return;
+  const target = document.querySelector('#actionList .action-card button:not(:disabled)');
+  if (!target) return;
+  showCoachStep('action-confirm', '#actionList .action-card button:not(:disabled)', '选好投入档位后，确认行动。');
+}
+
+function maybeShowEndTermCoach() {
+  if (!state || activePlace || dialog.open || activeCoach || coachDone('semester-end')) return;
+  if (!state.history.some((entry) => entry.command.operation === 'executeAction' || entry.command.operation === 'completeBasketball')) return;
+  showCoachStep('semester-end', '#endTermQuick', '本学期还可以继续安排；准备结束时，从这里参加考试。');
+}
+
 function showAdmission() {
   if (!loginSession && !loginSkipped) {
     if (!sms) loginSkipped = true;
     else { showLogin(); return; }
   }
-  const info = saves.inspect();
   const accountButtons = sms
     ? [{ id: loginSession ? 'switchAccount' : 'loginPrompt', text: loginSession ? '切换账号' : '手机登录', secondary: true }]
     : [];
-  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p>' + (loginSession ? '<p class="dialog-note">已登录：<b>' + h(loginSession.phone) + '</b>' + (loginSession.nickname ? ' · ' + h(loginSession.nickname) : '') + '</p>' : '') + '<form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="2～12 个字符，汉字/字母/数字，不能全是数字" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form><h3>或选择存档继续</h3>' + slotCards(info, 'load') + '<p class="dialog-note">共有 3 个存档栏位，新局首次保存时可自主选择。旧版存档位于栏位 1。</p>', accountButtons);
+  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p>' + (loginSession ? '<p class="dialog-note">已登录：<b>' + h(loginSession.phone) + '</b>' + (loginSession.nickname ? ' · ' + h(loginSession.nickname) : '') + '</p>' : '') + '<form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="2～12 个字符，汉字/字母/数字，不能全是数字" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form><p class="dialog-note">   已有存档可在启动页选择“继续游戏”。</p>', accountButtons);
 }
 function showLogin() {
   stopSmsCountdown();
@@ -1872,6 +2103,7 @@ function startGame() {
   audio?.play('success');
   audio?.startBgm();
   resetNpcSystem();
+  hideStartMenu();
   renderState();
   showEnrollment();
 }
@@ -1883,9 +2115,24 @@ function showEnrollment() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
   showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p>' + familyIntroMarkup() + budgetMarkup() + '<p class="dialog-note">背景只影响一项行动加成，不会锁死你的毕业路线。看完玩法说明后先确认本学期的衣/食/住/行预算，再完成选课。</p>', [{ id: 'resume', text: '看看怎么安排' }]);
 }
-function showTutorial() {
-  showDialog('tutorial', '八学期怎么安排', '<ol><li>每学期开学先选衣、食、住、行四个生活预算档位，确认后再从本学期可选课程中选择 3 门，然后去地图上安排行动。四个维度各自选档、按费用求和；普通档合计 4800 元，高预算从结余补，低预算退回。住宿会影响休息恢复、宿舍事件和宿舍描述；「行」目前只有 400 元基础通勤，属性影响待完善。</li><li>选课决定期末考试覆盖的学科；数学、物理、计算机、交通、土木、经管等定量课程会按主题随机生成计算题。</li><li>点击地图上的地点，先看活动安排和成本，再决定做不做。逛逛、返回都不花钱。</li><li>日常行动和部分事件可选固定投入档位；确认前查看时间及资源成本。勤工与实习按工作量支付固定报酬，其余投入完成后揭晓实际收益，并写入成长记录。课程学习与自习可选配套资料，每学期合计最多增加 4 点学习进度；室友交流可选零食分享。额外消费可以跳过，原有时间与精力成本照常支付。军训成本包含训练和汇演，汇演免费连续完成。</li><li>学习和自学都攒同一个学习进度，它是总评里的平时分（40%）。</li><li>期末参加 5 题考试，覆盖所选课程，每题 20 分；总评 = 平时分 × 40% + 考试 × 60%，60 分达标。</li><li>每学期 12 点时间。消耗精力的行动也会消耗体能；休息能回精力与体能，散步、锻炼也能回体能，但都回不了时间。体能分五档：虚弱、一般、良好、优秀会缩放行动的收益与消耗；低于 25 会生病，只能先去校医院。长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目的成果在之后的学期确认，社团和实习在投入完成后即可收尾。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
+function showTutorial(fromStart = false) {
+  const steps = '<div class="tutorial-steps">'
+    + '<article class="tutorial-step"><b>01</b><div><h3>先完成开学准备</h3><p>确认衣、食、住、行预算，再从本学期课程中选择 3 门。</p></div></article>'
+    + '<article class="tutorial-step"><b>02</b><div><h3>去地图安排行动</h3><p>点击地点查看行动。注意剩余时间和精力，确认投入后才会结算。</p></div></article>'
+    + '<article class="tutorial-step"><b>03</b><div><h3>结束学期并考试</h3><p>行动安排完或时间用完时，点击“结束学期并参加考试”。总评由平时分和 5 题考试组成。</p></div></article>'
+    + '</div>';
+  const full = '<details class="tutorial-more"><summary>查看完整规则</summary><ol>'
+    + '<li>每学期开始先确认生活预算并选择 3 门课；学期结束参加 5 题期末考试。</li>'
+    + '<li>每学期 12 点时间；行动会消耗时间、精力和体能。休息、散步和锻炼可以恢复，但时间不结转。</li>'
+    + '<li>日常行动和部分事件有固定投入档位，确认前会展示成本；完成后才揭晓实际收益。</li>'
+    + '<li>课程学习和自主学习积累学习进度，它会计入期末总评的平时分。</li>'
+    + '<li>项目、社团、实习需要先申请再投入；达标后还需要完成证明或成果确认。</li>'
+    + '<li>普通毕业要求平均成绩和达标学期；深造、就业还有额外条件，毕业时再选择方向。</li>'
+    + '<li>存档有 3 个栏位；学期结算和毕业确认会自动保存到当前栏位。</li>'
+    + '</ol></details>';
+  showDialog('tutorial', '先做这三件事', '<p class="tutorial-lead">不用一次记住所有规则，先完成第一学期的核心循环。</p>' + steps + full, [{ id: fromStart ? 'startMenu' : 'resume', text: fromStart ? '返回启动页' : '开始安排' }]);
 }
+
 function showBackground() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
   showDialog('background', '入学背景', '<p><b>' + h(state.nickname) + '</b> · ' + h(state.background.college) + ' · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p>' + familyIntroMarkup() + '<p>专业与课程参考学校公开培养方案，学期顺序、学分和选课限制为玩法简化。背景不会锁死你的毕业路线。</p>', [{ id: 'resume', text: '继续安排' }]);
@@ -2360,7 +2607,7 @@ function showResult() {
   showDialog(terminal ? 'ended' : 'finished', state.result.title, intro, [{ id: 'resume', text: '返回地图', secondary: true }, { id: 'restart', text: '重新开始' }]);
 }
 function resumePhase() {
-  if (!state) { showAdmission(); return; }
+  if (!state) { showStartMenu(); return; }
   state = game.resumeRequiredEvents(state);
   const last = state.history.at(-1);
   if (last?.command.operation === 'completeBasketball' && last.relationship && acknowledgedResultRevision !== state.revision) { showBasketballResult(last); return; }
@@ -2373,11 +2620,11 @@ function resumePhase() {
   else if (state.phase === 'finished' || state.phase === 'ended') showResult();
   else if (needsBudget()) showBudget();
   else if (needsCourseSelection()) showCourseSelection();
-  else { dialog.close(); maybeZhouNingDirector(); }
+  else { dialog.close(); maybeZhouNingDirector(); setTimeout(() => { maybeShowMapCoach(); maybeShowEndTermCoach(); }, 180); }
 }
 function showLoad() {
   const info = saves.inspect();
-  showDialog('load', '选择读取栏位', '<p>选择读取后，当前未保存进度将被替换，之后自动保存到所读栏位。</p>' + slotCards(info, 'load'), [{ id: state ? 'resume' : 'admission', text: '取消', secondary: true }]);
+  showDialog('load', '选择读取栏位', '<p>选择读取后，当前未保存进度将被替换，之后自动保存到所读栏位。</p>' + slotCards(info, 'load'), [{ id: state ? 'resume' : 'startMenu', text: '取消', secondary: true }]);
 }
 function loadGame(slotId, source = 'primary') {
   const result = saves.load(slotId, source);
@@ -2402,6 +2649,7 @@ function loadGame(slotId, source = 'primary') {
   resetNpcSystem();
   audio?.play('load');
   audio?.startBgm();
+  hideStartMenu();
   renderState();
   resumePhase();
   showToast(source === 'backup' ? '已恢复栏位 ' + slotId + ' 的备份；下次保存时更新该栏位主档' : '已读取栏位 ' + slotId);
@@ -2512,6 +2760,7 @@ $('#actionList').addEventListener('click', (event) => {
   if (button?.dataset.actionInvestmentPreset) { updateActionInvestment(button.dataset.actionInvestmentPreset, Number(button.dataset.amount)); return; }
   if (!button || game.ACTIONS[button.dataset.action]?.place !== activePlace || dialog.open) return;
   const id = button.dataset.action;
+  finishCoach('action-confirm');
   if (game.ACTIONS[id]?.minigame === 'basketball') { startBasketball(); return; }
   if (id === 'applyInternship') { showPositionPicker(); return; }
   const investment = actionDraft(id);
@@ -2654,6 +2903,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
     if (state.phase === 'playing' && !needsCourseSelection()) showZhouNing(); else resumePhase();
   }
   else if (id === 'basketballContinue' && dialogMode === 'basketballResult') { acknowledgedResultRevision = state.revision; resumePhase(); }
+  else if (id === 'startMenu') showStartMenu();
   else if (id === 'admission') showAdmission();
   else if (id === 'loginPrompt') { loginSkipped = false; try { storage?.removeItem(LOGIN_SKIP_KEY); } catch (_) {} showLogin(); }
   else if (id === 'switchAccount') {
@@ -2708,7 +2958,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
     savedAt = '';
     clearTimeout(unlockTimer);
     uiLocked = false;
-    showAdmission();
+    showStartMenu();
   }
 });
 hotspots.forEach((hotspot) => hotspot.addEventListener('click', () => openPlace(hotspot.dataset.place, hotspot)));
@@ -2731,7 +2981,7 @@ $('#backButton').addEventListener('click', () => {
 });
 $('#basketballQuit')?.addEventListener('click', () => basketballSession?.finish());
 basketballDialog?.addEventListener('cancel', (event) => { if (basketballSession) event.preventDefault(); });
-$('#endTermButton').addEventListener('click', requestEndTerm);
+$('#endTermButton').addEventListener('click', () => { finishCoach('semester-end'); requestEndTerm(); });
 $('#saveButton').addEventListener('click', showSave);
 $('#dialogSave').addEventListener('click', showSave);
 $('#loadButton').addEventListener('click', showLoad);
@@ -2899,10 +3149,40 @@ if (audio) {
   soundButton.addEventListener('click', () => {
     audio.setEnabled(!audio.isEnabled());
     soundButton.textContent = '声音:' + (audio.isEnabled() ? '开' : '关');
+    updateStartSoundButton();
   });
 } else {
   soundButton.hidden = true;
 }
+$('#startNew')?.addEventListener('click', startNewGame);
+$('#startContinue')?.addEventListener('click', startContinueGame);
+$('#startSettings')?.addEventListener('click', toggleStartSettings);
+$('#startExit')?.addEventListener('click', startExitGame);
+$('#startSoundButton')?.addEventListener('click', () => {
+  if (!audio) return;
+  audio.setEnabled(!audio.isEnabled());
+  updateStartSoundButton();
+  if (soundButton) soundButton.textContent = '声音:' + (audio.isEnabled() ? '开' : '关');
+});
+$('#startMotionButton')?.addEventListener('click', () => {
+  motionOn = !motionOn;
+  applyMotion();
+  try { window.localStorage.setItem(MOTION_KEY, motionOn ? '1' : '0'); } catch (_) {}
+});
+$('#startHelpButton')?.addEventListener('click', () => showTutorial(true));
+$('#startResetTips')?.addEventListener('click', () => {
+  coachProgress = {};
+  saveCoachProgress();
+  hideCoach();
+  const status = $('#startStatus');
+  if (status) status.textContent = '新手提示已重置，下次进入游戏会重新显示。';
+});
+$('#startSettingsBack')?.addEventListener('click', () => { const panel = $('#startSettingsPanel'); if (panel) panel.hidden = true; });
+$('#endTermQuick')?.addEventListener('click', () => { finishCoach('semester-end'); requestEndTerm(); });
+$('#coachNext')?.addEventListener('click', () => { if (activeCoach) finishCoach(activeCoach.id); });
+$('#coachSkip')?.addEventListener('click', skipAllCoach);
+window.addEventListener('resize', positionCoach);
+window.addEventListener('scroll', positionCoach, true);
 document.addEventListener('click', (event) => {
   if (event.target.closest('button')) audio?.play('click');
 }, { capture: true });
@@ -2926,5 +3206,5 @@ window.addEventListener('beforeunload', guardUnsavedProgress);
 if (typeof HTMLDialogElement === 'undefined' || typeof HTMLDialogElement.prototype.showModal !== 'function') {
   $('.game-shell').innerHTML = '<div class="browser-notice"><h2>请使用较新的浏览器打开</h2><p>本游戏需要支持弹窗等现代网页特性的浏览器。请升级微信或浏览器，或用系统浏览器打开本地址。</p><p class="browser-notice-url">https://zjr231.github.io/BJTU-Life-Simulator/</p></div>';
 } else {
-  showAdmission();
+  showStartMenu();
 }
