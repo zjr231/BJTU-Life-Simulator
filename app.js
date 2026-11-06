@@ -345,7 +345,7 @@ function showBudget() {
   }
   const plan = game.budgetPlan(budgetDraft);
   const affordable = !!plan && plan.costs.total - grant.livingCost <= state.money;
-  const body = '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。确认本学期的基础费用并选择住宿档位，确认后进入选课。</p>' + budgetPickerMarkup() + budgetSummaryMarkup() + '<p id="budgetError" class="action-reason" role="alert"></p>';
+  const body = '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。确认本学期的基础费用并选择住宿档位，确认后进入选课。</p>' + termUnlockMarkup() + budgetPickerMarkup() + budgetSummaryMarkup() + '<p id="budgetError" class="action-reason" role="alert"></p>';
   showDialog('budget', '学期生活预算', body, [{ id: 'budgetConfirm', text: '确认预算', disabled: !affordable }]);
 }
 function selectBudgetTier(dimension, tierId) {
@@ -463,6 +463,7 @@ const GROWTH_ICONS = {
 };
 let selectedGrowthId = 'bedding';
 let selectedGrowthDimension = 'housing';
+let growthView = 'tree';
 function growthIcon(node) {
   return '<svg viewBox="0 0 48 48" aria-hidden="true" shape-rendering="crispEdges">' + (GROWTH_ICONS[node.icon] || GROWTH_ICONS.bed) + '</svg>';
 }
@@ -496,6 +497,7 @@ function renderGrowth() {
   const toggle = $('#growthToggle');
   if (toggle) toggle.hidden = !state;
   if (!state) return;
+  $('#panelGrowth')?.setAttribute('data-view', growthView);
   const board = game.growthStatus(state);
   $('#growthCount').textContent = board.ownedCount + ' / ' + board.nodes.length;
   if (!game.GROWTH_DIMENSIONS.some(dimension => dimension.id === selectedGrowthDimension)) selectedGrowthDimension = 'housing';
@@ -519,7 +521,8 @@ function renderGrowth() {
   }
   const requirements = selected.requirements.length && !selected.purchased ? '<ul class="growth-requirements">' + selected.requirements.map(item => '<li class="' + (item.met ? 'is-met' : '') + '">' + (item.met ? '✓ ' : '○ ') + h(growthRequirementText(item)) + '</li>').join('') + '</ul>' : '';
   const hasUnmetRequirement = selected.requirements.some(item => !item.met);
-  $('#growthDetails').innerHTML = '<div class="growth-selected-icon is-' + status.type + '">' + growthIcon(selected) + '</div>'
+  const backButton = growthView === 'detail' ? '<button type="button" class="growth-back" data-growth-back="1">← 返回节点列表</button>' : '';
+  $('#growthDetails').innerHTML = backButton + '<div class="growth-selected-icon is-' + status.type + '">' + growthIcon(selected) + '</div>'
     + '<p class="growth-category">' + h(selected.category) + ' / 本局持续</p><h4>' + h(selected.title) + '</h4>'
     + '<p class="growth-selection-state is-' + status.type + '">' + status.label + '</p>'
     + '<p class="growth-description">' + h(selected.description) + '</p>'
@@ -802,18 +805,34 @@ function showAttrPopover(attr, anchorEl) {
   popover.hidden = false;
   positionPopover(popover, anchorEl);
 }
-// 顶部菜单：点击展开对应面板，再点或点空白处收起。
+// 顶部菜单：四组一级入口，组内用页签切换；再点一级入口或点空白处收起。
+const PANEL_GROUPS = [
+  { id: 'character', panels: [{ id: 'status', label: '角色' }, { id: 'relationships', label: '关系' }] },
+  { id: 'academic', panels: [{ id: 'term', label: '学业' }, { id: 'resume', label: '简历' }] },
+  { id: 'tasks', panels: [{ id: 'goals', label: '手头的事' }, { id: 'records', label: '记录' }] },
+  { id: 'system', panels: [{ id: 'saves', label: '存档' }, { id: 'settings', label: '设置' }] }
+];
+const PANEL_GROUP_INDEX = Object.fromEntries(PANEL_GROUPS.flatMap((group) => group.panels.map((panel) => [panel.id, group])));
 let openPanelName = null;
 function setPanel(name) {
   openPanelName = name;
+  const group = PANEL_GROUP_INDEX[name];
   document.querySelectorAll('.app-panel').forEach((panel) => {
     panel.hidden = panel.dataset.panelName !== name;
   });
-  document.querySelectorAll('.app-menu-button').forEach((button) => {
-    button.setAttribute('aria-expanded', button.dataset.panel === name ? 'true' : 'false');
+  document.querySelectorAll('.app-menu-button[data-panel-group]').forEach((button) => {
+    button.setAttribute('aria-expanded', group && button.dataset.panelGroup === group.id ? 'true' : 'false');
   });
+  const subnav = $('#panelSubnav');
+  if (subnav) {
+    subnav.hidden = !group;
+    subnav.innerHTML = group
+      ? group.panels.map((panel) => '<button type="button" class="panel-subnav-button" data-panel="' + panel.id + '" aria-current="' + (name === panel.id ? 'page' : 'false') + '">' + h(panel.label) + '</button>').join('')
+      : '';
+  }
   $('#growthToggle')?.setAttribute('aria-expanded', name === 'growth' ? 'true' : 'false');
   if (name === 'growth') {
+    growthView = 'tree';
     $('#growthNotice').textContent = '';
     renderGrowth();
   }
@@ -965,6 +984,27 @@ function semesterNextStep() {
   const window = board.groups.find((group) => group.id === 'windows')?.items[0];
   if (window) return window.title;
   return '点击地图地点开始安排行动';
+}
+
+function termUnlockItems(term = state?.term) {
+  if (!state || !Number.isInteger(term) || term <= 1) return [];
+  const items = [];
+  for (const action of Object.values(game.ACTIONS)) {
+    if (action.minTerm !== term || action.requiresGrowth) continue;
+    if (action.autumnOnly && term % 2 === 0) continue;
+    items.push('行动「' + action.title + '」');
+  }
+  for (const node of Object.values(game.GROWTH_NODES)) {
+    if (node.prereq?.minTerm === term) items.push('养成「' + node.title + '」');
+  }
+  const positions = Object.values(game.POSITIONS).filter(item => item.window?.[0] === term).length;
+  if (positions) items.push('南门岗位库 ' + positions + ' 个实习岗位');
+  return items;
+}
+function termUnlockMarkup(term = state?.term) {
+  const items = termUnlockItems(term);
+  if (!items.length) return '';
+  return '<div class="term-unlocks"><b>本学期新解锁</b><ul>' + items.map(item => '<li>' + h(item) + '</li>').join('') + '</ul><p>可在行动、校园养成或南门岗位库中查看。</p></div>';
 }
 
 function updateSemesterDock() {
@@ -2315,7 +2355,7 @@ function showCourseSelection() {
   if ((state.selectedCourses || []).length) { resumePhase(); return; }
   const options = game.coursesForTerm(state.term, state.background.id, state.background.major);
   const cards = options.map((course) => '<label class="course-card"><input type="checkbox" name="course" value="' + h(course.id) + '"><span class="course-main"><b>' + h(course.name) + '</b><span class="course-meta">' + h(game.SUBJECTS[course.subject]) + ' · ' + course.credits + ' 学分</span><span class="course-desc">' + h(course.description) + '</span></span></label>').join('');
-  showDialog('courseSelection', '开学选课', '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。从本学期可选课程中选择 3 门，期末考试会覆盖这些课程。</p>' + budgetMarkup() + '<form id="courseForm"><p class="course-count" id="courseCount">已选 0 / 3 门</p><div class="course-list">' + cards + '</div><p id="courseError" class="action-reason" role="alert"></p><button type="submit">确认选课</button></form><p class="dialog-note">每学期 3 门课；期末考试 5 题，每题 20 分。定量课程按主题随机生成计算题，其余课程从对应学科题库抽题。总评 = 平时分 40% + 考试 60%。</p>');
+  showDialog('courseSelection', '开学选课', '<p>这是' + h(game.TERM_NAMES[state.term - 1]) + '。从本学期可选课程中选择 3 门，期末考试会覆盖这些课程。</p>' + termUnlockMarkup() + budgetMarkup() + '<form id="courseForm"><p class="course-count" id="courseCount">已选 0 / 3 门</p><div class="course-list">' + cards + '</div><p id="courseError" class="action-reason" role="alert"></p><button type="submit">确认选课</button></form><p class="dialog-note">每学期 3 门课；期末考试 5 题，每题 20 分。定量课程按主题随机生成计算题，其余课程从对应学科题库抽题。总评 = 平时分 40% + 考试 60%。</p>');
 }
 function submitCourseSelection(form) {
   const ids = [...form.querySelectorAll('input[name="course"]:checked')].map((input) => input.value);
@@ -3123,12 +3163,21 @@ if (resetAvatarButton && typeof resetAvatarButton.addEventListener === 'function
 loadAvatar();
 loadPreferences();
 
-document.querySelectorAll('.app-menu-button').forEach((button) => {
+document.querySelectorAll('.app-menu-button[data-panel-group]').forEach((button) => {
   button.addEventListener('click', (event) => {
     event.stopPropagation();
     closePopovers();
-    setPanel(openPanelName === button.dataset.panel ? null : button.dataset.panel);
+    const group = PANEL_GROUPS.find((item) => item.id === button.dataset.panelGroup);
+    if (!group) return;
+    const current = PANEL_GROUP_INDEX[openPanelName];
+    setPanel(current?.id === group.id ? null : group.panels[0].id);
   });
+});
+$('#panelSubnav')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-panel]');
+  if (!button) return;
+  event.stopPropagation();
+  setPanel(button.dataset.panel);
 });
 document.querySelectorAll('.advisory-close').forEach((button) => button.addEventListener('click', closePanel));
 $('#growthToggle')?.addEventListener('click', (event) => {
@@ -3139,6 +3188,14 @@ $('#growthToggle')?.addEventListener('click', (event) => {
 });
 $('#growthClose')?.addEventListener('click', closePanel);
 $('#growthDetails')?.addEventListener('click', (event) => {
+  const back = event.target.closest('[data-growth-back]');
+  if (back) {
+    event.stopPropagation();
+    growthView = 'tree';
+    renderGrowth();
+    $('#growthNodes').querySelector('[data-growth-select="' + selectedGrowthId + '"]')?.focus({ preventScroll: true });
+    return;
+  }
   const button = event.target.closest('[data-growth-place]');
   if (!button || !state || uiLocked || dialog.open || !Object.hasOwn(game.PLACES, button.dataset.growthPlace)) return;
   event.stopPropagation();
@@ -3164,11 +3221,17 @@ $('#growthNodes')?.addEventListener('click', (event) => {
   event.stopPropagation();
   selectedGrowthId = button.dataset.growthSelect;
   $('#growthNotice').textContent = '';
+  const mobile = !!window.matchMedia?.('(max-width: 640px)').matches;
+  if (mobile) {
+    growthView = 'detail';
+    renderGrowth();
+    const layout = $('#growthLayout');
+    if (layout) layout.scrollTop = 0;
+    $('#growthDetails').focus({ preventScroll: true });
+    return;
+  }
   renderGrowth();
   $('#growthNodes').querySelector('[data-growth-select="' + selectedGrowthId + '"]')?.focus({ preventScroll: true });
-  if (window.matchMedia?.('(max-width: 640px)').matches) {
-    $('#growthDetails').scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-  }
 });
 $('#growthPurchase')?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-growth-buy]');

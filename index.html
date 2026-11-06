@@ -154,14 +154,10 @@
 
 
 <nav class="app-menu" id="appMenu" aria-label="功能导航">
-          <button type="button" class="app-menu-button" data-panel="status" aria-expanded="false">角色</button>
-          <button type="button" class="app-menu-button" data-panel="term" aria-expanded="false">学业</button>
-          <button type="button" class="app-menu-button" data-panel="goals" aria-expanded="false">手头的事<span class="menu-badge" id="advisoryBadge" hidden></span></button>
-          <button type="button" class="app-menu-button" data-panel="resume" aria-expanded="false">简历</button>
-          <button type="button" class="app-menu-button" data-panel="relationships" aria-expanded="false">关系</button>
-          <button type="button" class="app-menu-button" data-panel="records" aria-expanded="false">记录</button>
-          <button type="button" class="app-menu-button" data-panel="saves" aria-expanded="false">存档</button>
-          <button type="button" class="app-menu-button" data-panel="settings" aria-expanded="false">设置</button>
+          <button type="button" class="app-menu-button" data-panel-group="character" aria-expanded="false">角色</button>
+          <button type="button" class="app-menu-button" data-panel-group="academic" aria-expanded="false">学业</button>
+          <button type="button" class="app-menu-button" data-panel-group="tasks" aria-expanded="false">手头的事<span class="menu-badge" id="advisoryBadge" hidden></span></button>
+          <button type="button" class="app-menu-button" data-panel-group="system" aria-expanded="false">系统</button>
         </nav>
       </header>
 
@@ -216,6 +212,7 @@
       </nav>
 
       <div class="app-panels" id="appPanels">
+        <nav class="panel-subnav" id="panelSubnav" aria-label="当前分组" hidden></nav>
         <section class="app-panel" id="panelGrowth" data-panel-name="growth" hidden aria-labelledby="growthTitle">
           <header class="growth-header">
             <h3 id="growthTitle" tabindex="-1">校园养成 <span>· 我的大学生活</span></h3>

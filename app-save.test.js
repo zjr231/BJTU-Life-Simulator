@@ -126,6 +126,23 @@ test('地点行动按单个行动折叠，不共用分区展开框', () => {
   assert.doesNotMatch(html, /action-accordion[^>]* open/);
 });
 
+test('顶部导航收敛为四组，组内页签切换对应面板', () => {
+  const ui = app();
+  ui.start();
+  assert.equal(ui.evaluate('PANEL_GROUPS.length'), 4);
+  assert.equal(ui.evaluate('PANEL_GROUPS.flatMap((group) => group.panels).length'), 8);
+  ui.evaluate('setPanel("status")');
+  assert.equal(ui.evaluate('openPanelName'), 'status');
+  assert.match(ui.element('#panelSubnav').innerHTML, /data-panel="status"/);
+  assert.match(ui.element('#panelSubnav').innerHTML, /data-panel="relationships"/);
+  assert.doesNotMatch(ui.element('#panelSubnav').innerHTML, /data-panel="term"/);
+  ui.evaluate('setPanel("records")');
+  assert.equal(ui.evaluate('openPanelName'), 'records');
+  assert.match(ui.element('#panelSubnav').innerHTML, /data-panel="goals"/);
+  assert.match(ui.element('#panelSubnav').innerHTML, /data-panel="records"/);
+  assert.match(ui.element('#panelSubnav').innerHTML, /aria-current="page">记录/);
+});
+
 test('学习先询问可选资料；确认前不扣费，购买后仅加2点且不会重复提交', () => {
   const ui = app();
   ui.start();
@@ -209,6 +226,13 @@ test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可�
   assert.equal(ui.evaluate('openPanelName'), 'growth');
   assert.match(ui.element('#growthOverview').innerHTML, /1200/);
   assert.match(ui.element('#growthNodes').innerHTML, /舒适寝具/);
+  // 移动端将节点树与详情拆成两页，详情页提供返回按钮。
+  assert.equal(ui.evaluate('growthView'), 'tree');
+  assert.doesNotMatch(ui.element('#growthDetails').innerHTML, /data-growth-back/);
+  ui.evaluate('growthView = "detail"; renderGrowth()');
+  assert.match(ui.element('#growthDetails').innerHTML, /data-growth-back/);
+  ui.evaluate('growthView = "tree"; renderGrowth()');
+  assert.doesNotMatch(ui.element('#growthDetails').innerHTML, /data-growth-back/);
   // 二期：顶部维度标签切换，默认显示住宿，只有选中维度的卡片出现在下方。
   const tabHtml = ui.element('#growthTabs').innerHTML;
   for (const label of ['衣', '食', '住', '行', '学习', '兴趣', '习惯']) assert.match(tabHtml, new RegExp('>' + label + '<'));
@@ -283,6 +307,20 @@ test('养成侧栏余额不足不能扣款，弹窗期间忽略购买，休息�
   ui.click('#actionList', { action: 'rest', revision: String(ui.evaluate('state.revision')) });
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');
   assert.match(ui.element('#dialogBody').innerHTML, /校园养成额外恢复：精力 \+3/);
+});
+
+test('进入新学期时提示新解锁的行动、养成与南门岗位', () => {
+  const ui = growthUi();
+  const items = ui.evaluate('termUnlockItems(3).join("|")');
+  assert.match(items, /行动「申请实习岗位」/);
+  assert.match(items, /养成「通勤公交卡」/);
+  assert.match(items, /南门岗位库 7 个实习岗位/);
+  assert.equal(ui.evaluate('termUnlockMarkup(1)'), '');
+  assert.match(ui.evaluate('termUnlockMarkup(3)'), /本学期新解锁/);
+  ui.evaluate('state.term = 3; state.economy = null; state.selectedCourses = []; state.history = []; renderState(); showCourseSelection()');
+  assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
+  assert.match(ui.element('#dialogBody').innerHTML, /本学期新解锁/);
+  assert.match(ui.element('#dialogBody').innerHTML, /申请实习岗位/);
 });
 
 function app(storage = memory(), withSms = false, withNpc = false, autoStart = true) {
@@ -1097,7 +1135,7 @@ test('新增校园经历从存档恢复后显示中文名称，简历面板不�
   assert.equal(saves.createSlotService(storage).save(state, 2).ok, true);
   const ui = app(storage);
   ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
-  ui.click('.app-menu-button[data-panel="resume"]');
+  ui.evaluate('setPanel("resume")');
   const html = ui.element('#resumeBody').innerHTML;
   for (const name of ['军训', '歌手大赛', '返乡', '竞赛']) assert.ok(html.includes(name), name);
   for (const title of ['实习经历', '项目经历', '竞赛经历', '社团经历']) assert.ok(html.includes(title), title);
