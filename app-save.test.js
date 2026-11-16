@@ -171,7 +171,7 @@ test('学习先询问可选资料；确认前不扣费，购买后仅加2点且�
   assert.match(ui.evaluate('investmentRecord()'), /配套学习资料 −80 元/);
 });
 
-test('取消可选消费不执行行动，跳过按原规则执行；余额不足不额外弹窗', () => {
+test('取消可选消费不会执行所选行动', () => {
   const ui = app();
   ui.start();
   ui.evaluate('openPlace("library")');
@@ -181,17 +181,43 @@ test('取消可选消费不执行行动，跳过按原规则执行；余额不�
   ui.click('#dialogButtons', { dialogAction: 'extraCancel' });
   assert.equal(ui.evaluate('JSON.stringify(state)'), before);
   assert.equal(ui.element('#termDialog').open, false);
+});
+
+test('跳过可选消费只执行基础行动', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("library")');
+  const before = ui.evaluate('state');
   ui.click('#actionList', { action: 'selfStudy', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'actionExtra');
   ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
+  assert.equal(ui.evaluate('state.revision'), before.revision + 1);
+  assert.equal(ui.evaluate('state.history.at(-1).action'), 'selfStudy');
   assert.equal(ui.evaluate('state.history.at(-1).extra'), undefined);
-  assert.equal(ui.evaluate('state.money'), JSON.parse(before).money);
-  ui.flush();
-  ui.evaluate('dialog.close(); state.money = 0; openPlace("think")');
-  const revision = ui.evaluate('state.revision');
-  ui.click('#actionList', { action: 'study', revision: String(revision) });
-  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
-  assert.equal(ui.evaluate('state.money'), 0);
-  assert.equal(ui.evaluate('state.revision'), revision + 1);
+  assert.equal(ui.evaluate('state.money'), before.money);
+});
+
+test('学习资料的余额边界：0 和 79 元只结算基础学习，80 元可购买', () => {
+  for (const balance of [0, 79, 80]) {
+    const ui = app();
+    ui.start();
+    ui.evaluate('state = { ...state, money: ' + balance + ' }; openPlace("think")');
+    const revision = ui.evaluate('state.revision');
+    ui.click('#actionList', { action: 'study', revision: String(revision) });
+    if (balance === 80) {
+      assert.equal(ui.evaluate('dialogMode'), 'actionExtra');
+      assert.equal(ui.evaluate('state.revision'), revision);
+      assert.equal(ui.evaluate('state.money'), balance);
+      ui.click('#dialogButtons', { dialogAction: 'extraBuy' });
+      assert.equal(ui.evaluate('state.history.at(-1).extra.id'), 'materials');
+    } else {
+      assert.notEqual(ui.evaluate('dialogMode'), 'actionExtra');
+      assert.equal(ui.evaluate('state.history.at(-1).extra'), undefined);
+    }
+    assert.equal(ui.evaluate('state.history.at(-1).action'), 'study');
+    assert.equal(ui.evaluate('state.revision'), revision + 1);
+    assert.equal(ui.evaluate('state.money'), balance === 80 ? 0 : balance);
+  }
 });
 
 test('仅三项行动有可选消费，付费确认使用原版本号，过期时不扣费', () => {
@@ -636,16 +662,25 @@ test('其他栏位的 storage 变化不提示当前栏位冲突，当前栏位�
   assert.match(ui.element('#sessionNote').textContent, /另一个标签页/);
 });
 
-test('旧档显示为栏位 1，昵称转义，存储不可用时仍可开始游戏', () => {
-  const storage = memory();
-  // 旧版昵称规则宽松，旧档可能带 HTML 特殊字符；新规则只约束创建，加载时保持宽松并转义显示。
-  saves.createSaveService(storage).save({ ...game.createGame({ nickname: '旧档玩家' }), nickname: '<x>' });
-  const ui = app(storage);
-  const html = ui.element('#dialogBody').innerHTML;
-  assert.match(html, /&lt;x&gt;/);
-  assert.doesNotMatch(html, /<x>/);
-  ui.click('#dialogBody', { loadSlot: '1', saveSource: 'primary' });
-  assert.equal(ui.evaluate('state.nickname'), '<x>');
+test('从继续游戏读取栏位 1 的旧档并按文本显示旧昵称', () => {
+  const legacy = require('./qa/legacy-wallet-v055.json');
+  for (const nickname of [legacy.state.nickname, '<x>']) {
+    const storage = memory();
+    storage.setItem(saves.KEYS.primary, JSON.stringify({ ...legacy, state: { ...legacy.state, nickname } }));
+    const ui = app(storage, false, false, false);
+    ui.click('#startContinue');
+    const html = ui.element('#dialogBody').innerHTML;
+    assert.match(html, /栏位 1/);
+    assert.match(html, /data-load-slot="1"/);
+    assert.ok(html.includes(nickname === '<x>' ? '&lt;x&gt;' : nickname));
+    assert.doesNotMatch(html, /<x>/);
+    ui.click('#dialogBody', { loadSlot: '1', saveSource: 'primary' });
+    assert.equal(ui.evaluate('state.nickname'), nickname);
+    assert.equal(ui.evaluate('state.term'), legacy.state.term);
+  }
+});
+
+test('存储不可用时仍可开局，保存栏位不可用', () => {
   const denied = app(null);
   denied.start(); denied.click('#saveButton');
   assert.equal((denied.element('#dialogBody').innerHTML.match(/disabled/g) || []).length, 3);
@@ -1167,18 +1202,24 @@ test('事件只预览成本，确认后显示具体结果；保存、读档和�
   assert.equal(ui.evaluate('state.energy'), 17);
   const story = ui.evaluate('state.history.at(-1).investment.description');
   assert.ok(ui.element('#dialogBody').innerHTML.includes(story));
+  const settled = ui.evaluate('JSON.stringify(state)');
   ui.flush();
   ui.click('#dialogSave');
   ui.evaluate('selectSaveSlot(2)');
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.equal(ui.evaluate('activeSaveSlot'), 2);
+  assert.equal(ui.evaluate('savedRevision'), JSON.parse(settled).revision);
   ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
   assert.equal(ui.evaluate('state.pendingEvent.id'), 'military2');
   ui.click('#dialogBody', { eventChoice: 'perform', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
   ui.flush();
-  ui.click('#loadButton');
-  ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
-  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
-  assert.equal(ui.evaluate('JSON.stringify(state)'), settled);
+  for (let read = 0; read < 2; read++) {
+    ui.click('#loadButton');
+    ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+    assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+    assert.equal(ui.evaluate('JSON.stringify(state)'), settled);
+    assert.ok(ui.element('#dialogBody').innerHTML.includes(story));
+  }
   ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
   ui.click('#historyButton');
   assert.ok(ui.element('#dialogBody').innerHTML.includes(story));
@@ -1196,13 +1237,20 @@ test('档位按钮拒绝任意数字，资源不足可改选有效档位', () =>
     ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
     assert.equal(ui.evaluate('JSON.stringify(state)'), original);
   }
-  ui.evaluate('state.energy = 9');
-  ui.click('#dialogBody', { investmentPreset: 'join', amount: '10' });
-  assert.equal(ui.element('#event-choice-join').disabled, true);
-  assert.match(ui.element('#investment-reason-join').textContent, /精力不够/);
-  ui.evaluate('state.energy = 10');
-  ui.click('#dialogBody', { investmentPreset: 'join', amount: '10' });
-  assert.equal(ui.element('#event-choice-join').disabled, false);
+  for (const [fitness, cost] of [[50, 10], [44, 13]]) {
+    ui.evaluate('state = { ...' + original + ', fitness: ' + fitness + ', energy: ' + (cost - 1) + ' }; showEvent()');
+    ui.click('#dialogBody', { investmentPreset: 'join', amount: '10' });
+    assert.match(ui.element('#investment-cost-join').textContent, new RegExp('精力 −' + cost));
+    assert.equal(ui.element('#event-choice-join').disabled, true);
+    assert.match(ui.element('#investment-reason-join').textContent, new RegExp('需要 ' + cost));
+    ui.evaluate('state.energy = ' + cost);
+    ui.click('#dialogBody', { investmentPreset: 'join', amount: '10' });
+    assert.equal(ui.element('#event-choice-join').disabled, false);
+    ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+    assert.equal(ui.evaluate('state.energy'), 0);
+    assert.equal(ui.evaluate('state.history.at(-1).changes.energy'), -cost);
+    ui.flush();
+  }
 });
 
 test('军训回顾后直接进入汇演，室友关心等待军训完成', () => {
@@ -1441,16 +1489,27 @@ test('校园卡追查事件先确认再进入终局，安全归还可继续游�
 
 
 test('南门岗位库：浏览、锁定意向、带岗位申请与存档往返', () => {
-  const state = game.createGame({ nickname: '岗位测试', seed: 'positions-test', legacyEconomy: true });
-  state.term = 3;
-  const makeCourse = (term, preparation) => {
-    const grade = Math.round(40 + preparation * 0.6);
-    return { term, name: game.TERM_NAMES[term - 1], preparation, grade, passed: grade >= 60, moneyAfter: 900, unusedTime: 12, counts: {}, notices: [], attributes: { social: state.social, fitness: state.fitness, mood: state.mood }, livingCost: game.RULES.livingCost, aid: 0 };
-  };
-  state.courses = [makeCourse(1, 67), makeCourse(2, 67)];
+  let state = game.createGame({ nickname: '岗位测试', seed: 'positions-test' });
+  function advance(result) {
+    assert.equal(result.ok, true, result.reason);
+    state = result.state;
+  }
+  for (let term = 1; term <= 3; term++) {
+    assert.equal(state.term, term);
+    advance(game.chooseBudget(state, game.DEFAULT_BUDGET));
+    const courses = game.coursesForTerm(term, state.background.id, state.background.major).slice(0, 3);
+    advance(game.selectCourses(state, courses.map(course => course.id)));
+    if (term < 3) {
+      advance(game.beginExam(state));
+      advance(game.submitExam(state, state.exam.questions.map(question => question.answer)));
+      assert.equal(state.summary.grade, 60);
+      advance(game.continueGame(state));
+    }
+  }
   const storage = memory();
   assert.equal(saves.createSlotService(storage).save(state, 2).ok, true);
-  const ui = app(storage);
+  const ui = app(storage, false, false, false);
+  ui.click('#startContinue');
   ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
   ui.evaluate('dialog.close(); activePlace = "gate"; gateSection = "internship"; renderActions()');
   ui.click('#actionList', { action: 'applyInternship', revision: String(ui.evaluate('state.revision')) });
@@ -1460,8 +1519,9 @@ test('南门岗位库：浏览、锁定意向、带岗位申请与存档往返',
   assert.match(html, /音符跳动/);
   assert.match(html, /后端开发实习生/);
   // 锁定意向：写入存档字段，对话框出现「取消意向」
-  const revision = String(ui.evaluate('state.revision'));
-  ui.click('#dialogBody', { positionLock: 'qiandu_testdev', revision });
+  const lockRevision = html.match(/data-position-lock="qiandu_testdev" data-revision="(\d+)"/);
+  assert.ok(lockRevision, '意向按钮应带上渲染时的状态版本');
+  ui.click('#dialogBody', { positionLock: 'qiandu_testdev', revision: lockRevision[1] });
   ui.flush();
   assert.equal(ui.evaluate('state.targetPosition'), 'qiandu_testdev');
   assert.match(ui.element('#dialogBody').innerHTML, /取消意向/);
@@ -1472,17 +1532,21 @@ test('南门岗位库：浏览、锁定意向、带岗位申请与存档往返',
   ui.click('#actionList', { action: 'applyInternship', revision: String(ui.evaluate('state.revision')) });
   assert.equal(ui.evaluate('dialogMode'), 'positionPicker');
   // 带岗位申请：链挂岗位、邀请入队、命令记录 positionId
-  const revision2 = String(ui.evaluate('state.revision'));
-  ui.click('#dialogBody', { positionApply: 'qiandu_testdev', revision: revision2 });
+  const applyRevision = ui.element('#dialogBody').innerHTML.match(/data-position-apply="qiandu_testdev" data-revision="(\d+)"/);
+  assert.ok(applyRevision, '申请按钮应带上渲染时的状态版本');
+  ui.click('#dialogBody', { positionApply: 'qiandu_testdev', revision: applyRevision[1] });
   assert.equal(ui.evaluate('state.chains.internship.positionId'), 'qiandu_testdev');
   assert.equal(ui.evaluate('state.pendingEvent && state.pendingEvent.id'), 'internshipOffer');
   assert.equal(ui.evaluate('state.history.at(-1).command.positionId'), 'qiandu_testdev');
   // 存档往返：意向与链岗位字段保留
-  ui.evaluate('saveCurrent(true)');
-  const loaded = saves.createSlotService(storage).load(2);
-  assert.equal(loaded.ok, true);
-  assert.equal(loaded.state.targetPosition, 'qiandu_testdev');
-  assert.equal(loaded.state.chains.internship.positionId, 'qiandu_testdev');
+  const saved = ui.evaluate('saveCurrent(true)');
+  assert.equal(saved.ok, true, saved.reason);
+  const restarted = app(storage, false, false, false);
+  restarted.click('#startContinue');
+  restarted.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(restarted.evaluate('state.targetPosition'), 'qiandu_testdev');
+  assert.equal(restarted.evaluate('state.chains.internship.positionId'), 'qiandu_testdev');
+  assert.equal(restarted.evaluate('state.pendingEvent.id'), 'internshipOffer');
 });
 
 test('岗位门槛不达标时申请按钮禁用并显示原因', () => {

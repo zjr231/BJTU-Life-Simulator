@@ -56,7 +56,10 @@ test('每个事件选项都显式声明体能消耗，按有效精力分档，�
       assert.equal(choice.fitnessCost, band(energy), id + ':' + choice.id);
     }
   }
-  assert.equal(total, 115);
+  assert.deepEqual(game.EVENTS.zhouNingMeet.choices.map(choice => choice.id), ['discuss', 'later']);
+  assert.deepEqual(game.EVENTS.zhouNingPresentation.choices.map(choice => choice.id), ['outline', 'rehearse', 'encourage', 'later']);
+  assert.deepEqual(game.EVENTS.internshipMilestone.choices.map(choice => choice.id), ['settle', 'continue']);
+  assert.equal(total, 121);
   assert.equal(game.EVENTS.military1.choices.find(choice => choice.id === 'join').fitnessCost, 4);
   assert.equal(game.EVENTS.night.choices.find(choice => choice.id === 'join').fitnessCost, 1);
   assert.equal(game.EVENTS.military2.choices.every(choice => choice.fitnessCost === 0), true);

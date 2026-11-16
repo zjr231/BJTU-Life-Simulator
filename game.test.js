@@ -48,13 +48,17 @@ test('每个行动的资源边界：刚好满足可执行，任一资源不足�
     const action = game.getAction(initial, id);
     const state = { ...initial, time: action.time, energy: action.energy, money: action.money };
     const options = id === 'applyInternship' ? { positionId: 'qiandu_testdev' } : {};
-    assert.equal(game.executeAction(state, id, options).ok, true, id);
+    const execute = candidate => id === 'basketball'
+      ? game.completeBasketball(candidate, 25)
+      : game.executeAction(candidate, id, options);
+    const allowed = execute(state);
+    assert.equal(allowed.ok, true, `${id}: ${allowed.reason || ''}`);
     for (const [key, cost] of [['time', action.time], ['energy', action.energy], ['money', action.money]]) {
       if (!cost) continue;
       if (key === 'money' && action.emergencyMoney) continue;
       const insufficient = { ...state, [key]: cost - 1 };
       const before = structuredClone(insufficient);
-      const result = game.executeAction(insufficient, id, options);
+      const result = execute(insufficient);
       assert.equal(result.ok, false, `${id}: ${key}`);
       assert.strictEqual(result.state, insufficient);
       assert.deepEqual(insufficient, before);
@@ -83,11 +87,44 @@ test('各行动次数限制阻止刷取，学期切换后清空', () => {
   for (const [id, action] of Object.entries(game.ACTIONS)) {
     if (!action.limit) continue;
     const state = { ...actionableState(id), counts: { [id]: action.limit } };
-    assert.equal(game.executeAction(state, id).ok, false);
-    let next = game.continueGame(game.endTerm(state).state).state;
-    while (next.pendingEvent) next = game.submitEventChoice(next, 'later').state;
-    assert.equal(game.executeAction(next, id).ok, true);
+    const execute = candidate => id === 'basketball'
+      ? game.completeBasketball(candidate, 25)
+      : game.executeAction(candidate, id);
+    const limited = execute(state);
+    assert.equal(limited.ok, false, id);
+    assert.match(limited.reason, /已经安排满/, id);
+    const summary = game.endTerm(state);
+    assert.equal(summary.ok, true, summary.reason);
+    const started = game.continueGame(summary.state);
+    assert.equal(started.ok, true, started.reason);
+    let next = started.state;
+    while (next.pendingEvent) {
+      const cleared = game.submitEventChoice(next, 'later');
+      assert.equal(cleared.ok, true, cleared.reason);
+      next = cleared.state;
+    }
+    assert.equal(next.counts[id] || 0, 0, id);
+    const allowed = execute(next);
+    assert.equal(allowed.ok, true, `${id}: ${allowed.reason || ''}`);
   }
+});
+
+test('篮球第二次可结算、第三次被限，重复提交不扣费也不加奖', () => {
+  const initial = actionableState('basketball');
+  const first = game.completeBasketball(initial, 25, { commandId: 'basketball-first' });
+  assert.equal(first.ok, true, first.reason);
+  assert.equal(first.state.counts.basketball, 1);
+  const duplicate = game.completeBasketball(first.state, 25, { commandId: 'basketball-first' });
+  assert.equal(duplicate.ok, false);
+  assert.match(duplicate.reason, /已经提交/);
+  assert.strictEqual(duplicate.state, first.state);
+  const second = game.completeBasketball(first.state, 25, { commandId: 'basketball-second' });
+  assert.equal(second.ok, true, second.reason);
+  assert.equal(second.state.counts.basketball, 2);
+  const third = game.completeBasketball(second.state, 25, { commandId: 'basketball-third' });
+  assert.equal(third.ok, false);
+  assert.match(third.reason, /已经安排满/);
+  assert.strictEqual(third.state, second.state);
 });
 test('结算预览不修改状态，成绩不跨学期累加，资源仅扣一次', () => {
   let state = game.createGame();

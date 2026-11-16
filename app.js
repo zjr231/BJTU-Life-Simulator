@@ -1850,6 +1850,7 @@ function lockUi() {
     renderGrowth();
     if (activePlace) renderActions();
     dialog.querySelectorAll('[data-dialog-action]').forEach((button) => { button.disabled = false; });
+    dialog.querySelectorAll('[data-position-lock]').forEach((button) => { button.disabled = false; });
     dialog.querySelectorAll('[data-position-apply]').forEach((button) => { button.disabled = !game.availability(state, 'applyInternship', undefined, button.dataset.positionApply).ok; });
     dialog.querySelectorAll('[data-event-choice]').forEach((button) => { button.disabled = !game.eventAvailability(state, button.dataset.eventChoice, button.dataset.instance, eventDraft(button.dataset.eventChoice)).ok; });
     dialog.querySelectorAll('[data-ending]').forEach((button) => { button.disabled = !state.endingOptions.options.find((item) => item.id === button.dataset.ending)?.available; });
@@ -2862,7 +2863,7 @@ function showPositionPicker() {
       + '<p class="position-flavor">' + h(position.flavor) + '</p>'
       + '<p class="position-reqs">' + h('第 ' + position.window[0] + '–' + position.window[1] + ' 学期 · ' + gradeText + ' · ' + requirementText + ' · 段收入 ' + position.rewards.income + ' 元 · 求职准备 +' + position.rewards.jobPreparation + (position.costs && position.costs.fitness ? ' · 体能消耗 +' + position.costs.fitness + '/次' : '')) + '</p>'
       + '<p class="position-status' + (check.ok ? ' is-ok' : '') + '">' + (check.ok ? '● 达标，可以投递' : h(check.reason)) + '</p>'
-      + '<div class="position-actions"><button type="button" class="secondary" data-position-lock="' + h(position.id) + '"' + (uiLocked ? ' disabled' : '') + '>' + (state.targetPosition === position.id ? '取消意向' : '锁定意向') + '</button>'
+      + '<div class="position-actions"><button type="button" class="secondary" data-position-lock="' + h(position.id) + '" data-revision="' + state.revision + '"' + (uiLocked ? ' disabled' : '') + '>' + (state.targetPosition === position.id ? '取消意向' : '锁定意向') + '</button>'
       + '<button type="button" data-position-apply="' + h(position.id) + '" data-revision="' + state.revision + '"' + (applyOk ? '' : ' disabled') + '>申请这个岗位</button></div>'
       + '</article>';
   }).join('')).join('');
@@ -3109,7 +3110,12 @@ $('#backButton').addEventListener('click', () => {
   closePlace();
 });
 $('#basketballQuit')?.addEventListener('click', () => basketballSession?.finish());
-basketballDialog?.addEventListener('cancel', (event) => { if (basketballSession) event.preventDefault(); });
+$('#basketballCancel')?.addEventListener('click', cancelBasketball);
+basketballDialog?.addEventListener('cancel', (event) => {
+  if (!basketballSession) return;
+  event.preventDefault();
+  cancelBasketball();
+});
 $('#endTermButton').addEventListener('click', () => { finishCoach('semester-end'); requestEndTerm(); });
 $('#saveButton').addEventListener('click', showSave);
 $('#dialogSave').addEventListener('click', showSave);
@@ -3350,7 +3356,7 @@ dialog.addEventListener('cancel', (event) => {
   if (!state || ['eventPending', 'examPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment', 'courseSelection', 'budget', 'exam', 'confirmCheat', 'confirmEnding'].includes(dialogMode)) event.preventDefault();
 });
 document.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape') return;
+  if (event.key !== 'Escape' || basketballDialog?.open) return;
   if (openPopoverName) { closePopovers(); return; }
   if (openPanelName) { closePanel(); return; }
   if (activePlace && !dialog.open) closePlace();
