@@ -39,7 +39,13 @@ const basketballDialog = $('#basketballDialog');
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
 try { storage = window.localStorage; } catch (_) { /* Play remains available without storage. */ }
-const saves = CampusSave.createSlotService(storage);
+const normalSaves = CampusSave.createSlotService(storage);
+let saves = normalSaves;
+let developerPanel = null;
+let developerTesting = false;
+let developerPaused = false;
+let developerPauseStarted = 0;
+let developerNpcOffset = 0;
 const sms = typeof CampusSms !== 'undefined' ? CampusSms : null;
 const LOGIN_KEY = 'bjtu-life:login';
 const LOGIN_SKIP_KEY = 'bjtu-life:login:skipped';
@@ -1094,7 +1100,7 @@ function renderState() {
   renderGrowth();
   $('#endTermButton').textContent = endTermButtonLabel();
   updateSemesterDock();
-  $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
+  $('#sessionNote').textContent = (developerTesting ? '【隔离测试】保存仅写入测试栏位 · ' : '') + (savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。');
   renderRecordsPanel();
   renderRelationshipsPanel();
   renderNpcLayer();
@@ -1390,7 +1396,7 @@ async function sendZhouChat(message) {
   acknowledgedResultRevision=state.revision;zhouChatNotice=decision.source==='local'?'在线对话暂时没连上，先继续本地对话。':result.entry.dialogue.gained?'你们多了解了彼此一点 · 相识度 +'+result.entry.dialogue.gained+'。':'';showZhouNing({preserve:true});
 }
 async function maybeZhouNingDirector() {
-  if(!state||zhouRequest||uiLocked||basketballSession||needsCourseSelection())return;
+  if(developerPaused||!state||zhouRequest||uiLocked||basketballSession||needsCourseSelection())return;
   const occasion=game.npcOpportunity(state);if(!occasion||(dialog.open&&dialogMode!=='event'))return;
   const snapshot=state,sequence=++zhouRequestSequence,controller=typeof AbortController==='function'?new AbortController():null,npcId=occasion.npcId;
   zhouRequest={controller,npcId};const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
@@ -1659,8 +1665,8 @@ function renderNpcLayer() {
   }
 }
 function npcTick() {
-  if (npcSystem && state) {
-    const events = npcSystem.tick(Date.now());
+  if (!developerPaused && npcSystem && state) {
+    const events = npcSystem.tick(Date.now() - developerNpcOffset);
     for (const removed of events.removed) {
       npcFades.set(removed.id, { npc: removed, since: Date.now() });
       npcChatLogs.delete(removed.id);
@@ -1676,7 +1682,7 @@ function npcTick() {
       }
     }
   }
-  renderNpcLayer();
+  if (!developerPaused) renderNpcLayer();
   if (typeof setTimeout === 'function') npcTimer = setTimeout(npcTick, 300);
 }
 function talkToNpc(npcId) {
@@ -1793,6 +1799,7 @@ async function sendNpcChat() {
     }
   }
   if (npcTalking !== talking) return; // 期间换了聊天对象或已退出，不再写入
+  if (developerPaused) { npcTyping = false; return; }
   // 对话质量（0/1/2）：优先用中转返回的 quality；旧版中转没剥离标记时在前端剥离尾部【Q:n】；都没有用本地启发式。
   let quality = relayQuality;
   const marker = reply === null ? null : reply.match(/【\s*Q[:：]?\s*([012])\s*】\s*$/);
@@ -1861,18 +1868,21 @@ function lockUi() {
 }
 function runCommand(operation, id, expectedRevision, eventInstanceId, investment, extra, positionId) {
   if (!state || uiLocked) return null;
+  const developerBefore = developerTesting ? CampusDeveloperTools.clone(state) : null;
   const options = { ...(extra && typeof extra === 'object' ? extra : { extra }), positionId, commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId, investment };
   if(['executeAction','completeBasketball','submitEventChoice','resolveNpcProposal','runNpcStory'].includes(operation)){options.npcSupportVersion=1;options.npcCastVersion=1;if(options.companionId)options.characterVersion=2;}
   if(operation==='submitEventChoice'&&state.relationships?.eventCompanion?.instanceId===state.pendingEvent?.instanceId)options.companionId=state.relationships.eventCompanion.npcId;
   if (operation === 'submitEventChoice' && id !== game.SICK_LEAVE_ID && game.characterAgent.read(state).cameo?.instanceId === state.pendingEvent?.instanceId) options.zhouCameo = true;
   const result = ['executeAction', 'purchaseGrowth', 'chooseBudget', 'setTargetPosition', 'completeBasketball', 'submitEventChoice', 'chooseEnding', 'selectCourses', 'updateExamAnswers', 'submitExam', 'chatWithNpc', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal','recordNpcDialogue','resolveNpcProposal','runNpcStory','attachNpcToEvent'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
+    developerPanel?.record(operation, developerBefore, state, result.reason);
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');
     showToast(result.reason);
     return null;
   }
   state = result.state;
+  developerPanel?.record(result.entry?.title || operation, developerBefore, state);
   if (operation !== 'updateExamAnswers') lockUi();
   renderState();
   return result;
@@ -1927,7 +1937,7 @@ function showSave() {
   if (!state) return;
   saveTarget = null;
   const info = saves.inspect();
-  showDialog('save', '选择保存栏位', '<p>选择一个栏位保存当前进度，之后的自动保存也会使用这个栏位。</p>' + slotCards(info, 'save'), [{ id: 'resume', text: '返回游戏', secondary: true }]);
+  showDialog('save', developerTesting ? '选择测试保存栏位' : '选择保存栏位', '<p>' + (developerTesting ? '隔离测试中：这些是独立测试栏位，自动保存也只写入测试存档。' : '选择一个栏位保存当前进度，之后的自动保存也会使用这个栏位。') + '</p>' + slotCards(info, 'save'), [{ id: 'resume', text: '返回游戏', secondary: true }]);
 }
 function selectSaveSlot(slotId) {
   const info = saves.inspect().slots.find(slot => slot.id === slotId);
@@ -2091,6 +2101,7 @@ function positionCoach() {
 }
 
 function showCoachStep(id, selector, text, onFinish) {
+  if (developerPaused || developerTesting) return false;
   if (coachDone(id) || activeCoach || dialog.open) return;
   const target = document.querySelector(selector);
   if (!target) return;
@@ -2754,7 +2765,7 @@ function resumePhase() {
 }
 function showLoad() {
   const info = saves.inspect();
-  showDialog('load', '选择读取栏位', '<p>选择读取后，当前未保存进度将被替换，之后自动保存到所读栏位。</p>' + slotCards(info, 'load'), [{ id: state ? 'resume' : 'startMenu', text: '取消', secondary: true }]);
+  showDialog('load', developerTesting ? '选择测试读取栏位' : '选择读取栏位', '<p>' + (developerTesting ? '隔离测试中：这里只读取独立测试存档，之后自动保存也使用测试栏位。' : '选择读取后，当前未保存进度将被替换，之后自动保存到所读栏位。') + '</p>' + slotCards(info, 'load'), [{ id: state ? 'resume' : 'startMenu', text: '取消', secondary: true }]);
 }
 function loadGame(slotId, source = 'primary') {
   const result = saves.load(slotId, source);
@@ -3347,6 +3358,7 @@ document.addEventListener('click', (event) => {
 }, { capture: true });
 $('#debugPanel').hidden = !debug;
 window.addEventListener('storage', (event) => {
+  if (developerTesting) return;
   if (activeSaveSlot !== null && (event.key === null || event.key === CampusSave.getSlotKeys(activeSaveSlot).primary)) {
     $('#sessionNote').textContent = '另一个标签页更新了栏位 ' + activeSaveSlot + '。当前游戏仍可继续，保存前请读取最新存档。';
     showToast('当前存档栏位发生变化，请先读取最新存档');
@@ -3366,4 +3378,90 @@ if (typeof HTMLDialogElement === 'undefined' || typeof HTMLDialogElement.prototy
   $('.game-shell').innerHTML = '<div class="browser-notice"><h2>请使用较新的浏览器打开</h2><p>本游戏需要支持弹窗等现代网页特性的浏览器。请升级微信或浏览器，或用系统浏览器打开本地址。</p><p class="browser-notice-url">https://zjr231.github.io/BJTU-Life-Simulator/</p></div>';
 } else {
   showStartMenu();
+}
+
+if (typeof CampusDeveloperPanel !== 'undefined') {
+  let developerOriginalBasketball = null;
+  let developerOriginalCompanion = null;
+  // Keep all state replacement at the UI boundary; production rule and save validation stay strict.
+  function replaceDeveloperState(next, resume = true) {
+    cancelZhouRequest(); cancelBasketball(); closePlace(); closePanel(); closePopovers(); hideCoach();
+    clearTimeout(unlockTimer); uiLocked = false;
+    actionDrafts.clear(); eventDrafts.clear(); openActionCards.clear(); pendingActionExtra = null;
+    budgetDraft = null; budgetDraftTerm = null; terminalChoice = null; termUnlockQueue = [];
+    zhouChatDraft = ''; zhouChatNotice = ''; zhouHistoryOpen = false;
+    state = next;
+    savedRevision = -1; savedAt = ''; saveNotice = developerTesting ? '隔离测试副本，普通游戏存档不受影响。' : '';
+    acknowledgedResultRevision = state?.revision ?? -1;
+    resetSeasonTracking(); resetNpcSystem();
+    if (dialog.open) dialog.close();
+    if (state) { hideStartMenu(); renderState(); if (resume) resumePhase(); }
+    else showStartMenu();
+    const drawer = $('#developerPanel');
+    if (drawer.open) { drawer.close(); drawer.showModal(); }
+  }
+  developerPanel = CampusDeveloperPanel.install({
+    storage, state: () => state, failures: () => failures,
+    capture: () => ({ state, activeSaveSlot, savedRevision, savedAt, saveNotice, failures, activePlace, gateSection,
+      budgetDraft, budgetDraftTerm, acknowledgedResultRevision, basketball: !!basketballSession, uiLocked,
+      activeNpcId, zhouView, zhouChatDraft, zhouChatNotice, zhouHistoryOpen, saveTarget, terminalChoice,
+      eventDrafts: [...eventDrafts], actionDrafts: [...actionDrafts], openActionCards: [...openActionCards], pendingActionExtra,
+      dialog: { open: dialog.open, mode: dialogMode, className: dialog.className, title: $('#dialogTitle').textContent, body: $('#dialogBody').innerHTML, buttons: $('#dialogButtons').innerHTML, notice: $('#dialogNotice').textContent, kicker: $('.dialog-kicker').textContent, saveHidden: $('#dialogSave').hidden } }),
+    testing(enabled, testStore) {
+      developerTesting = enabled; saves = enabled ? testStore : normalSaves;
+      if (enabled) {
+        activeSaveSlot = null; failures.length = 0;
+        developerOriginalBasketball = basketballSession; developerOriginalCompanion = basketballCompanion;
+        basketballSession = null; basketballCompanion = null;
+      }
+    },
+    replace: replaceDeveloperState,
+    restore(snapshot) {
+      replaceDeveloperState(snapshot.state, false);
+      activeSaveSlot = snapshot.activeSaveSlot; savedRevision = snapshot.savedRevision; savedAt = snapshot.savedAt; saveNotice = snapshot.saveNotice;
+      failures.splice(0, failures.length, ...snapshot.failures);
+      budgetDraft = snapshot.budgetDraft; budgetDraftTerm = snapshot.budgetDraftTerm; acknowledgedResultRevision = snapshot.acknowledgedResultRevision;
+      activeNpcId = snapshot.activeNpcId; zhouView = snapshot.zhouView; zhouChatDraft = snapshot.zhouChatDraft; zhouChatNotice = snapshot.zhouChatNotice; zhouHistoryOpen = snapshot.zhouHistoryOpen;
+      saveTarget = snapshot.saveTarget; terminalChoice = snapshot.terminalChoice; pendingActionExtra = snapshot.pendingActionExtra;
+      for (const [key,value] of snapshot.eventDrafts) eventDrafts.set(key,value);
+      for (const [key,value] of snapshot.actionDrafts) actionDrafts.set(key,value);
+      if (state) {
+        renderState();
+        if (snapshot.activePlace) {
+          openPlace(snapshot.activePlace, document.querySelector('[data-place="' + snapshot.activePlace + '"]'));
+          gateSection = snapshot.gateSection;
+          snapshot.openActionCards.forEach(id => openActionCards.add(id)); renderActions();
+        }
+      }
+      gateSection = snapshot.gateSection;
+      const saved = snapshot.dialog;
+      dialogMode = saved.mode;
+      if (saved.open) {
+        dialog.className = saved.className; $('#dialogTitle').textContent = saved.title; $('#dialogBody').innerHTML = saved.body;
+        $('#dialogButtons').innerHTML = saved.buttons; $('#dialogNotice').textContent = saved.notice; $('.dialog-kicker').textContent = saved.kicker; $('#dialogSave').hidden = saved.saveHidden;
+        // The developer drawer must remain the last modal in the browser's top layer.
+        const drawer = $('#developerPanel'), wasOpen = drawer.open;
+        if (wasOpen) drawer.close();
+        dialog.showModal();
+        if (wasOpen) drawer.showModal();
+      }
+      if (snapshot.basketball && developerOriginalBasketball) {
+        basketballSession = developerOriginalBasketball; basketballCompanion = developerOriginalCompanion;
+        renderBasketballHud(basketballSession.getState());
+        const drawer = $('#developerPanel'), wasOpen = drawer.open;
+        if (wasOpen) drawer.close();
+        basketballDialog.showModal();
+        if (wasOpen) drawer.showModal();
+      }
+      developerOriginalBasketball = null; developerOriginalCompanion = null;
+      if (snapshot.uiLocked) lockUi();
+    },
+    character: id => showCharacter(id),
+    pause(paused) {
+      if (paused === developerPaused) return;
+      developerPaused = paused;
+      if (paused) { developerPauseStarted = Date.now(); cancelZhouRequest(); basketballSession?.pause(); hideCoach(); }
+      else { developerNpcOffset += Date.now() - developerPauseStarted; basketballSession?.resume(); maybeZhouNingDirector(); }
+    }
+  });
 }

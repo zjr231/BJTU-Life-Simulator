@@ -238,6 +238,7 @@
     let last = 0;
     let elapsed = 0;
     let paused = false;
+    let manuallyPaused = false;
     let finished = false;
     let dragging = false;
     let drag = { x: 0, y: 0 };
@@ -383,10 +384,17 @@
     }
 
     function pause() {
+      manuallyPaused = true;
       paused = true;
     }
 
     function resume() {
+      manuallyPaused = false;
+      resumeVisible();
+    }
+
+    function resumeVisible() {
+      if (manuallyPaused || root.document?.hidden) return;
       if (finished) return;
       paused = false;
       last = 0;
@@ -456,8 +464,8 @@
     }
 
     function onVisibility() {
-      if (root.document && root.document.hidden) pause();
-      else resume();
+      if (root.document && root.document.hidden) paused = true;
+      else resumeVisible();
     }
 
     function update(dt) {

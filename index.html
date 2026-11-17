@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="北交人生">
   <meta name="format-detection" content="telephone=no">
-  <link rel="stylesheet" href="styles.css?v=20261106-p3">
+  <link rel="stylesheet" href="styles.css?v=20261117-dev2">
 </head>
 <body>
   <section class="start-screen" id="startScreen" aria-label="北交人生启动页">
@@ -391,6 +391,22 @@
       </div>
     </div>
   </div>
+  <button type="button" id="developerBadge" class="developer-badge" hidden>测试中 · 打开面板</button>
+  <dialog id="developerPanel" class="developer-panel" aria-labelledby="developerTitle">
+    <header class="dev-header">
+      <div class="dev-heading"><h2 id="developerTitle">测试面板</h2><span data-dev-mode></span></div>
+      <div class="dev-buttons"><button type="button" data-dev-action="exit" title="退出测试，恢复进入前的游戏进度" disabled hidden>恢复原进度</button><button type="button" data-dev-action="expand" aria-expanded="false" title="调整面板高度">展开</button><button type="button" data-dev-action="close" aria-label="关闭测试面板" title="关闭面板后可继续测试 · Esc">关闭</button></div>
+    </header>
+    <div class="dev-tabs" role="tablist" aria-label="测试工具分类">
+      <button type="button" role="tab" id="developerTab0" data-dev-tab="0" aria-controls="developerBody" aria-selected="true">资源</button>
+      <button type="button" role="tab" id="developerTab1" data-dev-tab="1" aria-controls="developerBody" aria-selected="false" tabindex="-1">进度</button>
+      <button type="button" role="tab" id="developerTab2" data-dev-tab="2" aria-controls="developerBody" aria-selected="false" tabindex="-1">事件 / 人物</button>
+      <button type="button" role="tab" id="developerTab3" data-dev-tab="3" aria-controls="developerBody" aria-selected="false" tabindex="-1">养成 / 结局</button>
+      <button type="button" role="tab" id="developerTab4" data-dev-tab="4" aria-controls="developerBody" aria-selected="false" tabindex="-1">记录</button>
+    </div>
+    <div id="developerBody" class="dev-body" data-dev-body role="tabpanel" aria-labelledby="developerTab0" tabindex="0"></div>
+    <footer><span data-dev-notice role="status" aria-live="polite">修改仅影响测试副本 · Esc 关闭</span></footer>
+  </dialog>
   <script src="config.js?v=20261106-p3"></script>
   <script src="courses.js?v=20261106-p3"></script>
   <script src="rng.js?v=20261106-p3"></script>
@@ -409,7 +425,9 @@
   <script src="npc.js?v=20261106-p3"></script>
   <script src="season.js?v=20261106-p3"></script>
   <script src="vendor/planck.min.js?v=20261106-p3"></script>
-  <script src="basketball.js?v=20261106-p3"></script>
-  <script src="app.js?v=20261106-p3"></script>
+  <script src="basketball.js?v=20261117-dev1"></script>
+  <script src="developer-tools.js?v=20261117-dev1"></script>
+  <script src="developer-panel.js?v=20261117-dev2"></script>
+  <script src="app.js?v=20261117-dev1"></script>
 </body>
 </html>

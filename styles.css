@@ -1490,3 +1490,81 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
 .tutorial-more { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ded9c9; }
 .tutorial-more summary { cursor: pointer; color: #6b5526; font-size: 12px; font-weight: 700; }
 .tutorial-more ol { margin: 10px 0 0; padding-left: 20px; color: #59665d; font-size: 12px; line-height: 1.8; }
+/* Hidden developer drawer: all rules are scoped away from the game interface. */
+.developer-panel { position: fixed; inset: auto 0 0; margin: 0 auto; width: 100%; max-width: 1180px; height: 40dvh; min-height: 320px; max-height: 94dvh; padding: 0; border: 1px solid #39434b; border-bottom: 0; border-radius: 10px 10px 0 0; color: #e1e6e9; background: #1c242b; box-shadow: 0 -8px 32px #0004; font: 13px/1.5 system-ui, sans-serif; }
+.developer-panel[open] { display: flex; flex-direction: column; }
+.developer-panel.dev-expanded { height: 85dvh; }
+.developer-panel::backdrop { background: #10182020; }
+.developer-panel .dev-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 20px 6px; flex-shrink: 0; }
+.developer-panel .dev-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.developer-panel h2 { margin: 0; font-size: 15px; color: #f1f4f5; }
+.developer-panel h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #e1e6e9; }
+.developer-panel h3 small { margin-left: 6px; font-weight: 400; }
+.developer-panel p { margin: 6px 0 10px; }
+.developer-panel [data-dev-mode] { color: #99b9ae; font-size: 11px; }
+.developer-panel button { border: 1px solid #46525c; border-radius: 5px; padding: 5px 10px; background: #2a343d; color: #e1e6e9; font: inherit; cursor: pointer; box-shadow: none; transform: none; white-space: nowrap; }
+.developer-panel button:hover { background: #35434d; border-color: #70808a; }
+.developer-panel button:disabled { opacity: .45; cursor: default; }
+.developer-panel button[hidden] { display: none; }
+.developer-panel button.dev-primary { background: #37695a; border-color: #508e7a; color: #fff; }
+.developer-panel :focus-visible { outline: 2px solid #8ac2b0; outline-offset: 2px; }
+.developer-panel .dev-header button { background: transparent; border-color: transparent; color: #b3bfc7; }
+.developer-panel .dev-header button:hover { color: #fff; background: #2a343d; }
+.developer-panel .dev-tabs { display: flex; gap: 16px; padding: 0 20px; border-bottom: 1px solid #36414a; overflow-x: auto; flex-shrink: 0; }
+.developer-panel .dev-tabs button { padding: 9px 0; background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #9fadb7; }
+.developer-panel .dev-tabs button[aria-selected="true"] { color: #c2e6d9; border-bottom-color: #87bca7; }
+.developer-panel .dev-body { overflow: auto; padding: 16px 20px; flex: 1; min-height: 0; overscroll-behavior: contain; }
+.developer-panel label { display: flex; flex-direction: column; gap: 5px; margin: 0 0 10px; color: #aab7c0; font-size: 12px; min-width: 0; }
+.developer-panel input, .developer-panel select { min-width: 0; width: 100%; height: 32px; border: 1px solid #414d57; border-radius: 5px; padding: 5px 8px; background: #172027; color: #e9edef; font: inherit; font-size: 13px; box-sizing: border-box; }
+.developer-panel .dev-fields { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
+.developer-panel .dev-fields label { margin-bottom: 4px; }
+.developer-panel .dev-person-fields { display: grid; grid-template-columns: 1fr 100px; gap: 10px; }
+.developer-panel .dev-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 5px 0; }
+.developer-panel .dev-buttons label { margin: 0; }
+.developer-panel .dev-resource-actions { margin-top: 14px; }
+.developer-panel .dev-toolbar { display: flex; align-items: flex-end; gap: 8px; margin: 0 0 12px; }
+.developer-panel .dev-toolbar > label { flex: 1; margin: 0; }
+.developer-panel .dev-toolbar .dev-buttons { margin: 0; }
+.developer-panel .dev-save-row { margin-top: 16px; }
+.developer-panel .dev-help, .developer-panel small { color: #9baab4; font-size: 12px; }
+.developer-panel .dev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.developer-panel .dev-grid > section { min-width: 0; }
+.developer-panel .dev-grid > section + section { padding-left: 24px; border-left: 1px solid #36414a; }
+.developer-panel .dev-section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+.developer-panel .dev-section-heading h3 { margin: 0; }
+.developer-panel .dev-details { margin: 8px 0; }
+.developer-panel .dev-details > summary { width: fit-content; }
+.developer-panel .dev-details[open] > summary { margin-bottom: 8px; }
+.developer-panel .dev-checks { list-style: none; padding: 0; margin: 8px 0; }
+.developer-panel .dev-pass { color: #94c7ad; }
+.developer-panel .dev-gap, .developer-panel .dev-error { color: #edb0a3; }
+.developer-panel .dev-info { color: #a6b3bd; }
+.developer-panel .dev-progress-list > div, .developer-panel .dev-checkpoint { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid #303c45; padding: 6px 0; }
+.developer-panel pre { max-height: 260px; overflow: auto; padding: 10px; color: #bfcbd3; background: #172027; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.developer-panel summary { cursor: pointer; color: #9fadb7; font-size: 12px; }
+.developer-panel summary:hover { color: #e1e6e9; }
+.developer-panel .dev-log { list-style: none; padding: 0; margin: 0; }
+.developer-panel .dev-log li { position: relative; margin: 0 0 9px; padding-right: 52px; }
+.developer-panel .dev-log b { font-weight: 500; }
+.developer-panel .dev-log small { position: absolute; top: 0; right: 0; font-size: 11px; }
+.developer-panel .dev-log p { margin: 1px 0; font-size: 12px; color: #9baab4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.developer-panel .dev-log .dev-error p { color: #edb0a3; }
+.developer-panel footer { border-top: 1px solid #36414a; padding: 6px 20px; color: #9baab4; font-size: 11px; flex-shrink: 0; }
+.developer-panel .dev-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.developer-badge { position: fixed; right: 12px; top: 8px; z-index: 10000; border: 1px solid #60796d; border-radius: 20px; padding: 5px 10px; background: #1c3028; color: #c2e6d9; font-size: 11px; cursor: pointer; }
+.developer-badge[hidden] { display: none; }
+@media (max-width: 680px) {
+  .developer-panel { height: 60dvh; min-height: 260px; }
+  .developer-panel .dev-header { padding: 10px 12px 4px; gap: 6px; }
+  .developer-panel .dev-heading { gap: 6px; }
+  .developer-panel .dev-header .dev-buttons { justify-content: flex-end; gap: 2px; }
+  .developer-panel .dev-header button { font-size: 11px; padding: 4px; }
+  .developer-panel .dev-tabs { padding: 0 12px; gap: 0; justify-content: space-between; }
+  .developer-panel .dev-tabs button { font-size: 12px; }
+  .developer-panel .dev-body { padding: 12px; }
+  .developer-panel .dev-grid { grid-template-columns: 1fr; gap: 18px; }
+  .developer-panel .dev-grid > section + section { border-left: 0; border-top: 1px solid #36414a; padding: 16px 0 0; }
+  .developer-panel .dev-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .developer-panel .dev-toolbar { flex-wrap: wrap; }
+  .developer-panel .dev-toolbar > label { flex-basis: 100px; }
+}
