@@ -101,6 +101,12 @@
       const replayNickname = game.validateNickname(state.nickname).ok ? state.nickname : '北交同学';
       const initialBackground = game.createGame({ nickname: replayNickname, seed: state.rng.seed }).background;
       const backgroundReplay = game.replay({ nickname: replayNickname, seed: state.rng.seed, legacyEconomy: !state.economy || state.economy.startTerm > 1, economyStartTerm: state.economy?.startTerm ?? 9, relationshipsInitialized: state.relationships !== undefined, commands: state.history.map((entry) => entry.command) });
+      if (state.animalVisits !== undefined || state.history.some(entry => entry.command?.operation === 'interactWithAnimal')) {
+        const visits = state.animalVisits;
+        const replayed = backgroundReplay.state?.animalVisits;
+        if (!backgroundReplay.ok || !object(visits) || Object.keys(visits).length !== 2 || !replayed
+          || visits.cat !== replayed.cat || visits.goose !== replayed.goose) return fail('动物互动次数与历史不一致');
+      }
       if (backgroundReplay.ok && !same(state.growth ?? null, backgroundReplay.state.growth ?? null)) return fail('校园养成购买记录');
       if (usesSupport && (!backgroundReplay.ok || !['time', 'energy', 'money', 'social', 'fitness', 'mood', 'preparation', 'furtherStudy', 'jobPreparation', 'rng'].every(key => same(state[key], backgroundReplay.state[key])))) return fail('玩家收获与辅助结算历史不一致');
       const transferred = state.eventHistory.some((entry) => entry.event === 'transferResult' && entry.choice === 'check') && state.experiences.some((item) => item.type === 'transfer');
@@ -156,7 +162,9 @@
       for (const [index, entry] of state.history.entries()) {
         if (!object(entry) || entry.revision !== index + 1 || typeof entry.commandId !== 'string' || !entry.commandId.length || entry.commandId.length > 128 || entry.commandId !== state.processedCommands[index] || !integer(entry.term, 1, state.term) || !object(entry.command)) return fail('操作历史');
         const command = entry.command;
-        if (!['executeAction', 'purchaseGrowth', 'chooseBudget', 'setTargetPosition', 'settleInternship', 'completeBasketball', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal', 'recordNpcDialogue', 'resolveNpcProposal', 'runNpcStory', 'attachNpcToEvent'].includes(command.operation)) return fail('历史操作类型');
+        if (!['executeAction', 'purchaseGrowth', 'chooseBudget', 'setTargetPosition', 'settleInternship', 'completeBasketball', 'submitEventChoice', 'selectCourses', 'beginExam', 'updateExamAnswers', 'submitExam', 'cheatExam', 'endTerm', 'continueGame', 'chooseEnding', 'chatWithNpc', 'interactWithAnimal', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal', 'recordNpcDialogue', 'resolveNpcProposal', 'runNpcStory', 'attachNpcToEvent'].includes(command.operation)) return fail('历史操作类型');
+        if (command.operation === 'interactWithAnimal'
+          && (!backgroundReplay.ok || !same(entry, { ...backgroundReplay.state.history[index], commandId: entry.commandId }))) return fail('动物互动结果与历史不一致');
         if (command.operation === 'purchaseGrowth') {
           const node = GROWTH_NODES[command.id];
           const hasTermStart = node && node.effects.some(item => item.kind === 'termStart');

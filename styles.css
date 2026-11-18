@@ -1568,3 +1568,323 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
   .developer-panel .dev-toolbar { flex-wrap: wrap; }
   .developer-panel .dev-toolbar > label { flex-basis: 100px; }
 }
+
+/* Campus encounters */
+.animal-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.animal-marker {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  min-width: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translate(-50%, -62%);
+}
+.animal-marker-image {
+  width: clamp(43px, 6vw, 59px);
+  aspect-ratio: 1;
+  border: 1px solid #ab905b;
+  border-radius: 50%;
+  background: #fff5dc var(--animal-atlas) 0 0 / 200% 200% no-repeat;
+  box-shadow: 0 2px 6px #233b2e65;
+}
+.animal-marker:hover .animal-marker-image { background-color: #ffe8ad; }
+.animal-marker .npc-label { font-size: 10px; }
+.map-screen.is-leaving .animal-layer { visibility: hidden; }
+
+.animal-world[data-species="cat"], .animal-marker-image[data-species="cat"] {
+  --animal-atlas: url("assets/animals/cat-atlas-hiss.webp");
+}
+.animal-world[data-species="goose"], .animal-marker-image[data-species="goose"] {
+  --animal-atlas: url("assets/animals/goose-atlas.webp");
+}
+
+.animal-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #141e17;
+  color: #fcf6e7;
+  overflow: hidden;
+}
+.animal-dialog::backdrop { background: #141e17; }
+.animal-dialog:not([open]) { display: none; }
+.animal-world {
+  --edge: clamp(13px, 3vw, 50px);
+  --actor-size: min(58dvh, 68vw, 610px);
+  --floor: 77%;
+  --footline: -90%;
+  --mark-y: .45;
+  --landscape: url("assets/animals/fengye.webp");
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.animal-world[data-species="goose"] {
+  --actor-size: min(66dvh, 75vw, 660px);
+  --footline: -98%;
+  --mark-y: .53;
+  --landscape: url("assets/animals/minghu.webp");
+}
+.animal-landscape {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  background: #283329 var(--landscape) center 58% / cover no-repeat;
+}
+.animal-world::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, #10150edb 0, #141b1518 24%, transparent 58%, #141a153d 77%, #111912d6 100%),
+    radial-gradient(ellipse at 52% 52%, transparent 42%, #13180e33 100%);
+}
+.animal-actor {
+  position: absolute;
+  left: 50%;
+  top: var(--floor);
+  width: var(--actor-size);
+  aspect-ratio: 1;
+  transform: translate(-50%, var(--footline));
+  pointer-events: none;
+}
+.animal-shadow {
+  position: absolute;
+  inset: 84% 20% 6%;
+  border-radius: 50%;
+  background: #221b125e;
+  transform: scaleY(.54);
+  filter: blur(11px);
+}
+.animal-world[data-species="goose"] .animal-shadow { inset: 93% 20% -4%; }
+.animal-portrait {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 91%;
+  filter: drop-shadow(2px 4px 4px #27220d38);
+  animation: animal-breathe 3.1s ease-in-out infinite;
+}
+.animal-motion-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.animal-motion-canvas:not([hidden]) ~ .animal-frame { visibility: hidden; }
+.animal-frame {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  background: var(--animal-atlas) 0 0 / 200% 200% no-repeat;
+}
+.animal-frame-calm { background-position: 100% 0; }
+.animal-frame-petted { background-position: 0 100%; }
+.animal-frame-startled { background-position: 100% 100%; }
+.animal-world[data-species="cat"] .animal-frame-alert { transform: translateX(2.7%) scaleX(-1); }
+.animal-world[data-species="cat"] .animal-frame-petted { transform: translate(-3%, -1%); }
+.animal-world[data-species="cat"] .animal-frame-startled { transform: translateY(-2%); }
+[data-pose="alert"] .animal-frame-alert,
+[data-pose="calm"] .animal-frame-calm,
+[data-pose="petted"] .animal-frame-petted,
+[data-pose="fed"] .animal-frame-petted,
+[data-pose="startled"] .animal-frame-startled { visibility: visible; }
+.animal-world[data-mode="react"][data-pose="petted"] .animal-portrait { animation: animal-lean .74s ease-in-out both; }
+.animal-world[data-mode="react"][data-pose="fed"] .animal-portrait { animation: animal-feed-lean .74s ease-in-out both; }
+.animal-world[data-species="cat"][data-mode="react"][data-pose="startled"] .animal-portrait { animation: animal-cat-hiss .74s ease-out both; }
+.animal-world[data-species="goose"][data-mode="react"][data-pose="startled"] .animal-portrait { animation: animal-peck .74s ease-out both; }
+
+.animal-pet-target {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: calc(var(--floor) - var(--actor-size) * var(--mark-y));
+  width: calc(var(--actor-size) * .71);
+  height: calc(var(--actor-size) * .77);
+  transform: translate(-50%, -50%);
+  padding: 0;
+  border: 0;
+  border-radius: 42%;
+  background: transparent;
+  cursor: pointer;
+}
+.animal-pet-target[hidden] { display: none; }
+.animal-pet-target:focus-visible { outline: 2px dashed #fff0c4c0; outline-offset: 5px; }
+.animal-hand {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  width: clamp(153px, 22vw, 335px);
+  aspect-ratio: 1;
+  transform: translate3d(var(--hand-x, 65vw), var(--hand-y, 56vh), 0) translate(-16%, -14%);
+  pointer-events: none;
+  visibility: hidden;
+}
+.animal-hand > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: url("assets/animals/petting-hand.webp") center / contain no-repeat;
+  mask-image: linear-gradient(to right, #000 80%, transparent), linear-gradient(to bottom, #000 81%, transparent);
+  mask-composite: intersect;
+  transform-origin: 74% 78%;
+  will-change: transform;
+}
+.animal-world[data-mode="pet"][data-tracking="true"] .animal-hand,
+.animal-world[data-mode="react"][data-tracking="true"] .animal-hand { visibility: visible; }
+.animal-world[data-mode="react"][data-pose="petted"] .animal-hand > span { animation: animal-hand-stroke .74s cubic-bezier(.2,.66,.34,1) both; }
+.animal-world[data-mode="react"][data-pose="startled"] .animal-hand > span { animation: animal-hand-withdraw .74s cubic-bezier(.2,.8,.37,1) both; }
+
+.animal-hud, .animal-controls {
+  position: absolute;
+  z-index: 3;
+  left: var(--edge);
+  right: var(--edge);
+}
+.animal-hud {
+  top: max(var(--edge), env(safe-area-inset-top));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.animal-place {
+  margin: 0 0 5px;
+  color: #f0d598;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-shadow: 0 2px 6px #171a12;
+}
+.animal-hud h2 {
+  margin: 0;
+  font-size: clamp(28px, 4.1vw, 52px);
+  line-height: 1.1;
+  letter-spacing: -.03em;
+  text-shadow: 0 3px 16px #1d2216b3;
+}
+.animal-hud h2:focus { outline: 0; }
+.animal-hud-right { display: flex; align-items: center; gap: 9px; }
+.animal-balance {
+  display: flex;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid #f1dcab5c;
+  border-radius: 12px;
+  background: #182015b3;
+  color: #e9e1cc;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.animal-balance b { margin-left: 4px; color: #fff8de; font-variant-numeric: tabular-nums; }
+.animal-exit, .animal-buttons button {
+  min-height: 43px;
+  padding: 9px 15px;
+  border: 1px solid #ead5a489;
+  border-radius: 9px;
+  background: #22281eeb;
+  color: #fcf4dd;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.animal-exit:hover, .animal-buttons button:hover { background: #333b2cbf; }
+.animal-exit { font-size: 13px; }
+.animal-controls {
+  bottom: max(var(--edge), env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 17px;
+  width: min(calc(100% - var(--edge) * 2), 860px);
+  margin-inline: auto;
+  padding: 17px 19px;
+  border: 1px solid #dac3916e;
+  border-radius: 15px;
+  background: #182015e8;
+  box-shadow: 0 12px 44px #211c135e;
+  backdrop-filter: blur(17px);
+}
+.animal-cue-block { min-width: 0; }
+.animal-cue { margin: 0; color: #fff3d3; font-size: 20px; font-weight: 720; line-height: 1.2; }
+.animal-detail { margin: 5px 0 0; color: #e9dfc5; font-size: 14px; line-height: 1.45; }
+.animal-detail:empty, .animal-buttons:empty { display: none; }
+.animal-world[data-mode="pet"] .animal-cue::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin: 0 9px 2px 0;
+  border-radius: 50%;
+  background: #edb36d;
+}
+.animal-world[data-mode="pet"][data-pose="calm"] .animal-cue::before { background: #b9dfa1; }
+.animal-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; flex-shrink: 0; gap: 8px; }
+.animal-buttons button { background: #232a1e; font-size: 14px; }
+.animal-buttons .animal-primary { background: #e9ce91; border-color: #f3dba4; color: #222719; font-weight: 700; }
+.animal-buttons .animal-primary:hover { background: #f6deaa; }
+.animal-buttons button:disabled { opacity: .5; cursor: not-allowed; }
+
+@keyframes animal-breathe { 50% { transform: translateY(-.5%) scale(1.004, 1.018); } }
+@keyframes animal-lean { 46% { transform: translate(1.8%, .8%) rotate(2deg) scale(1.035); } }
+@keyframes animal-feed-lean { 40% { transform: translate(-1%, 2%) scale(.99, .95); } 72% { transform: translate(-.6%, .8%) scaleY(.98); } }
+@keyframes animal-cat-hiss {
+  18% { transform: translateY(2.5%) scale(.97, .98); }
+  48% { transform: translateY(1%) scale(1.01, .99); }
+  78% { transform: translateY(1%) scale(.99); }
+}
+@keyframes animal-peck { 23% { transform: translate(0, 1%) scale(1.12); } 56% { transform: translate(0, -.8%) scale(.99); } }
+@keyframes animal-hand-stroke {
+  0% { transform: translate(25%, 36%) scale(.91) rotate(11deg); opacity: 1; }
+  25% { transform: translate(-3%, -4%) scale(1.02) rotate(-5deg); opacity: 1; }
+  51% { transform: translate(8%, 7%) rotate(1deg); opacity: 1; }
+  73% { transform: translate(-1%, -1%) rotate(-3deg); opacity: 1; }
+  100% { transform: translate(35%, 43%) scale(.91) rotate(11deg); opacity: 0; }
+}
+@keyframes animal-hand-withdraw {
+  0% { transform: translate(17%, 23%) rotate(6deg); opacity: 1; }
+  16% { transform: translate(-1%, -4%) rotate(-4deg); opacity: 1; }
+  46% { transform: translate(52%, 60%) rotate(19deg); opacity: .85; }
+  100% { transform: translate(85%, 85%) rotate(26deg); opacity: 0; }
+}
+@media (pointer: fine) {
+  .animal-world[data-mode="pet"][data-tracking="true"],
+  .animal-world[data-mode="pet"][data-tracking="true"] .animal-pet-target { cursor: none; }
+}
+@media (max-width: 630px) and (orientation: portrait) {
+  .animal-world, .animal-world[data-species="goose"] { --actor-size: min(55dvh, 95vw); --floor: 68%; }
+  .animal-hud-right { flex-direction: column-reverse; align-items: flex-end; gap: 6px; }
+  .animal-balance { gap: 7px; padding: 6px 8px; font-size: 11px; }
+  .animal-exit { padding: 7px 10px; min-height: 39px; }
+  .animal-controls { display: block; padding: 13px; }
+  .animal-cue { font-size: 17px; }
+  .animal-detail { font-size: 12px; }
+  .animal-buttons { justify-content: flex-start; margin-top: 9px; }
+  .animal-buttons button { flex: auto; min-height: 40px; padding: 8px 10px; font-size: 13px; }
+  .animal-hand { width: clamp(112px, 47vw, 205px); }
+}
+@media (max-height: 440px) and (orientation: landscape) {
+  .animal-world, .animal-world[data-species="goose"] { --actor-size: min(61dvh, 53vw); --floor: 75%; --edge: 9px; }
+  .animal-hud h2 { font-size: 25px; }
+  .animal-controls { padding: 8px 11px; }
+  .animal-cue { font-size: 15px; }
+  .animal-detail { margin-top: 3px; font-size: 11px; }
+  .animal-buttons button { min-height: 34px; padding: 5px 12px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animal-world *, .animal-world *::before { animation: none !important; transition: none !important; }
+}

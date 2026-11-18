@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="北交人生">
   <meta name="format-detection" content="telephone=no">
-  <link rel="stylesheet" href="styles.css?v=20261117-dev2">
+  <link rel="stylesheet" href="styles.css?v=20261118-lin-animals">
 </head>
 <body>
   <section class="start-screen" id="startScreen" aria-label="北交人生启动页">
@@ -49,6 +49,7 @@
         <img class="map-art" src="assets/campus-map-reference.png" alt="北交大主校区地点交互地图">
         <div class="map-wash"></div>
         <div class="npc-layer" id="npcLayer" aria-hidden="true"></div>
+        <div class="animal-layer" id="animalLayer" hidden></div>
 
         <button class="map-hotspot hotspot-activity" data-place="activity" aria-label="进入学生活动中心">
           <span class="pin-ring"><span class="pin-core"></span></span>
@@ -371,6 +372,41 @@
       </div>
     </dialog>
 
+    <dialog class="animal-dialog" id="animalDialog" aria-labelledby="animalTitle">
+      <div class="animal-world" id="animalWorld">
+        <div class="animal-landscape" aria-hidden="true"></div>
+        <div class="animal-actor" aria-hidden="true">
+          <div class="animal-shadow"></div>
+          <div class="animal-portrait">
+            <canvas id="animalMotionCanvas" class="animal-motion-canvas" hidden></canvas>
+            <span class="animal-frame animal-frame-alert"></span>
+            <span class="animal-frame animal-frame-calm"></span>
+            <span class="animal-frame animal-frame-petted"></span>
+            <span class="animal-frame animal-frame-startled"></span>
+          </div>
+        </div>
+        <button type="button" class="animal-pet-target" id="animalPetTarget" aria-describedby="animalCue" hidden></button>
+        <div class="animal-hand" id="animalHand" aria-hidden="true"><span></span></div>
+        <header class="animal-hud">
+          <div>
+            <p class="animal-place" id="animalPlace"></p>
+            <h2 id="animalTitle" tabindex="-1"></h2>
+          </div>
+          <div class="animal-hud-right">
+            <div class="animal-balance"><span>心情 <b id="animalMood"></b></span><span>已互动 <b id="animalVisits"></b> 次</span></div>
+            <button type="button" class="animal-exit" id="animalExit" aria-label="结束偶遇，返回地图">返回地图</button>
+          </div>
+        </header>
+        <footer class="animal-controls">
+          <div class="animal-cue-block">
+            <p class="animal-cue" id="animalCue" aria-live="polite"></p>
+            <p class="animal-detail" id="animalDetail"></p>
+          </div>
+          <div class="animal-buttons" id="animalButtons"></div>
+        </footer>
+      </div>
+    </dialog>
+
     <dialog class="term-dialog" id="termDialog" aria-labelledby="dialogTitle">
       <div class="dialog-kicker">北交人生 · 学期回顾</div>
       <button type="button" class="dialog-save utility-button" id="dialogSave" hidden>保存当前进度</button>
@@ -407,6 +443,7 @@
     <div id="developerBody" class="dev-body" data-dev-body role="tabpanel" aria-labelledby="developerTab0" tabindex="0"></div>
     <footer><span data-dev-notice role="status" aria-live="polite">修改仅影响测试副本 · Esc 关闭</span></footer>
   </dialog>
+  <audio id="catHissAudio" src="assets/animals/cat-hiss.wav" preload="auto" hidden></audio>
   <script src="config.js?v=20261106-p3"></script>
   <script src="courses.js?v=20261106-p3"></script>
   <script src="rng.js?v=20261106-p3"></script>
@@ -415,19 +452,20 @@
   <script src="npc-support.js?v=20261106-p3"></script>
   <script src="character-agent.js?v=20261106-p3"></script>
   <script src="npc-director.js?v=20261106-p3"></script>
-  <script src="npc-game.js?v=20261106-p3"></script>
+  <script src="npc-game.js?v=20261118-lin-animals"></script>
   <script src="character-scene.js?v=20261106-p3"></script>
-  <script src="state-validation.js?v=20261106-p3"></script>
+  <script src="state-validation.js?v=20261118-lin-animals"></script>
   <script src="game.js?v=20261106-p3"></script>
   <script src="save.js?v=20261106-p3"></script>
-  <script src="audio.js?v=20261106-p3"></script>
+  <script src="audio.js?v=20261118-lin-animals"></script>
   <script src="sms.js?v=20261106-p3"></script>
   <script src="npc.js?v=20261106-p3"></script>
+  <script src="animals.js?v=20261118-lin-animals"></script>
   <script src="season.js?v=20261106-p3"></script>
   <script src="vendor/planck.min.js?v=20261106-p3"></script>
   <script src="basketball.js?v=20261117-dev1"></script>
   <script src="developer-tools.js?v=20261117-dev1"></script>
   <script src="developer-panel.js?v=20261117-dev2"></script>
-  <script src="app.js?v=20261117-dev1"></script>
+  <script src="app.js?v=20261118-lin-animals"></script>
 </body>
 </html>

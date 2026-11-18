@@ -1393,6 +1393,59 @@
     const next = { ...applyChanges(state, changes), npcChats: { ...(state.npcChats || {}), [identityId]: nextRecord } };
     return commit(state, next, { operation: 'chatWithNpc', identityId, quality }, { action: 'chatWithNpc', identity: '和' + NPC_CHAT.identities[identityId] + '聊天', changes, quality }, command.commandId);
   }
+  const ANIMALS = Object.freeze({
+    cat: Object.freeze({ label: '小猫', food: '猫零食', price: 30, fedMood: 5, petMood: 4, startledMood: -2, calmMs: 1250, visitMs: 150, maxCalmMs: 2150 }),
+    goose: Object.freeze({ label: '明湖的鹅', food: '鹅饲料', price: 40, fedMood: 8, petMood: 7, startledMood: -4, calmMs: 850, visitMs: 150, maxCalmMs: 2050 })
+  });
+  const ANIMAL_CYCLE_MS = 3400;
+  const ANIMAL_CALM_START_MS = 850;
+
+  function animalCalmWindow(state, species) {
+    if (!own(ANIMALS, species)) return null;
+    const { calmMs, visitMs, maxCalmMs } = ANIMALS[species];
+    const width = Math.min(maxCalmMs, calmMs + (state.animalVisits?.[species] || 0) * visitMs);
+    return { start: ANIMAL_CALM_START_MS, end: ANIMAL_CALM_START_MS + width };
+  }
+
+  function animalCalm(state, species, elapsedMs) {
+    const window = animalCalmWindow(state, species);
+    return !!window && elapsedMs >= window.start && elapsedMs < window.end;
+  }
+
+  function animalAvailability(state, species, choice) {
+    if (!own(ANIMALS, species) || !['pet', 'feed'].includes(choice)) return { ok: false, reason: '这个互动无法进行' };
+    if (state.phase !== 'playing' || activeMilitary(state)) return { ok: false, reason: '现在还不能进行校园偶遇' };
+    if (isSick(state)) return { ok: false, reason: ILLNESS_REASON };
+    if (choice === 'feed') {
+      const { price } = ANIMALS[species];
+      if (state.money < price) return { ok: false, reason: '余额不足，需要 ' + price + ' 元' };
+      if (state.mood >= RULES.maxAttribute) return { ok: false, reason: '心情已满' };
+    }
+    return { ok: true };
+  }
+
+  function interactWithAnimal(state, payload, options = {}) {
+    const { species, choice, elapsedMs } = payload || {};
+    const command = commandCheck(state, options, 'animal');
+    if (!command.ok) return command;
+    const availability = animalAvailability(state, species, choice);
+    if (!availability.ok) return { ...availability, state };
+    if (choice === 'pet' && (!Number.isSafeInteger(elapsedMs) || elapsedMs < 0 || elapsedMs >= ANIMAL_CYCLE_MS)) {
+      return { ok: false, reason: '抚摸时机无效', state };
+    }
+    const profile = ANIMALS[species];
+    const feed = choice === 'feed';
+    const outcome = feed ? 'fed' : animalCalm(state, species, elapsedMs) ? 'petted' : 'startled';
+    const mood = feed ? profile.fedMood : outcome === 'petted' ? profile.petMood : profile.startledMood;
+    const changes = previewChanges(state, { mood, money: feed ? profile.price : 0 });
+    const animalVisits = { cat: 0, goose: 0, ...state.animalVisits };
+    const visits = ++animalVisits[species];
+    return commit(state, { ...applyChanges(state, changes), animalVisits },
+      { operation: 'interactWithAnimal', data: { species, choice, ...(feed ? {} : { elapsedMs }) } },
+      { action: 'interactWithAnimal', title: (feed ? '喂食' : '抚摸') + profile.label, animal: { species, outcome, visits }, changes },
+      command.commandId);
+  }
+
   function getRelationships(state) { return relationships.read(state); }
   function companionAvailability(state, actionId, investment) {
     if (!state || state.phase !== 'playing') return { ok: false, reason: '请先完成当前事件、考试或学期流程' };
@@ -1550,6 +1603,7 @@
       handlers.resolveNpcProposal = () => api.resolveNpcProposal(state, command.data, args);
       handlers.runNpcStory = () => api.runNpcStory(state, command.data, args);
       handlers.attachNpcToEvent = () => api.attachNpcToEvent(state, command.npcId, args);
+      handlers.interactWithAnimal = () => interactWithAnimal(state, command.data, args);
       handlers.interactWithZhouNing = () => interactWithZhouNing(state, command.id, args);
       handlers.recordZhouNingDialogue = () => recordZhouNingDialogue(state, command.data, args);
       handlers.resolveZhouNingProposal = () => resolveZhouNingProposal(state, command.id, args);
@@ -1563,6 +1617,7 @@
   const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, growthRequirements, growthAvailability, growthStatus, purchaseGrowth, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, budgetPlan, currentGrant, activeBudget, housingFor, placeFor, placeDescription, applyDormEventBonus, eventChoiceEffect, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, BASKETBALL, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, basketballReward, availability, previewChanges, executeAction, completeBasketball, eventAvailability, submitEventChoice, previewSettlement, selectCourses, chooseBudget, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, advisories, ADVISORIES, resume, RESUME, COMPANIES, POSITIONS, positionAvailability, REAPPLY_GAP, internshipRequirementMet, internshipProgress, settleInternship, setTargetPosition, REQUIREMENT_LABELS, TIER_LABELS, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   Object.assign(api, { getRelationships, companionAvailability, zhouNingAvailability, interactWithZhouNing, relationshipRules: relationships, characterAgent, zhouNingCandidates, zhouNingOpportunity, recordZhouNingDialogue, resolveZhouNingProposal, npcSupport });
   Object.assign(api, { RANDOM_POOL, CAMPUS_SCHEDULE });
+  Object.assign(api, { ANIMALS, ANIMAL_CYCLE_MS, animalCalmWindow, animalCalm, animalAvailability, interactWithAnimal });
   Object.assign(api, npcGame.install(api, { commandCheck, commit, resourceCheck, applyChanges, attachEvents, activeMilitary }));
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusGame = api;
