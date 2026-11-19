@@ -269,6 +269,7 @@
         }
         for (const brief of [entry.before, entry.after]) if (!object(brief) || !integer(brief.term, 1, 8) || !['playing', 'eventPending', 'examPending', 'summary', 'endingChoice', 'finished', 'ended'].includes(brief.phase) || !integer(brief.time, 0, 12) || !integer(brief.energy, 0, 100) || !integer(brief.money, 0, 1000000) || !attribute(brief.preparation, 0, 100) || !integer(brief.rngCalls, 2, 2010)) return fail('历史状态摘要');
       }
+      if (!game.characterAgent.validSummaries(state)) return fail('人物对话摘要');
       const relation = state.relationships;
       if (relation !== undefined) {
         if (!object(relation) || relation.version !== 1 || typeof relation.introSeen !== 'boolean' || relation.term !== state.term || !integer(relation.talks, 0, 2) || !integer(relation.talkGrowth, 0, 8) || !integer(relation.interactions, 0, relation.zhouNing?.life ? 4 : 2)) return fail('人物关系字段');

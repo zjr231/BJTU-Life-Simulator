@@ -97,6 +97,7 @@ const npcChatLogs = new Map();
 let npcTyping = false;
 let commandSequence = 0;
 let savedRevision = -1;
+let savedNpcDialogueSummaries = '';
 let savedAt = '';
 let saveNotice = '';
 const COACH_KEY = 'bjtu-life:coach:v1';
@@ -115,6 +116,7 @@ let zhouView = { screen: 'home', group: 'life', activity: 'selfStudy', amount: u
 let lastVisualNovel = null;
 let zhouRequest = null;
 let zhouRequestSequence = 0;
+const npcSummaryJobs = new Map();
 let activeNpcId = 'zhouNing';
 let zhouChatDraft = '';
 let zhouChatNotice = '';
@@ -1111,7 +1113,7 @@ function renderState() {
   renderGrowth();
   $('#endTermButton').textContent = endTermButtonLabel();
   updateSemesterDock();
-  $('#sessionNote').textContent = (developerTesting ? '【隔离测试】保存仅写入测试栏位 · ' : '') + (savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。');
+  renderSaveStatus();
   renderRecordsPanel();
   renderRelationshipsPanel();
   renderNpcLayer();
@@ -1379,6 +1381,37 @@ function cancelZhouRequest() {
   zhouRequest?.controller?.abort();
   zhouRequest = null;
 }
+function resetNpcSummaryJobs() {
+  const jobs = [...npcSummaryJobs.values()];
+  npcSummaryJobs.clear();
+  for (const job of jobs) job.controller?.abort();
+}
+
+function refreshNpcSummary(npcId) {
+  if (!state || !game.AI_CHAT.relay || typeof fetch !== 'function') return null;
+  const existing = npcSummaryJobs.get(npcId);
+  if (existing?.promise) return existing.promise;
+  if (existing?.attemptedAt === state.revision) return null;
+  const plan = game.characterAgent.summaryPlan(state, npcId);
+  if (!plan) return null;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), Math.min(game.AI_CHAT.timeoutMs || 15000, 6000)) : null;
+  const job = { controller, attemptedAt: state.revision, promise: null };
+  npcSummaryJobs.set(npcId, job);
+  job.promise = game.characterAgent.requestSummary({ plan, relay: game.AI_CHAT.relay, fetchFn: fetch, signal: controller?.signal })
+    .then(text => {
+      if (!text || npcSummaryJobs.get(npcId) !== job || !state) return;
+      // 摘要是存档附加信息。保留游戏状态对象，避免打断正在等待的对话请求。
+      state.npcDialogueSummaries = { ...state.npcDialogueSummaries, [npcId]: { text, throughRevision: plan.throughRevision } };
+      renderSaveStatus();
+    })
+    .finally(() => {
+      if (timer !== null) clearTimeout(timer);
+      job.promise = null;
+    });
+  return job.promise;
+}
+
 function answerZhouProposal(answer, proposalRevision) {
   if(!state||uiLocked||zhouRequest)return;
   const id=activeNpcId,p=game.npcCast.profile(id),proposal=game.characterAgent.read(state,id).proposal;
@@ -1399,11 +1432,22 @@ async function sendZhouChat(message) {
   if(answer){zhouChatDraft='';answerZhouProposal(answer,proposal.createdRevision);return;}
   const snapshot=state,sequence=++zhouRequestSequence,controller=typeof AbortController==='function'?new AbortController():null;
   zhouRequest={controller,npcId,text};zhouChatDraft='';zhouChatNotice='';zhouView.screen='home';zhouView.text=null;showZhouNing({preserve:true});
+  const summary = refreshNpcSummary(npcId);
+  if (summary) {
+    await summary;
+    if (sequence !== zhouRequestSequence || activeNpcId !== npcId) return;
+    if (state !== snapshot || dialogMode !== 'relationship' || !dialog.open) {
+      zhouRequest = null;
+      zhouChatDraft = text;
+      return;
+    }
+  }
   const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
   const decision=await game.characterAgent.request({state:snapshot,npcId,text,candidates:game.npcCandidates(snapshot,npcId),relay:game.AI_CHAT.relay,fetchFn:typeof fetch==='function'?fetch:null,signal:controller?.signal});
   if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence||activeNpcId!==npcId)return;zhouRequest=null;
   if(state!==snapshot||dialogMode!=='relationship'||!dialog.open){zhouChatDraft=text;return;}
   const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:'chat',text},snapshot.revision);if(!result){zhouChatDraft=text;showZhouNing({preserve:true});return;}
+  refreshNpcSummary(npcId);
   acknowledgedResultRevision=state.revision;zhouChatNotice=decision.source==='local'?'在线对话暂时没连上，先继续本地对话。':result.entry.dialogue.gained?'你们多了解了彼此一点 · 相识度 +'+result.entry.dialogue.gained+'。':'';showZhouNing({preserve:true});
 }
 async function maybeZhouNingDirector() {
@@ -2207,6 +2251,7 @@ function saveCurrent(automatic = false, slotId = activeSaveSlot) {
   if (result.ok) {
     activeSaveSlot = slotId;
     savedRevision = state.revision;
+    savedNpcDialogueSummaries = npcSummarySaveStamp();
     savedAt = result.savedAt;
     saveNotice = result.warning || '已保存到栏位 ' + slotId + ' · ' + displayTime(savedAt);
     audio?.play('save');
@@ -2220,7 +2265,16 @@ function saveCurrent(automatic = false, slotId = activeSaveSlot) {
   return result;
 }
 function hasUnsavedProgress() {
-  return !!state && state.revision !== savedRevision;
+  return !!state && (state.revision !== savedRevision || npcSummarySaveStamp() !== savedNpcDialogueSummaries);
+}
+function npcSummarySaveStamp() {
+  // 开发者测试面板会深拷贝存档，按内容比较摘要的保存状态。
+  return state?.npcDialogueSummaries ? JSON.stringify(state.npcDialogueSummaries) : '';
+}
+function renderSaveStatus() {
+  const prefix = developerTesting ? '【隔离测试】保存仅写入测试栏位 · ' : '';
+  const status = hasUnsavedProgress() ? '当前有未保存进度 · ' : '当前进度已保存 · ';
+  $('#sessionNote').textContent = prefix + (savedAt ? '栏位 ' + activeSaveSlot + ' · ' + status + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。');
 }
 function guardUnsavedProgress(event) {
   if (!hasUnsavedProgress()) return;
@@ -2544,7 +2598,9 @@ function startGame() {
   if (loginSession) { loginSession.nickname = checked.value; try { storage?.setItem(LOGIN_KEY, JSON.stringify(loginSession)); } catch (_) {} }
   const seed = debug ? $('#seedInput').value : (window.crypto?.getRandomValues ? String(window.crypto.getRandomValues(new Uint32Array(1))[0]) : String(Date.now()));
   try { state = game.createGame({ nickname: checked.value, seed }); } catch (error) { $('#admissionError').textContent = error.message; return; }
+  resetNpcSummaryJobs();
   savedRevision = -1;
+  savedNpcDialogueSummaries = '';
   activeSaveSlot = null;
   savedAt = '';
   saveNotice = '';
@@ -3080,6 +3136,7 @@ function loadGame(slotId, source = 'primary') {
   const result = saves.load(slotId, source);
   if (!result.ok) { showToast(result.reason); return; }
   cancelZhouRequest();
+  resetNpcSummaryJobs();
   zhouChatDraft = ''; zhouChatNotice = ''; zhouHistoryOpen = false;
   cancelBasketball();
   closePlace();
@@ -3090,6 +3147,7 @@ function loadGame(slotId, source = 'primary') {
   eventDrafts.clear();
   acknowledgedResultRevision = -1;
   savedRevision = state.revision;
+  savedNpcDialogueSummaries = npcSummarySaveStamp();
   savedAt = result.savedAt;
   saveNotice = '已恢复栏位 ' + slotId + ' · ' + displayTime(savedAt);
   clearTimeout(unlockTimer);
@@ -3390,6 +3448,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
   else if (id === 'restart') askRestart();
   else if (id === 'confirmRestart') {
     cancelZhouRequest();
+    resetNpcSummaryJobs();
     zhouChatDraft = ''; zhouChatNotice = ''; zhouHistoryOpen = false;
     cancelBasketball();
     closePlace();
@@ -3405,6 +3464,7 @@ $('#dialogButtons').addEventListener('click', (event) => {
     activeSaveSlot = null;
     saveTarget = null;
     savedRevision = -1;
+    savedNpcDialogueSummaries = '';
     savedAt = '';
     clearTimeout(unlockTimer);
     uiLocked = false;
@@ -3705,6 +3765,7 @@ window.addEventListener('storage', (event) => {
 });
 dialog.addEventListener('cancel', (event) => {
   if (!state || ['eventPending', 'examPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment', 'courseSelection', 'budget', 'exam', 'confirmCheat', 'confirmEnding'].includes(dialogMode)) event.preventDefault();
+  else if (dialogMode === 'relationship') cancelZhouRequest();
 });
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape' || basketballDialog?.open || animalDialog?.open) return;
@@ -3725,12 +3786,14 @@ if (typeof CampusDeveloperPanel !== 'undefined') {
   // Keep all state replacement at the UI boundary; production rule and save validation stay strict.
   function replaceDeveloperState(next, resume = true) {
     cancelZhouRequest(); cancelBasketball(); closePlace(); closePanel(); closePopovers(); hideCoach();
+    resetNpcSummaryJobs();
     clearTimeout(unlockTimer); uiLocked = false;
     actionDrafts.clear(); eventDrafts.clear(); openActionCards.clear(); pendingActionExtra = null;
     budgetDraft = null; budgetDraftTerm = null; terminalChoice = null; termUnlockQueue = [];
     zhouChatDraft = ''; zhouChatNotice = ''; zhouHistoryOpen = false;
     state = next;
     savedRevision = -1; savedAt = ''; saveNotice = developerTesting ? '隔离测试副本，普通游戏存档不受影响。' : '';
+    savedNpcDialogueSummaries = '';
     acknowledgedResultRevision = state?.revision ?? -1;
     resetSeasonTracking(); resetNpcSystem();
     if (dialog.open) dialog.close();
@@ -3741,7 +3804,7 @@ if (typeof CampusDeveloperPanel !== 'undefined') {
   }
   developerPanel = CampusDeveloperPanel.install({
     storage, state: () => state, failures: () => failures,
-    capture: () => ({ state, activeSaveSlot, savedRevision, savedAt, saveNotice, failures, activePlace, gateSection,
+    capture: () => ({ state, activeSaveSlot, savedRevision, savedNpcDialogueSummaries, savedAt, saveNotice, failures, activePlace, gateSection,
       budgetDraft, budgetDraftTerm, acknowledgedResultRevision, basketball: !!basketballSession, uiLocked,
       activeNpcId, zhouView, zhouChatDraft, zhouChatNotice, zhouHistoryOpen, saveTarget, terminalChoice,
       eventDrafts: [...eventDrafts], actionDrafts: [...actionDrafts], openActionCards: [...openActionCards], pendingActionExtra,
@@ -3758,6 +3821,7 @@ if (typeof CampusDeveloperPanel !== 'undefined') {
     restore(snapshot) {
       replaceDeveloperState(snapshot.state, false);
       activeSaveSlot = snapshot.activeSaveSlot; savedRevision = snapshot.savedRevision; savedAt = snapshot.savedAt; saveNotice = snapshot.saveNotice;
+      savedNpcDialogueSummaries = snapshot.savedNpcDialogueSummaries;
       failures.splice(0, failures.length, ...snapshot.failures);
       budgetDraft = snapshot.budgetDraft; budgetDraftTerm = snapshot.budgetDraftTerm; acknowledgedResultRevision = snapshot.acknowledgedResultRevision;
       activeNpcId = snapshot.activeNpcId; zhouView = snapshot.zhouView; zhouChatDraft = snapshot.zhouChatDraft; zhouChatNotice = snapshot.zhouChatNotice; zhouHistoryOpen = snapshot.zhouHistoryOpen;
