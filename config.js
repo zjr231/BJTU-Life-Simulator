@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.9.0', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, termLivingCost: 4800, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.9.1', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, termLivingCost: 4800, lowMood: 30, fitnessThreshold: 60 };
   // initialMoney/livingCost are retained only for the current term of legacy saves.
   const FAMILIES = [
     { id: 'tight', label: '预算较紧', termAllowance: 5200, weight: 20, description: '家里的收支安排得比较紧凑。父母提前为你留好了这一学期的生活费，日常吃住能够安心，额外花销需要多做些计划。临行前，家里人叮嘱你照顾好身体，有困难记得说。' },
@@ -895,7 +895,7 @@
   };
   // 可选在线对话：relay 为云函数中转地址，空字符串表示关闭（NPC 只回本地台词）。
   // 密钥只放在云函数的环境变量里，前端永远接触不到；未连接或超时自动回退本地台词。
-  const AI_CHAT = { relay: 'https://deepseek-relay-bsxioiwmxt.cn-hangzhou.fcapp.run', timeoutMs: 15000 };
+  const AI_CHAT = { relay: 'https://deepseek-relay-bsxioiwmxt.cn-hangzhou.fcapp.run', timeoutMs: 15000, agentMemory: true };
   // NPC 聊天规则：聊天不再纯观感，走统一规则入口 chatWithNpc（见 game.js）。
   // 每条消息扣精力；学期内每个身份第一次搭话扣时间（整学期有上限）；
   // 社交/心情按对话质量分档，学长学姐和老师（academicIdentities）还能指点学习进度（平时分）。

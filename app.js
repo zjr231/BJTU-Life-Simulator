@@ -117,6 +117,7 @@ let lastVisualNovel = null;
 let zhouRequest = null;
 let zhouRequestSequence = 0;
 const npcSummaryJobs = new Map();
+const npcReflectionJobs = new Map();
 let activeNpcId = 'zhouNing';
 let zhouChatDraft = '';
 let zhouChatNotice = '';
@@ -1425,8 +1426,9 @@ function cancelZhouRequest() {
   zhouRequest = null;
 }
 function resetNpcSummaryJobs() {
-  const jobs = [...npcSummaryJobs.values()];
+  const jobs = [...npcSummaryJobs.values(), ...npcReflectionJobs.values()];
   npcSummaryJobs.clear();
+  npcReflectionJobs.clear();
   for (const job of jobs) job.controller?.abort();
 }
 
@@ -1453,6 +1455,37 @@ function refreshNpcSummary(npcId) {
       job.promise = null;
     });
   return job.promise;
+}
+
+function refreshNpcReflection(npcId, trigger = 'term-end') {
+  if (!state || !game.AI_CHAT.relay || typeof fetch !== 'function' || game.AI_CHAT.agentMemory === false) return null;
+  if (!game.npcCast.get(state, npcId)) return null;
+  const existing = npcReflectionJobs.get(npcId);
+  if (existing?.promise) return existing.promise;
+  if (existing?.attemptedAt === state.revision) return null;
+  const plan = game.characterAgent.reflectionPlan(state, npcId);
+  if (!plan) return null;
+  const snapshot = game.characterAgent.markAttempt(state, npcId, plan);
+  state = snapshot;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), Math.min(game.AI_CHAT.timeoutMs || 15000, 8000)) : null;
+  const job = { controller, attemptedAt: state.revision, promise: null };
+  npcReflectionJobs.set(npcId, job);
+  job.promise = game.characterAgent.requestReflection({ plan, relay: game.AI_CHAT.relay, fetchFn: fetch, signal: controller?.signal })
+    .then(result => {
+      if (!result || npcReflectionJobs.get(npcId) !== job || state !== snapshot) return;
+      state = game.characterAgent.applyReflection(state, npcId, result, plan, trigger);
+      renderSaveStatus();
+    })
+    .finally(() => {
+      if (timer !== null) clearTimeout(timer);
+      job.promise = null;
+    });
+  return job.promise;
+}
+function maybeQueueNpcReflection(trigger = 'term-end') {
+  if (!state || !game.AI_CHAT.relay || typeof fetch !== 'function' || game.AI_CHAT.agentMemory === false) return;
+  for (const npcId of Object.keys(game.npcCast.PROFILES)) refreshNpcReflection(npcId, trigger);
 }
 
 function answerZhouProposal(answer, proposalRevision) {
@@ -2281,6 +2314,9 @@ function runCommand(operation, id, expectedRevision, eventInstanceId, investment
   developerPanel?.record(result.entry?.title || operation, developerBefore, state);
   if (operation !== 'updateExamAnswers') lockUi();
   renderState();
+  if (['settleInternship', 'submitEventChoice', 'runNpcStory', 'interactWithZhouNing', 'completeBasketball'].includes(operation)) {
+    setTimeout(() => maybeQueueNpcReflection('major'), 0);
+  }
   return result;
 }
 function saveCurrent(automatic = false, slotId = activeSaveSlot) {
@@ -2311,8 +2347,11 @@ function hasUnsavedProgress() {
   return !!state && (state.revision !== savedRevision || npcSummarySaveStamp() !== savedNpcDialogueSummaries);
 }
 function npcSummarySaveStamp() {
-  // 开发者测试面板会深拷贝存档，按内容比较摘要的保存状态。
-  return state?.npcDialogueSummaries ? JSON.stringify(state.npcDialogueSummaries) : '';
+  // 开发者测试面板会深拷贝存档，按内容比较摘要与人物记忆的保存状态。
+  return JSON.stringify({
+    summaries: state?.npcDialogueSummaries || null,
+    memory: state?.npcAgentMemory || null
+  });
 }
 function renderSaveStatus() {
   const prefix = developerTesting ? '【隔离测试】保存仅写入测试栏位 · ' : '';
@@ -2902,6 +2941,7 @@ function requestEndTerm() {
 function showSummary() {
   audio?.play('paper');
   showDialog('summary', state.summary.name + ' · 学期总结', summaryMarkup(state.summary) + '<p>' + h(saveNotice || '可以随时保存当前总结。') + '</p>', [{ id: 'next', text: state.term === 8 ? '评估毕业方向' : '进入' + game.TERM_NAMES[state.term] }]);
+  maybeQueueNpcReflection('term-end');
 }
 function courseTable() {
   if (!state.courses.length) return '<h3>八学期成绩</h3><p>还没有结算过的成绩。</p>';

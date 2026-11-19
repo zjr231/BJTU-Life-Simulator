@@ -136,3 +136,99 @@ test('人物摘要按六轮累计且不删除原话或串用其他人物的记�
   assert.deepEqual(second.turns.map(turn => turn.text), Array.from({ length: 6 }, (_, index) => playerLine(index + 7)));
   assert.ok(agent.conversation(state, npcId).some(row => row.content === playerLine(1)));
 });
+
+test('人物记忆按重要性、相关性和时间检索，并隔离其他人物', () => {
+  const npcId = 'linXia';
+  const base = cast.meet(cast.meet(game.createGame({ seed: 'agent-memory' }), npcId), 'zhouNing');
+  const state = {
+    ...base,
+    revision: 100,
+    history: [
+      { revision: 1, term: 1, command: { operation: 'recordNpcDialogue' }, dialogue: { npcId, kind: 'chat', text: '我答应陪你练习展示，下次一起', say: '好，我会记住' } },
+      { revision: 40, term: 1, command: { operation: 'executeAction' }, relationship: { characterId: npcId, kind: 'story', description: '陪林夏完成接力配合练习' } },
+      { revision: 99, term: 1, command: { operation: 'recordNpcDialogue' }, dialogue: { npcId, kind: 'chat', text: '今天天气不错', say: '嗯' } },
+      { revision: 98, term: 1, command: { operation: 'recordNpcDialogue' }, dialogue: { npcId: 'zhouNing', kind: 'chat', text: '周宁专属记忆', say: '好' } }
+    ]
+  };
+  const relevant = agent.retrieveMemories(state, npcId, '展示', 4);
+  assert.ok(relevant.length >= 2);
+  assert.match(relevant[0].text, /练习展示|接力/);
+  assert.ok(relevant.every(item => !item.text.includes('周宁专属')));
+  assert.equal(agent.memoryPrompt({ ...state, npcAgentMemory: { version: 1, byNpc: { [npcId]: { core: { text: '你现在愿意向信任的人求助。', term: 1, revision: 100, trigger: 'term-end' } } } } }, npcId, '展示').includes('核心档案'), true);
+});
+
+test('人物反思每学期最多一次，成功写档并校验结构', () => {
+  const npcId = 'linXia';
+  const base = cast.meet(cast.meet(game.createGame({ seed: 'agent-reflection' }), npcId), 'zhouNing');
+  const state = {
+    ...base,
+    phase: 'summary',
+    revision: 100,
+    history: [{ revision: 90, term: 1, command: { operation: 'recordNpcDialogue' }, dialogue: { npcId, kind: 'chat', text: '我有点害怕上台展示', say: '我陪你练' } }]
+  };
+  const plan = agent.reflectionPlan(state, npcId);
+  assert.ok(plan);
+  assert.match(plan.memories[0].text, /害怕|展示/);
+  const marked = agent.markAttempt(state, npcId, plan);
+  assert.equal(agent.reflectionPlan(marked, npcId), null);
+  assert.equal(agent.validAgentMemory(marked), true);
+  const result = {
+    reflection: '玩家愿意陪我练习展示，我开始敢承认自己害怕。',
+    core: '我想把课程展示准备好，也愿意在紧张时向信任的人求助。',
+    focus: '准备展示',
+    memories: [{ kind: 'promise', text: '玩家答应陪我练习展示', importance: 5, tags: ['约定', '展示'] }]
+  };
+  const updated = agent.applyReflection(marked, npcId, result, plan, 'term-end');
+  assert.equal(agent.validAgentMemory(updated), true);
+  assert.equal(updated.npcAgentMemory.byNpc[npcId].lastReflection.term, 1);
+  assert.equal(updated.npcAgentMemory.byNpc[npcId].memories.length, 1);
+  assert.match(agent.memoryPrompt(updated, npcId, '展示'), /核心档案|相关记忆/);
+  assert.equal(agent.parseReflection(JSON.stringify({ ...result, coreMemory: result.core })).core, result.core);
+  assert.equal(agent.parseReflection(JSON.stringify({ ...result, coreMemory: 'x'.repeat(181) })), null);
+});
+
+test('长期记忆作为存档侧车通过完整状态校验', () => {
+  let state = game.chooseBudget(game.createGame({ seed: 'agent-memory-validation' }), game.DEFAULT_BUDGET).state;
+  state = { ...state, npcAgentMemory: { version: 1, byNpc: { linXia: {
+    core: { text: '我想准备好展示，也愿意向信任的人求助。', term: 1, revision: state.revision, trigger: 'term-end' },
+    memories: [{ id: 'r:1:linXia:0', revision: state.revision, term: 1, kind: 'promise', text: '玩家答应陪我练习展示', importance: 5, tags: ['约定', '展示'] }],
+    lastReflection: { term: 1, revision: state.revision, text: '我开始愿意承认自己害怕。', focus: '准备展示' },
+    lastAttempt: { term: 1, revision: state.revision, kind: 'reflection' }
+  } } } };
+  assert.equal(agent.validAgentMemory(state), true);
+  const check = game.validateState(state);
+  assert.equal(check.ok, true, check.reason);
+});
+
+test('人物对话可接受但不持久化 thought，非法 thought 被拒绝', () => {
+  const parsed = agent.parse(JSON.stringify({ say: '可以，你陪我练一次吗？', intent: 'none', thought: '其实我很怕上台' }), [], 'linXia');
+  assert.equal(parsed.say, '可以，你陪我练一次吗？');
+  assert.equal(parsed.thought, '其实我很怕上台');
+  assert.equal(agent.parse(JSON.stringify({ say: '好', intent: 'none', thought: 'x'.repeat(61) }), [], 'linXia'), null);
+});
+
+test('人物反思请求受消息预算限制，并能解析结构化结果', async () => {
+  const npcId = 'linXia';
+  const base = cast.meet(cast.meet(game.createGame({ seed: 'agent-reflection-request' }), npcId), 'zhouNing');
+  const state = {
+    ...base,
+    phase: 'summary',
+    revision: 100,
+    history: [{ revision: 90, term: 1, command: { operation: 'recordNpcDialogue' }, dialogue: { npcId, kind: 'chat', text: '我有点害怕上台展示', say: '我陪你练' } }],
+    npcAgentMemory: { version: 1, byNpc: { [npcId]: { core: { text: '我想准备好课程展示。', term: 1, revision: 90, trigger: 'term-end' } } } }
+  };
+  const plan = agent.reflectionPlan(state, npcId);
+  assert.ok(plan);
+  let request;
+  const relay = 'https://example.invalid/reflect';
+  const result = await agent.requestReflection({
+    plan, relay,
+    fetchFn: async (url, options) => {
+      request = JSON.parse(options.body).messages;
+      return { ok: true, json: async () => ({ reply: JSON.stringify({ reflection: '我开始愿意承认自己害怕。', coreMemory: '我想准备好展示，也愿意向信任的人求助。', focus: '准备展示', memories: [{ kind: 'promise', text: '玩家答应陪我练习展示', importance: 5 }] }) }) };
+    }
+  });
+  assert.equal(result.core, '我想准备好展示，也愿意向信任的人求助。');
+  assert.ok(request.length <= 14 && request.every(row => row.content.length <= 600));
+  assert.ok(request.some(row => row.content.includes('害怕上台')) || request.some(row => row.content.includes('展示')));
+});
