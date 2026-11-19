@@ -10,7 +10,7 @@ const game = require('./game.js');
 const saves = require('./save.js');
 const sms = require('./sms.js');
 
-test('家庭预算在入学、钱包与成长记录中展示；选课页不再重复预算；打开收支不重复拨款', () => {
+test('家庭预算在预算页、钱包与成长记录中展示；录取页不重复预算；打开收支不重复拨款', () => {
   const ui = app();
   ui.start();
   let seed = 'budget-ui-0';
@@ -21,22 +21,34 @@ test('家庭预算在入学、钱包与成长记录中展示；选课页不再�
   assert.match(enrollment, /你的家庭环境/);
   assert.match(enrollment, /你来自一个收入稳定的普通家庭/);
   assert.doesNotMatch(enrollment, /每月|个月/);
+  assert.doesNotMatch(enrollment, /默认预留|基础通勤|开学可支配资金|<h3>本学期生活费/);
+  ui.evaluate('showBudget()');
+  const budget = ui.element('#dialogBody').innerHTML;
+  assert.match(budget, /本学期生活费/);
+  assert.match(budget, /\+6000 元/);
+  assert.match(budget, /默认预留 <b>4800 元/);
+  assert.match(budget, /1200 元/);
+  assert.doesNotMatch(budget, /当前可用余额/);
+  assert.ok(budget.indexOf('data-budget-tier=') < budget.indexOf('本学期预算合计'));
+  assert.ok(budget.indexOf('本学期预算合计') < budget.indexOf('本学期生活费'));
   ui.evaluate("showBackground()");
   assert.match(ui.element("#dialogBody").innerHTML, /你的家庭环境/);
-  assert.match(enrollment, /\+6000 元/);
-  assert.match(enrollment, /默认预留 <b>4800 元/);
-  assert.match(enrollment, /普通 <b>1000 元/);
-  assert.match(enrollment, /普通宿舍 <b>1000 元/);
-  assert.match(enrollment, /基础通勤 <b>400 元/);
-  assert.match(enrollment, /1200 元/);
   ui.evaluate('showCourseSelection()');
   assert.equal(ui.evaluate('dialogMode'), 'budget', '未确认预算时仍先进入预算页');
   ui.evaluate('dialog.close()');
   const before = JSON.stringify(ui.evaluate('state'));
   ui.click('#mapStats', { walletBudget: '1' });
   assert.equal(ui.evaluate('dialogMode'), 'wallet');
-  assert.match(ui.element('#dialogBody').innerHTML, /历次学期拨款/);
-  assert.match(ui.element('#dialogBody').innerHTML, /当前可用余额/);
+  const wallet = ui.element('#dialogBody').innerHTML;
+  assert.match(wallet, /历次学期拨款/);
+  assert.match(wallet, /当前余额/);
+  assert.doesNotMatch(wallet, /当前可用余额/);
+  assert.match(wallet, /衣 · 普通 <b>1000 元/);
+  assert.match(wallet, /食 · 普通 <b>2400 元/);
+  assert.match(wallet, /住 · 普通宿舍 <b>1000 元/);
+  assert.match(wallet, /行 · 基础通勤 <b>400 元/);
+  assert.match(wallet, /本学期现金流/);
+  assert.match(wallet, /经济状态/);
   assert.equal(JSON.stringify(ui.evaluate('state')), before);
   ui.evaluate('showDialog("history", "成长记录", growthRecord())');
   assert.match(ui.element('#dialogBody').innerHTML, /家庭生活费到账/);
@@ -292,7 +304,7 @@ test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可�
   const before = ui.evaluate('state.revision');
   ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(before) });
   assert.equal(ui.evaluate('state.money'), 900);
-  assert.equal(ui.element('#growthCount').textContent, '1 / 14');
+  assert.equal(ui.element('#growthCount').textContent, '1 / 16');
   assert.match(ui.element('#growthNodes').innerHTML, /已拥有 ✓/);
   assert.match(ui.element('#growthNotice').textContent, /支出 300 元/);
   assert.match(ui.evaluate('growthRecord()'), /添置舒适寝具/);
@@ -307,7 +319,7 @@ test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可�
   ui.click('#loadButton');
   ui.click('#dialogBody', { loadSlot: '3', saveSource: 'primary' });
   assert.equal(ui.evaluate('JSON.stringify(state)'), purchased);
-  assert.equal(ui.element('#growthCount').textContent, '1 / 14');
+  assert.equal(ui.element('#growthCount').textContent, '1 / 16');
   ui.click('#growthClose');
   ui.element('#growthToggle').emit('click', { stopPropagation() {} });
   assert.equal(ui.evaluate('openPanelName'), 'growth');
@@ -895,7 +907,7 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
   assert.match(ui.element('#dialogBody').innerHTML, /期末考试/);
 });
 
-test('开学确认基础费用与住宿档位：固定底座不可选、住宿三档、低体能警告与不可负担禁用', () => {
+test('开学预算四项各三档可选、低体能警告与不可负担禁用', () => {
   const ui = app();
   ui.start(false);
   let seed = 'budget-picker-0';
@@ -903,25 +915,48 @@ test('开学确认基础费用与住宿档位：固定底座不可选、住宿�
   ui.evaluate('state = CampusGame.createGame({ seed: ' + JSON.stringify(seed) + ' }); budgetDraft = null; budgetDraftTerm = null; renderState(); showBudget()');
   assert.equal(ui.evaluate('dialogMode'), 'budget');
   let body = ui.element('#dialogBody').innerHTML;
-  // 只有住宿渲染档位按钮；衣/食/行为固定底座行，legacy 档位不再提供。
-  assert.equal((body.match(/data-budget-dimension/g) || []).length, 3);
-  for (const dimension of ['clothing', 'food', 'transport']) assert.doesNotMatch(body, new RegExp('data-budget-dimension="' + dimension));
-  assert.equal((body.match(/data-budget-tier=/g) || []).length, 3);
-  assert.equal((body.match(/data-budget-dimension="housing"/g) || []).length, 3);
-  assert.equal((body.match(/本学期固定安排/g) || []).length, 3);
-  assert.doesNotMatch(body, /精致|出色|品鉴家|健康|极简/);
-  assert.match(body, /影响待完善/);
+  // 四个维度都渲染三个可选档位，legacy 档位不出现在界面。
+  assert.equal((body.match(/data-budget-dimension=/g) || []).length, 12);
+  for (const dimension of ['clothing', 'food', 'housing', 'transport']) {
+    assert.equal((body.match(new RegExp('data-budget-dimension="' + dimension + '"', 'g')) || []).length, 3, dimension);
+  }
+  assert.equal((body.match(/data-budget-tier=/g) || []).length, 12);
+  assert.doesNotMatch(body, /data-budget-tier="excellent"|data-budget-tier="healthy"|固定安排|影响待完善/);
+  assert.match(body, /精致/);
+  assert.match(body, /品鉴家/);
+  assert.match(body, /打车出行/);
   assert.match(body, /本学期预算合计 4800 元/);
   assert.match(body, /与默认预留持平/);
-  assert.equal((body.match(/aria-pressed="true"/g) || []).length, 1);
+  assert.equal((body.match(/aria-pressed="true"/g) || []).length, 4);
   assert.doesNotMatch(ui.element('#dialogButtons').innerHTML, /disabled/);
   assert.equal(ui.evaluate('state.money'), 1200);
 
   ui.evaluate('state = { ...state, fitness: 21 }; showBudget()');
   assert.match(ui.element('#dialogBody').innerHTML, /预计体能 24，低于 25 会生病/);
 
+  ui.evaluate('dialog.scrollTop = 222');
   ui.click('#dialogBody', { budgetDimension: 'clothing', budgetTier: 'refined' });
-  assert.equal(ui.evaluate('budgetDraft.clothing'), 'ordinary', '固定维度不响应档位点击');
+  assert.equal(ui.evaluate('budgetDraft.clothing'), 'refined');
+  assert.equal(ui.evaluate('dialog.scrollTop'), 222, '选择档位后保持滚动位置');
+  body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /本学期预算合计 5400 元/);
+  assert.match(body, /需追加 600 元/);
+  ui.click('#dialogBody', { budgetDimension: 'clothing', budgetTier: 'ordinary' });
+
+  ui.click('#dialogBody', { budgetDimension: 'food', budgetTier: 'gourmet' });
+  assert.equal(ui.evaluate('budgetDraft.food'), 'gourmet');
+  body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /本学期预算合计 5800 元/);
+  assert.match(body, /需追加 1000 元/);
+  ui.click('#dialogBody', { budgetDimension: 'food', budgetTier: 'ordinary' });
+
+  ui.click('#dialogBody', { budgetDimension: 'transport', budgetTier: 'taxi' });
+  assert.equal(ui.evaluate('budgetDraft.transport'), 'taxi');
+  body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /本学期预算合计 5400 元/);
+  assert.match(body, /需追加 600 元/);
+  ui.click('#dialogBody', { budgetDimension: 'transport', budgetTier: 'basic' });
+
   ui.click('#dialogBody', { budgetDimension: 'housing', budgetTier: 'offCampus' });
   body = ui.element('#dialogBody').innerHTML;
   assert.match(body, /本学期预算合计 6800 元/);
@@ -939,8 +974,10 @@ test('开学确认基础费用与住宿档位：固定底座不可选、住宿�
   ui.flush();
   assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
   assert.equal(ui.evaluate('state.economy.grants[0].budgetChosen'), true);
+  assert.equal(ui.evaluate('state.economy.grants[0].budget.clothing'), 'ordinary');
   assert.equal(ui.evaluate('state.economy.grants[0].budget.food'), 'ordinary');
   assert.equal(ui.evaluate('state.economy.grants[0].budget.housing'), 'ordinaryDorm');
+  assert.equal(ui.evaluate('state.economy.grants[0].budget.transport'), 'basic');
   assert.equal(ui.evaluate('state.money'), 1200);
 });
 
@@ -1308,7 +1345,7 @@ test('行动卡展示体能成本，体能不足时禁用并提示', () => {
   assert.match(ui.element('#investment-reason-action-study').textContent, /身体不适，先去校医院就诊/);
 });
 
-test('锻炼结果区分体能消耗与扣除消耗后的净变化', () => {
+test('锻炼结果区分体能消耗与结算后的实际变化', () => {
   const ui = app(); ui.start();
   ui.evaluate('openPlace("think")');
   assert.doesNotMatch(ui.element('#actionList').innerHTML, /运动会消耗体能/);
@@ -1331,7 +1368,7 @@ test('锻炼结果区分体能消耗与扣除消耗后的净变化', () => {
   ui.click('#actionList', { action: 'exercise', revision: String(ui.evaluate('state.revision')) });
   assert.equal(ui.evaluate('dialogMode'), 'eventResult');
   assert.match(ui.element('#dialogBody').innerHTML, /另消耗 <b>2 点体能<\/b>/);
-  assert.match(ui.element('#dialogBody').innerHTML, /体能 \+\d+(?:\.\d+)? 是扣除本次 2 点消耗后的净变化/);
+  assert.match(ui.element('#dialogBody').innerHTML, /实际变化<\/span><b>[^<]*体能 \+\d+(?:\.\d+)?/);
 });
 
 test('状态卡显示体能挡位与生病警告', () => {

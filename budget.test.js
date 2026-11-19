@@ -38,17 +38,18 @@ function pending(state, id) {
   return { ...state, phase: 'eventPending', pendingEvent: { id, term: state.term, instanceId: 'daily:' + id + ':' + state.term } };
 }
 const LOW = { clothing: 'minimal', food: 'minimal', housing: 'ordinaryDorm', transport: 'basic' };
-const HIGH = { clothing: 'refined', food: 'gourmet', housing: 'offCampus', transport: 'basic' };
+const HIGH = { clothing: 'refined', food: 'gourmet', housing: 'offCampus', transport: 'taxi' };
 
-test('四维预算配置：四维独立、普通合计4800、最高8400、最低3100，行暂未完善', () => {
+test('四维预算配置：四维各三档，普通合计4800、最高9000、最低3100', () => {
   const dimensions = game.BUDGET_DIMENSIONS;
   assert.deepEqual(Object.keys(dimensions), ['clothing', 'food', 'housing', 'transport']);
   assert.deepEqual(dimensions.clothing.tiers.map(tier => tier.id), ['refined', 'excellent', 'ordinary', 'minimal']);
   assert.deepEqual(dimensions.food.tiers.map(tier => tier.id), ['gourmet', 'healthy', 'ordinary', 'minimal']);
   assert.deepEqual(dimensions.housing.tiers.map(tier => tier.id), ['offCampus', 'luxuryDorm', 'ordinaryDorm']);
-  assert.deepEqual(dimensions.transport.tiers.map(tier => tier.id), ['basic']);
-  assert.equal(dimensions.transport.pending, true);
-  assert.deepEqual(dimensions.transport.tiers[0].effects, {});
+  assert.deepEqual(dimensions.transport.tiers.map(tier => tier.id), ['taxi', 'transit', 'basic']);
+  for (const dimension of Object.values(dimensions)) assert.equal(dimension.tiers.filter(tier => !tier.legacy).length, 3, dimension.id);
+  assert.deepEqual(dimensions.transport.tiers.filter(tier => !tier.legacy).map(tier => tier.id), ['taxi', 'transit', 'basic']);
+  assert.deepEqual(dimensions.transport.tiers.find(tier => tier.id === 'basic').effects, {});
   assert.deepEqual(dimensions.housing.dormEvents, ['roommateCare', 'night', 'insomnia', 'flu', 'parcel', 'wall', 'ticket3']);
   const ordinary = game.budgetPlan(game.DEFAULT_BUDGET);
   assert.equal(ordinary.costs.total, 4800);
@@ -56,7 +57,7 @@ test('四维预算配置：四维独立、普通合计4800、最高8400、最低
   assert.equal(ordinary.costs.food, 2400);
   assert.equal(ordinary.costs.housing, 1000);
   assert.equal(ordinary.costs.transport, 400);
-  assert.equal(game.budgetPlan(HIGH).costs.total, 8400);
+  assert.equal(game.budgetPlan(HIGH).costs.total, 9000);
   assert.equal(game.budgetPlan(LOW).costs.total, 3100);
   assert.equal(game.budgetPlan({ ...game.DEFAULT_BUDGET, food: 'unknown' }), null);
   assert.equal(game.budgetPlan({ clothing: 'ordinary', food: 'ordinary', housing: 'ordinaryDorm' }), null);
@@ -95,13 +96,13 @@ test('高预算追加差额并截断属性上限，低预算退回差额且不�
   assert.equal(rich.money, 5200);
   const high = game.chooseBudget(rich, HIGH);
   assert.equal(high.ok, true, high.reason);
-  assert.equal(high.state.money, 1600);
-  assert.equal(high.changes.money, -3600);
+  assert.equal(high.state.money, 1000);
+  assert.equal(high.changes.money, -4200);
   assert.equal(high.state.mood, 100);
   assert.equal(high.state.social, 40);
-  assert.equal(high.state.energy, 90);
+  assert.equal(high.state.energy, 94);
   assert.equal(high.state.fitness, 42);
-  assert.equal(game.currentGrant(high.state).budgetDelta, 3600);
+  assert.equal(game.currentGrant(high.state).budgetDelta, 4200);
 
   const capped = { ...rich, mood: 98, social: 99, energy: 99, fitness: 99 };
   const top = game.chooseBudget(capped, HIGH);
@@ -133,7 +134,7 @@ test('不可负担、重复确认、非法档位与选课后确认均原子拒�
   const before = JSON.stringify(state);
   const expensive = game.chooseBudget(state, HIGH);
   assert.equal(expensive.ok, false);
-  assert.match(expensive.reason, /追加 3600 元/);
+  assert.match(expensive.reason, /追加 4200 元/);
   assert.equal(JSON.stringify(state), before);
 
   const invalid = game.chooseBudget(state, { ...game.DEFAULT_BUDGET, clothing: 'unknown' });
@@ -301,7 +302,7 @@ test('预算快照、命令选择、扣款与总结快照被篡改时校验拒�
   assert.equal(game.validateState(state).ok, true);
   const tampered = [
     next => { game.currentGrant(next).budget.housing = 'offCampus'; },
-    next => { game.currentGrant(next).budgetCosts.total = 8400; },
+    next => { game.currentGrant(next).budgetCosts.total = 9000; },
     next => { game.currentGrant(next).budgetEffects.mood = 10; },
     next => { game.currentGrant(next).budgetModifiers.restMultiplier = 1.3; },
     next => { game.currentGrant(next).budgetDelta = 3600; },

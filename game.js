@@ -185,9 +185,42 @@
       const positionCosts = POSITIONS[state.chains.internship.positionId].costs;
       if (positionCosts && positionCosts.fitness) action.fitnessCost = (action.fitnessCost || 0) + positionCosts.fitness;
     }
+    if (Array.isArray(action.incomeByAverage)) {
+      const average = averageGrade(state);
+      const tier = action.incomeByAverage.find(item => average >= item.min);
+      action.income = tier ? tier.income : 0;
+    }
     return action;
   }
   function averageGrade(state) { return state.courses.length ? state.courses.reduce((sum, item) => sum + item.grade, 0) / state.courses.length : 0; }
+  function economySummary(state) {
+    const grant = currentGrant(state);
+    let earned = 0;
+    let spent = 0;
+    for (const entry of state.history) {
+      if (entry.term !== state.term || entry.command?.operation === 'chooseBudget') continue;
+      const delta = entry.changes?.money || 0;
+      if (delta > 0) earned += delta;
+      else if (delta < 0) spent += -delta;
+      earned += entry.cardDebtPaid || 0;
+    }
+    const allowance = grant?.allowance || 0;
+    const budget = grant?.livingCost || 0;
+    return {
+      term: state.term, opening: grant?.openingMoney || 0, allowance, budget, earned, spent,
+      net: allowance - budget + earned - spent, balance: state.money, debt: state.cardDebt || 0
+    };
+  }
+  function economyTag(state) {
+    const earnedTotal = state.history.reduce((sum, entry) => {
+      if (entry.command?.operation === 'chooseBudget') return sum;
+      return sum + Math.max(0, entry.changes?.money || 0) + (entry.cardDebtPaid || 0);
+    }, 0);
+    if ((state.cardDebt || 0) > 0) return { id: 'debt', label: '待还清' };
+    if (earnedTotal >= 8000) return { id: 'independent', label: '经济独立' };
+    if (state.term >= 6 && state.money < 500) return { id: 'paycheck', label: '月光' };
+    return { id: 'steady', label: '收支平稳' };
+  }
   function basketballReward(hits) {
     let tier = BASKETBALL.rewards[0];
     for (const item of BASKETBALL.rewards) if (hits >= item.minHits) tier = item;
@@ -355,6 +388,8 @@
     if (isSick(state) && id !== 'treatment') return { ok: false, reason: ILLNESS_REASON };
     if (baseAction.requiresGrowth && !state.growth?.purchased[baseAction.requiresGrowth]) return { ok: false, reason: '请先在校园养成中购买' + GROWTH_NODES[baseAction.requiresGrowth].title };
     if (baseAction.experience && state.experiences.some(item => item.type === baseAction.experience)) return { ok: false, reason: '本局已经完成' + baseAction.experienceTitle + '，可在简历中查看' };
+    if (baseAction.requiresExperience && !state.experiences.some(item => item.type === baseAction.requiresExperience)) return { ok: false, reason: '需要先完成' + (baseAction.requiresExperienceTitle || '相关经历') };
+    if (baseAction.oncePerRun && state.history.some(entry => entry.command?.operation === 'executeAction' && entry.command.id === id)) return { ok: false, reason: '本局已经领取过这项收入' };
     if (baseAction.sickOnly && !isSick(state)) return { ok: false, reason: '现在身体没有不适，不需要就诊' };
     const profile = getActionInvestment(state, id);
     if (!profile && requestedAmount !== undefined) return { ok: false, reason: '这个行动不需要设置投入' };
@@ -1614,7 +1649,7 @@
     }
     return { ok: true, state };
   }
-  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, growthRequirements, growthAvailability, growthStatus, purchaseGrowth, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, budgetPlan, currentGrant, activeBudget, housingFor, placeFor, placeDescription, applyDormEventBonus, eventChoiceEffect, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, BASKETBALL, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, basketballReward, availability, previewChanges, executeAction, completeBasketball, eventAvailability, submitEventChoice, previewSettlement, selectCourses, chooseBudget, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, advisories, ADVISORIES, resume, RESUME, COMPANIES, POSITIONS, positionAvailability, REAPPLY_GAP, internshipRequirementMet, internshipProgress, settleInternship, setTargetPosition, REQUIREMENT_LABELS, TIER_LABELS, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
+  const api = { RULES, FAMILIES, ACTION_EXTRAS, GROWTH_NODES, GROWTH_DIMENSIONS, growthRequirements, growthAvailability, growthStatus, purchaseGrowth, BUDGET_DIMENSIONS, DEFAULT_BUDGET, BUDGET_CONFIG_VERSION, budgetPlan, currentGrant, activeBudget, housingFor, placeFor, placeDescription, applyDormEventBonus, eventChoiceEffect, familyForSeed, budgetFor, getActionExtra, actionExtraAvailability, FITNESS_TIERS, BASKETBALL, fitnessTier, isSick, fitnessAdjustedEffect, ILLNESS_REASON, SICK_LEAVE_ID, TERM_NAMES, BACKGROUNDS, PLACES, ACTIONS, ACTION_INVESTMENTS, EVENTS, EVENT_INVESTMENTS, LEGACY_INVESTMENTS, ENDINGS, TERMINAL_ENDINGS, CHAIN_NAMES, AI_CHAT, NPC_CHAT, COURSES, SUBJECTS, QUESTIONS, LEGACY_QUESTIONS, courseById, coursesForTerm, generateExam, ratingFor, gradeFor, createGame, validateNickname, getAction, getActionInvestment, previewActionInvestment, getEventInvestment, previewEventInvestment, averageGrade, economySummary, economyTag, basketballReward, availability, previewChanges, executeAction, completeBasketball, eventAvailability, submitEventChoice, previewSettlement, selectCourses, chooseBudget, beginExam, updateExamAnswers, submitExam, cheatExam, endTerm, continueGame, evaluateEndings, advisories, ADVISORIES, resume, RESUME, COMPANIES, POSITIONS, positionAvailability, REAPPLY_GAP, internshipRequirementMet, internshipProgress, settleInternship, setTargetPosition, REQUIREMENT_LABELS, TIER_LABELS, chooseEnding, npcChatAvailability, chatWithNpc, validateState, stateBrief, replay, getTermStage, resumeRequiredEvents };
   Object.assign(api, { getRelationships, companionAvailability, zhouNingAvailability, interactWithZhouNing, relationshipRules: relationships, characterAgent, zhouNingCandidates, zhouNingOpportunity, recordZhouNingDialogue, resolveZhouNingProposal, npcSupport });
   Object.assign(api, { RANDOM_POOL, CAMPUS_SCHEDULE });
   Object.assign(api, { ANIMALS, ANIMAL_CYCLE_MS, animalCalmWindow, animalCalm, animalAvailability, interactWithAnimal });

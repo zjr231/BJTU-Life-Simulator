@@ -64,9 +64,9 @@ function replayAndSave(state) {
 }
 function bonusesOf(result) { return result.entry.growthBonuses; }
 
-test('十四个单品配置：七维分组、旧节点行为字段保留、金额与前置齐全', () => {
+test('十六个单品配置：七维分组、旧节点行为字段保留、金额与前置齐全', () => {
   const status = game.growthStatus(ready());
-  assert.equal(status.nodes.length, 14);
+  assert.equal(status.nodes.length, 16);
   assert.equal(status.ownedCount, 0);
   assert.deepEqual(game.GROWTH_DIMENSIONS.map(item => item.id), ['clothing', 'food', 'housing', 'transport', 'learning', 'interest', 'habit']);
   for (const node of status.nodes) {
@@ -93,6 +93,11 @@ test('十四个单品配置：七维分组、旧节点行为字段保留、金�
   assert.deepEqual(game.GROWTH_NODES.showcasePlan.unlocks, ['campusShowcase']);
   assert.deepEqual(game.GROWTH_NODES.dormDecor.prereq, { nodes: ['bedding', 'hobbyCorner'], actionCounts: { chat: 2 } });
   assert.deepEqual(game.GROWTH_NODES.dormDecor.unlocks, ['decorateDorm']);
+  assert.equal(game.GROWTH_NODES.laptop.price, 2500);
+  assert.deepEqual(game.GROWTH_NODES.laptop.prereq, { minTerm: 2 });
+  assert.deepEqual(game.GROWTH_NODES.laptop.effects, [{ kind: 'action', actions: ['study', 'selfStudy', 'projectWork', 'showPortfolio'], bonuses: { preparation: 1 } }]);
+  assert.equal(game.GROWTH_NODES.camera.price, 1800);
+  assert.deepEqual(game.GROWTH_NODES.camera.effects, [{ kind: 'action', actions: ['hobbyPractice', 'campusShowcase'], bonuses: { mood: 2, social: 1 } }]);
 });
 
 test('新单品同样受预算确认、余额与阶段门限制', () => {

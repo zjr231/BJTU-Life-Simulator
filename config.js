@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const RULES = { version: 3, appVersion: '0.8.0', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, termLivingCost: 4800, lowMood: 30, fitnessThreshold: 60 };
+  const RULES = { version: 3, appVersion: '0.9.0', saveFormatVersion: 1, terms: 8, time: 12, energy: 80, maxEnergy: 100, maxAttribute: 100, maxPreparation: 100, initialMoney: 1000, initialSocial: 20, initialFitness: 50, initialMood: 70, livingCost: 300, termLivingCost: 4800, lowMood: 30, fitnessThreshold: 60 };
   // initialMoney/livingCost are retained only for the current term of legacy saves.
   const FAMILIES = [
     { id: 'tight', label: '预算较紧', termAllowance: 5200, weight: 20, description: '家里的收支安排得比较紧凑。父母提前为你留好了这一学期的生活费，日常吃住能够安心，额外花销需要多做些计划。临行前，家里人叮嘱你照顾好身体，有困难记得说。' },
@@ -70,6 +70,12 @@
       description: '整理好笔记本、文具和常用工具，让每次自主学习都有清楚的起点。', benefit: '购买后，每学期前两次自学各额外增加 1 点学习进度',
       effects: [{ kind: 'action', actions: ['selfStudy'], bonuses: { preparation: 1 }, perTerm: 2 }]
     },
+    laptop: {
+      id: 'laptop', icon: 'laptop', dimension: 'learning', category: '学习与设备', title: '高性能笔记本', price: 2500,
+      description: '一台能同时跑代码、查资料和剪片的电脑。图书馆闭馆后，它让宿舍也能变成临时工作台。', benefit: '课程学习、自主学习、项目投入与个人作品展示额外 +1 学习进度',
+      prereq: { minTerm: 2 },
+      effects: [{ kind: 'action', actions: ['study', 'selfStudy', 'projectWork', 'showPortfolio'], bonuses: { preparation: 1 } }]
+    },
     portfolioPlan: {
       id: 'portfolioPlan', icon: 'portfolio', dimension: 'learning', category: '学习与实践', title: '个人作品计划', price: 500,
       description: '把自学和项目中的尝试整理成个人作品，在逸夫楼向同学展示你的思路与成果。', benefit: '开启逸夫楼的“整理并展示个人作品”，本局可完成一次并留下作品经历',
@@ -80,6 +86,12 @@
       id: 'hobbyGear', icon: 'guitar', dimension: 'interest', category: '兴趣与活动', title: '入门器材', price: 150,
       description: '一套入门乐器与绘画小工具，带去活动中心，给课余生活留点练习的时间。', benefit: '开放学生活动中心的兴趣练习，每学期最多两次，累计两次可解锁展演计划',
       effects: [], unlocks: ['hobbyPractice']
+    },
+    camera: {
+      id: 'camera', icon: 'camera', dimension: 'interest', category: '兴趣与创作', title: '相机', price: 1800,
+      description: '一台二手微单，配一枚轻便定焦。周末的校园、演出和宿舍合影，都能留下更清楚的画面。', benefit: '兴趣练习与校园小展演额外 +2 心情、+1 社交',
+      prereq: { minTerm: 2 },
+      effects: [{ kind: 'action', actions: ['hobbyPractice', 'campusShowcase'], bonuses: { mood: 2, social: 1 } }]
     },
     showcasePlan: {
       id: 'showcasePlan', icon: 'stage', dimension: 'interest', category: '兴趣与活动', title: '校园展演计划', price: 300,
@@ -188,20 +200,20 @@
       id: 'clothing', label: '衣', title: '衣着与形象',
       description: '衣服、鞋包、饰品和日常打理，决定你在校园里的状态和与人相处时的底气。',
       tiers: [
-        { id: 'refined', label: '精致', cost: 1600, effects: { mood: 16, social: 10 }, legacy: true, description: '换季时认真添置，穿搭和打理都花心思。' },
+        { id: 'refined', label: '精致', cost: 1600, effects: { mood: 16, social: 10 }, description: '换季时认真添置，穿搭和打理都花心思。' },
         { id: 'excellent', label: '出色', cost: 1300, effects: { mood: 8, social: 4 }, legacy: true, description: '几套体面的换洗搭配，重要场合不怯场。' },
         { id: 'ordinary', label: '普通', cost: 1000, effects: { mood: 2, social: 1 }, description: '按需添置，干净合身就好。' },
-        { id: 'minimal', label: '极简', cost: 300, effects: { mood: -8, social: -4 }, legacy: true, description: '能穿就不买，衣柜里只剩最必要的几件。' }
+        { id: 'minimal', label: '极简', cost: 300, effects: { mood: -8, social: -4 }, description: '能穿就不买，衣柜里只剩最必要的几件。' }
       ]
     },
     food: {
       id: 'food', label: '食', title: '三餐与饮食',
       description: '食堂、外卖、水果、补剂和偶尔下馆子。吃得怎样，直接影响精力和身体。',
       tiers: [
-        { id: 'gourmet', label: '品鉴家', cost: 3400, effects: { mood: 18, energy: 10, fitness: -8 }, legacy: true, description: '常去新窗口和校外小店，味蕾满足了，作息和锻炼容易落下。' },
+        { id: 'gourmet', label: '品鉴家', cost: 3400, effects: { mood: 18, energy: 10, fitness: -8 }, description: '常去新窗口和校外小店，味蕾满足了，作息和锻炼容易落下。' },
         { id: 'healthy', label: '健康', cost: 3000, effects: { energy: 16, fitness: 10, mood: -6 }, legacy: true, description: '三餐规律，水果和蛋白质跟上，口味清淡。' },
         { id: 'ordinary', label: '普通', cost: 2400, effects: { energy: 4, fitness: 3 }, description: '食堂为主，偶尔加餐，够吃也够用。' },
-        { id: 'minimal', label: '极简', cost: 1400, effects: { mood: -10 }, legacy: true, description: '能省则省，常靠面包和泡面凑合。' }
+        { id: 'minimal', label: '极简', cost: 1400, effects: { mood: -10 }, description: '能省则省，常靠面包和泡面凑合。' }
       ]
     },
     housing: {
@@ -215,24 +227,30 @@
       ]
     },
     transport: {
-      id: 'transport', label: '行', title: '通勤与出行', pending: true,
-      description: '校内步行、班车和日常通勤。本轮只保留基础通勤费用，属性影响待完善。',
+      id: 'transport', label: '行', title: '通勤与出行',
+      description: '校内步行、班车和日常通勤。出行方式决定路上要花多少体力，也影响一天开始和结束时的心情。',
       tiers: [
-        { id: 'basic', label: '基础通勤', cost: 400, effects: {}, description: '校内步行和班车为主，日常通勤已计入基础预算；属性影响待完善。' }
+        { id: 'taxi', label: '打车出行', cost: 1000, effects: { energy: 4, mood: 3 }, description: '赶时间时直接打车，路上省下精力，也少受天气影响。' },
+        { id: 'transit', label: '公交地铁', cost: 700, effects: { energy: 2, mood: 1 }, description: '办一张公交地铁月卡，跨校区和进城都更方便。' },
+        { id: 'basic', label: '基础通勤', cost: 400, effects: {}, description: '校内步行和班车为主，日常通勤已计入基础预算。' }
       ]
     }
   };
   const DEFAULT_BUDGET = Object.freeze({ clothing: 'ordinary', food: 'ordinary', housing: 'ordinaryDorm', transport: 'basic' });
   // 预算表版本：调档位数值/效果时 +1。存档里确认过的预算快照带此标记，
   // 与当前版本一致才做严格比对；旧版本快照降级为结构校验，保证调表不破坏旧存档。
-  const BUDGET_CONFIG_VERSION = 2;
+  const BUDGET_CONFIG_VERSION = 3;
   const ACTIONS = {
     study: { place: 'think', title: '课程学习', description: '踩着铃声进教室，摊开今天要讲的那一章。一学期下来，笔记越写越厚。', time: 2, energy: 15, fitnessCost: 3, money: 0, preparation: 20, mood: -3, limit: 4 },
     tutoring: { place: 'think', title: '课程补习', description: '约了学长把卡住的章节讲透。两个小时，白板擦了又写。', time: 2, energy: 10, fitnessCost: 2, money: 100, preparation: 25, limit: 2 },
+    scholarship: { place: 'think', title: '奖学金评定', description: '把成绩单、获奖证明和申请材料交到教务处。窗口前排着几个人，桌上摞着厚厚的表格。', time: 1, energy: 0, fitnessCost: 0, money: 0, income: 0, incomeByAverage: [{ min: 90, income: 800 }, { min: 80, income: 400 }], minAverage: 80, limit: 1, hint: '按已结算平均成绩发放；80 分以上可评，90 分以上更高。每学期一次。' },
+    contestPrize: { place: 'think', title: '竞赛奖金登记', description: '把获奖证书和银行卡号递进窗口。工作人员核对完名单，让你在表上签字。', time: 0, energy: 0, fitnessCost: 0, money: 0, income: 600, requiresExperience: 'contest', requiresExperienceTitle: '学科竞赛', oncePerRun: true, hint: '完成学科竞赛后领取，本局一次。' },
     selfStudy: { place: 'library', title: '自主学习', description: '图书馆靠窗的位子，耳机一戴，按自己的节奏过一遍。', time: 2, energy: 12, fitnessCost: 3, money: 0, preparation: 20, limit: 3 },
     furtherStudy: { place: 'library', title: '深造准备', description: '目标院校的招生简章打印出来，一张张贴进计划本，用荧光笔标好时间线。', time: 1, energy: 8, fitnessCost: 2, money: 0, furtherStudy: 20, minTerm: 5, limit: 2 },
+    researchAssistant: { place: 'library', title: '助研工作', description: '帮课题组整理文献、清理数据，再把结果贴进共享文档。老师看完，给你留了下一次的任务。', time: 2, energy: 12, fitnessCost: 3, money: 0, income: 300, furtherStudy: 5, minTerm: 5, minAverage: 75, minPreparation: 60, limit: 2, hint: '需要已结算平均成绩 75、学习进度 60；每学期最多两次。' },
     work: { place: 'gate', title: '校内勤工助学', description: '在值班室坐一个下午。来人办事就登记，没人就翻书。做完这一轮任务，约定好的报酬当场到账。', time: 2, energy: 20, fitnessCost: 4, money: 0, income: 200, social: 2, mood: -5, limit: 3 },
     jobPreparation: { place: 'gate', title: '求职准备', description: '简历逐行改过，面试常见题抄了半本。对着镜子练自我介绍，练到不再卡壳。', time: 1, energy: 8, fitnessCost: 2, money: 0, jobPreparation: 20, minTerm: 5, limit: 2 },
+    jobTrip: { place: 'gate', title: '求职差旅', description: '打印材料、赶早班车、在陌生园区门口核对面试通知。路上花掉的时间和钱，都算进这次求职。', time: 1, energy: 5, fitnessCost: 1, money: 300, jobPreparation: 30, minTerm: 6, limit: 1, hint: '一次外出面试安排；需要 300 元差旅与材料费。' },
     rest: { place: 'dorm', title: '休息调整', description: '拉上帘子睡一觉。再睁眼，天都擦黑了。', time: 1, energy: 0, fitnessCost: 0, money: 0, recovery: 30, mood: 3 },
     chat: { place: 'dorm', title: '室友交流', description: '熄灯前的卧谈，从选课聊到食堂的菜，越聊越精神。', time: 1, energy: 5, fitnessCost: 1, money: 0, social: 5, mood: 8, limit: 2 },
     exercise: { place: 'track', title: '锻炼', description: '去操场跑几圈，出一身汗。晚风吹在脸上，很凉快。', time: 1, energy: 10, fitnessCost: 2, money: 0, fitness: 6, mood: 4, limit: 4, hint: '运动会消耗体能，但锻炼结束后能恢复更多体能。' },
@@ -241,11 +259,13 @@
     basketball: { place: 'track', title: '打篮球', description: '球场上只剩你和一个篮筐。60 秒，从三分线后出手，看看手感能撑到第几球。', time: 1, energy: 12, fitnessCost: 3, money: 0, limit: 2, minigame: 'basketball', hint: '进入投篮小游戏；命中越多，奖励越高。' },
     soloSport: { place: 'track', title: '单人运动', description: '戴上耳机，沿着跑道或骑行道出发。骑行、游泳、跑步，一个人也能把节奏找回来。', time: 1, energy: 3, fitnessCost: 1, money: 0, limit: 3, hint: '精力消耗最少，适合日常保持体能。' },
     walk: { place: 'ginkgo', title: '散步', description: '沿着银杏大道慢慢走，脑子里什么都不装。', time: 1, energy: 0, fitnessCost: 0, money: 0, recovery: 10, mood: 10, limit: 3 },
+    graduationTrip: { place: 'ginkgo', title: '毕业旅行', description: '和室友把想去的地方列了一遍，订票、订房、做攻略。最后一次以学生的身份一起出发。', time: 2, energy: 5, fitnessCost: 1, money: 1200, mood: 20, social: 10, minTerm: 8, limit: 1, experience: 'graduationTrip', experienceTitle: '毕业旅行', hint: '毕业季可选安排；需要 1200 元。' },
     applyProject: { place: 'yifu', title: '申请校园项目', description: '把简历和想法递到老师桌上。老师说：回去等消息。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 2, maxTerm: 6, minPreparation: 40, chain: 'project', kind: 'apply' },
     projectWork: { place: 'yifu', title: '项目投入', description: '例会开到晚上，方案改到第七版，白板上的箭头越画越多。', time: 2, energy: 15, fitnessCost: 3, money: 0, preparation: 10, chain: 'project', kind: 'work', limit: 2 },
     showPortfolio: { place: 'yifu', title: '整理并展示个人作品', description: '把自学笔记和项目尝试排成作品页，讲清楚做法，也认真听一听同学的建议。完成后记入个人作品经历。', time: 1, energy: 8, fitnessCost: 2, money: 0, social: 3, mood: 3, requiresGrowth: 'portfolioPlan', experience: 'portfolio', experienceTitle: '个人作品展示', hint: '购买个人作品计划后开放，本局一次；精力、体能与收益按当前体能档位结算。' },
     hobbyPractice: { place: 'activity', title: '兴趣练习', description: '在活动中心找一个角落，练一段旋律或补完一幅画，进步不大，却让今天多了一点期待。', time: 1, energy: 5, fitnessCost: 1, money: 0, mood: 4, requiresGrowth: 'hobbyGear', growthProgress: true, limit: 2, hint: '购买入门器材后开放，每学期最多两次；心情已满仍可练习并累计展演前置进度。' },
     campusShowcase: { place: 'activity', title: '校园小展演', description: '把练过的片段和作品分享给同学，掌声响起时，才发现平时的积累也能站到台前。', time: 1, energy: 8, fitnessCost: 2, money: 0, social: 4, mood: 6, requiresGrowth: 'showcasePlan', experience: 'showcase', experienceTitle: '校园小展演', hint: '购买校园展演计划后开放，本局一次；完成后记入简历，歌手大赛仍按原流程参加。' },
+    creativeIncome: { place: 'activity', title: '作品接单', description: '把展演片段或作品整理成可交付的小稿，接一次校内社团的海报、摄影或短片需求。', time: 1, energy: 5, fitnessCost: 1, money: 0, income: 200, requiresExperience: 'showcase', requiresExperienceTitle: '校园小展演', limit: 1, hint: '完成校园小展演后开放，每学期一次。' },
     decorateDorm: { place: 'dorm', title: '共同布置与合影', description: '室友搬来收纳盒，你贴好照片，最后挤进同一个镜头，把住过的地方变成共同的纪念。', time: 1, energy: 5, fitnessCost: 1, money: 0, social: 2, mood: 3, requiresGrowth: 'dormDecor', experience: 'dormMemory', experienceTitle: '宿舍布置合影', hint: '购买宿舍共同布置后开放，本局一次；不再收取材料费，完成后留下宿舍纪念。' },
     applyClub: { place: 'activity', title: '参与社团招新', description: '百团大战的摊位一眼望不到头。报名表递出去，扫码进群。', time: 1, energy: 5, fitnessCost: 1, money: 0, minTerm: 1, maxTerm: 6, autumnOnly: true, chain: 'club', kind: 'apply' },
     clubWork: { place: 'activity', title: '社团投入', description: '搬桌子、贴海报、盯签到，忙到嗓子发干。', time: 1, energy: 8, fitnessCost: 2, money: 0, social: 8, chain: 'club', kind: 'work', limit: 2 },
@@ -256,6 +276,7 @@
     sickVisit: { place: 'hospital', title: '看病开药', description: '在候诊区等了半小时。校医开了药，叮嘱按时吃、别熬夜。', time: 1, energy: 3, fitnessCost: 1, money: 60, mood: 8, limit: 2 },
     treatment: { place: 'hospital', title: '校医院就诊', description: '身体已经亮红灯。先挂个号，把状态稳下来。', time: 1, energy: 0, fitnessCost: 0, money: 20, fitnessFloor: 25, sickOnly: true, emergencyMoney: true, hint: '生病时只能先来校医院；诊费 20 元，钱包不够时按现有余额支付。' },
     alumniVolunteer: { place: 'hotel', title: '校友接待志愿', description: '给返校校友签到、指路、搬资料。听他们聊起当年的北交，好像比现在还要热闹。', time: 2, energy: 10, fitnessCost: 2, money: 0, social: 5, mood: 3, limit: 2 },
+    dinnerTreat: { place: 'hotel', title: '请室友聚餐', description: '在红果园宾馆点一桌，把最近各忙各的几个人重新凑齐。结账时心疼一下，坐下来还是觉得值。', time: 1, energy: 0, fitnessCost: 0, money: 100, social: 6, mood: 6, limit: 1, hint: '可选社交支出，每学期一次。' },
     show: { place: 'auditorium', title: '看演出', description: '会堂今晚有演出。灯暗下来的时候，你才想起上次看戏还是高中。', time: 1, energy: 2, fitnessCost: 1, money: 40, mood: 8, social: 2, limit: 3 }
   };
   const ACTION_INVESTMENTS = {

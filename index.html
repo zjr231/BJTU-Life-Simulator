@@ -9,7 +9,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="北交人生">
   <meta name="format-detection" content="telephone=no">
-  <link rel="stylesheet" href="styles.css?v=20261118-lin-animals">
+  <link rel="preload" as="image" href="assets/start-screen-campus.webp">
+  <link rel="stylesheet" href="styles.css?v=20261120-economy">
 </head>
 <body>
   <section class="start-screen" id="startScreen" aria-label="北交人生启动页">
@@ -123,31 +124,31 @@
           <div class="vital" data-vital="energy" data-attr="energy" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">⚡</span>
             <span class="vital-label">精力</span>
-            <span class="vital-track"><i id="barEnergy" style="width:80%"></i></span>
+            <span class="vital-track"><i id="barEnergy" style="height:80%"></i></span>
             <b class="vital-value" id="valueEnergy">80</b>
           </div>
           <div class="vital" data-vital="mood" data-attr="mood" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">☀</span>
             <span class="vital-label">心情</span>
-            <span class="vital-track"><i id="barMood" style="width:70%"></i></span>
+            <span class="vital-track"><i id="barMood" style="height:70%"></i></span>
             <b class="vital-value" id="valueMood">70</b>
           </div>
           <div class="vital" data-vital="fitness" data-attr="fitness" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">◎</span>
             <span class="vital-label">体能</span>
-            <span class="vital-track"><i id="barFitness" style="width:50%"></i></span>
+            <span class="vital-track"><i id="barFitness" style="height:50%"></i></span>
             <b class="vital-value" id="valueFitness">50</b>
           </div>
           <div class="vital" data-vital="social" data-attr="social" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">☺</span>
             <span class="vital-label">社交</span>
-            <span class="vital-track"><i id="barSocial" style="width:20%"></i></span>
+            <span class="vital-track"><i id="barSocial" style="height:20%"></i></span>
             <b class="vital-value" id="valueSocial">20</b>
           </div>
           <div class="vital vital-learning" data-vital="learning" data-attr="learning" role="button" tabindex="0">
             <span class="vital-icon" aria-hidden="true">✎</span>
             <span class="vital-label">学习</span>
-            <span class="vital-track"><i id="barPreparation" style="width:0%"></i></span>
+            <span class="vital-track"><i id="barPreparation" style="height:0%"></i></span>
             <b class="vital-value" id="valuePreparation">0</b>
           </div>
         </div>
@@ -168,7 +169,7 @@
         <div class="semester-dock-copy">
           <span class="semester-dock-urgent" id="semesterDockUrgent" hidden>时间已用完</span>
           <b id="semesterDockTerm">第 1 学期</b>
-          <small id="semesterDockNext">点击地图地点开始安排行动</small>
+          <small id="semesterDockNext">自由安排</small>
         </div>
         <button type="button" id="endTermQuick">结束学期并考试</button>
       </aside>
@@ -208,7 +209,7 @@
       <nav class="growth-rail" aria-label="校园养成入口">
         <button type="button" id="growthToggle" aria-controls="panelGrowth" aria-expanded="false" hidden>
           <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 27V14m0 7C7 21 4 15 5 8c8-1 11 4 11 9m0-3c0-7 5-11 12-10 1 8-4 13-12 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>校园养成</span><small id="growthCount">0 / 14</small>
+          <span>校园养成</span><small id="growthCount">0 / 16</small>
         </button>
       </nav>
 
@@ -232,8 +233,6 @@
               <div class="growth-legend" aria-label="节点状态说明">
                 <span><i class="is-owned"></i>已拥有</span><span><i class="is-ready"></i>可添置</span><span><i class="is-locked"></i>条件未满足</span><span><i class="is-short"></i>余额不足</span>
               </div>
-              <div class="growth-tips"><p><b>添置生活单品</b>衣、食、住、行、学习与兴趣各有长期目标，购买一次本局保留，行动结算时追加对应加成或开放新活动。</p><p><b>养成自己的节奏</b>完成休息、自学、项目投入、兴趣练习和室友交流，解锁下一步计划；部分单品要到达指定学期才开放。</p></div>
-              <p class="growth-footnote">精力、心情、学习进度最高 100。基础工具每学期前两次自学各额外 +1 进度。限次单品（兴趣角、水果篮、公交卡、基础工具）每学期按购买后的实际次数计数，属性已满也会消耗机会。作息计划从下学期起生效。购买后记得保存，新开一局重新培养。</p>
             </section>
           </div>
         </section>
@@ -247,7 +246,6 @@
             </div>
           </div>
           <div class="panel-list" id="profileBrief"></div>
-          <p class="app-panel-note">点击顶部状态条可以查看每项属性的获取方式和作用。</p>
           <p class="app-panel-note" id="energyLabel">精力 80 / 100</p>
           <div class="status-grid" id="mapStats"></div>
           <p class="fitness-warning" id="fitnessWarning" hidden></p>
@@ -259,7 +257,6 @@
         <section class="app-panel" id="panelTerm" data-panel-name="term" hidden aria-label="学业">
           <h3 class="app-panel-title">学业</h3>
           <div class="panel-list" id="termBrief"></div>
-          <p class="app-panel-note" id="termNote">安排完行动后，结束学期进入期末考试。</p>
           <button class="end-term-button" id="endTermButton" type="button">结束学期</button>
         </section>
 
@@ -269,7 +266,6 @@
             <button type="button" class="advisory-close" id="advisoryClose" aria-label="收起手头的事">✕</button>
           </header>
           <div class="advisory-board" id="advisoryList"></div>
-          <p class="app-panel-note">红色为紧急事项；角标只数待办，了结的事收在「有了下落的」。</p>
         </section>
 
         <section class="app-panel" id="panelResume" data-panel-name="resume" hidden aria-label="简历">
@@ -278,7 +274,6 @@
             <button type="button" class="advisory-close" id="resumeClose" aria-label="收起简历">✕</button>
           </header>
           <div class="resume-body" id="resumeBody"></div>
-          <p class="app-panel-note">简历收录实习、项目、竞赛、社团、个人作品、校园展演和宿舍纪念，其他校园经历收进附注。</p>
         </section>
 
         <section class="app-panel" id="panelRelationships" data-panel-name="relationships" hidden aria-label="人物关系网">
@@ -289,7 +284,6 @@
         <section class="app-panel" id="panelRecords" data-panel-name="records" hidden aria-label="成长记录">
           <h3 class="app-panel-title">成长记录</h3>
           <div class="record-summary" id="recordSummary"></div>
-          <p class="app-panel-note record-legend">按学期归档：日常行动；基础事件由学期、成绩或状态条件触发；突发事件在日常行动中随机出现；事件链记录项目 / 社团 / 实习的申请、投入与成果确认；学业节点记录选课、考试与结算。</p>
           <div class="record-chains" id="recordChains"></div>
           <div class="record-toolbar">
             <span class="record-toolbar-title">时间线</span>
@@ -309,7 +303,6 @@
 
         <section class="app-panel" id="panelSaves" data-panel-name="saves" hidden aria-label="存档">
           <h3 class="app-panel-title">存档</h3>
-          <p class="app-panel-note">共 3 个栏位；学期结算与毕业确认后自动保存到当前栏位。</p>
           <div class="panel-grid-2">
             <button class="utility-button" id="saveButton" type="button">保存进度</button>
             <button class="utility-button" id="loadButton" type="button">读取进度</button>
@@ -333,10 +326,6 @@
       </div>
       <div class="drawer-scrim" aria-hidden="true"></div>
 
-      <div class="map-caption">
-        <span class="caption-line"></span>
-        <span>学习 · 项目 · 社团 · 实习 · 校园生活</span>
-      </div>
     </section>
 
     <section class="place-screen" id="placeScreen" aria-hidden="true" inert>
@@ -358,7 +347,7 @@
     <dialog class="basketball-dialog" id="basketballDialog" aria-label="投篮小游戏">
       <div class="basketball-shell">
         <div class="basketball-hud">
-          <div class="basketball-companion" id="basketballCompanionNotice" hidden><img src="assets/characters/zhou-ning-casual-v1.png" alt="周宁"><span>周宁在场边帮你捡球<br><small>一起活动的经历将在结束时记下</small></span></div>
+          <div class="basketball-companion" id="basketballCompanionNotice" hidden><img src="assets/characters/zhou-ning-casual-v1.png" alt="周宁"><span>周宁在场边帮你捡球</span></div>
           <div class="basketball-stat"><span>时间</span><b id="basketballTime">60</b></div>
           <div class="basketball-stat"><span>得分</span><b id="basketballScore">0</b></div>
           <div class="basketball-stat"><span>命中</span><b id="basketballHits">0</b></div>
@@ -368,7 +357,6 @@
           </div>
         </div>
         <canvas id="basketballCanvas" tabindex="0" aria-label="移动鼠标调整瞄准，点击直接投篮；键盘方向键调整，空格出手"></canvas>
-        <p class="basketball-help">移动鼠标调整瞄准，点击直接投篮；距离越远力度越大，每 0.5 秒最多出手一次。</p>
       </div>
     </dialog>
 
@@ -444,7 +432,7 @@
     <footer><span data-dev-notice role="status" aria-live="polite">修改仅影响测试副本 · Esc 关闭</span></footer>
   </dialog>
   <audio id="catHissAudio" src="assets/animals/cat-hiss.wav" preload="auto" hidden></audio>
-  <script src="config.js?v=20261106-p3"></script>
+  <script src="config.js?v=20261120-economy"></script>
   <script src="courses.js?v=20261106-p3"></script>
   <script src="rng.js?v=20261106-p3"></script>
   <script src="relationships.js?v=20261106-p3"></script>
@@ -455,7 +443,7 @@
   <script src="npc-game.js?v=20261118-lin-animals"></script>
   <script src="character-scene.js?v=20261106-p3"></script>
   <script src="state-validation.js?v=20261119-dialogue-summary"></script>
-  <script src="game.js?v=20261106-p3"></script>
+  <script src="game.js?v=20261120-economy"></script>
   <script src="save.js?v=20261106-p3"></script>
   <script src="audio.js?v=20261118-lin-animals"></script>
   <script src="sms.js?v=20261106-p3"></script>
@@ -466,6 +454,6 @@
   <script src="basketball.js?v=20261117-dev1"></script>
   <script src="developer-tools.js?v=20261117-dev1"></script>
   <script src="developer-panel.js?v=20261117-dev2"></script>
-  <script src="app.js?v=20261119-dialogue-summary"></script>
+  <script src="app.js?v=20261120-economy"></script>
 </body>
 </html>

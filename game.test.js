@@ -15,6 +15,8 @@ function actionableState(id) {
   if (action.kind === 'work') state.chains[action.chain] = { status: 'active', progress: 0, startedTerm: 4, deadline: 6, nextEligibleTerm: 1, reviewAfter: 4 };
   return state;
 }
+// 这些行动带有成绩、经历、学期或一次性领取门限，由 economy.test.js 单独覆盖。
+const GATED_ECONOMY_ACTIONS = new Set(['scholarship', 'contestPrize', 'researchAssistant', 'creativeIncome', 'jobTrip', 'graduationTrip']);
 test('未知行动不会修改状态，包括对象原型上的名字', () => {
   const state = game.createGame();
   const before = structuredClone(state);
@@ -44,6 +46,7 @@ test('同样的投入与随机条件获得同样的课程回报，不受剩余�
 });
 test('每个行动的资源边界：刚好满足可执行，任一资源不足不扣费', () => {
   for (const id of Object.keys(game.ACTIONS)) {
+    if (GATED_ECONOMY_ACTIONS.has(id)) continue;
     const initial = actionableState(id);
     const action = game.getAction(initial, id);
     const state = { ...initial, time: action.time, energy: action.energy, money: action.money };
@@ -85,7 +88,7 @@ test('收益上限和已满状态，休息不能增加学期时间', () => {
 });
 test('各行动次数限制阻止刷取，学期切换后清空', () => {
   for (const [id, action] of Object.entries(game.ACTIONS)) {
-    if (!action.limit) continue;
+    if (!action.limit || GATED_ECONOMY_ACTIONS.has(id)) continue;
     const state = { ...actionableState(id), counts: { [id]: action.limit } };
     const execute = candidate => id === 'basketball'
       ? game.completeBasketball(candidate, 25)
