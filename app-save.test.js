@@ -9,6 +9,7 @@ const vm = require('node:vm');
 const game = require('./game.js');
 const saves = require('./save.js');
 const sms = require('./sms.js');
+const characterScene = require('./character-scene.js');
 
 test('家庭预算在预算页、钱包与成长记录中展示；录取页不重复预算；打开收支不重复拨款', () => {
   const ui = app();
@@ -238,7 +239,7 @@ test('仅三项行动有可选消费，付费确认使用原版本号，过期�
   ui.evaluate('openPlace("think")');
   assert.equal(ui.evaluate('offerActionExtra("tutoring", state.revision, 100)'), false);
   ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
-  ui.evaluate('state = CampusGame.chatWithNpc(state, { identityId: "student", quality: 1 }).state');
+  ui.evaluate('state = CampusGame.executeAction(state, "rest").state');
   const before = ui.evaluate('JSON.stringify(state)');
   ui.click('#dialogButtons', { dialogAction: 'extraBuy' });
   assert.equal(ui.evaluate('JSON.stringify(state)'), before);
@@ -365,14 +366,14 @@ test('新学期解锁以聚光灯指向行动、养成与南门岗位', () => {
   assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /term-unlocks|本学期新解锁/);
 });
 
-function app(storage = memory(), withSms = false, withNpc = false, autoStart = true) {
+function app(storage = memory(), withSms = false, autoStart = true, withAnimals = false) {
   const elements = new Map();
   function element(selector) {
     if (!elements.has(selector)) {
       const listeners = new Map();
       const classes = new Set();
       elements.set(selector, {
-        innerHTML: '', textContent: '', value: '', open: false, hidden: false, style: {},
+        innerHTML: '', textContent: '', value: '', open: false, hidden: false, dataset: {}, style: {},
         classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name),
           toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); } },
         addEventListener: (type, callback) => listeners.set(type, callback),
@@ -388,14 +389,14 @@ function app(storage = memory(), withSms = false, withNpc = false, autoStart = t
   const window = element('window');
   window.localStorage = storage;
   window.crypto = { getRandomValues(values) { values[0] = 1; return values; } };
-  const globals = { CampusGame: game, CampusSave: saves, window,
+  const globals = { CampusGame: game, CampusSave: saves, CampusCharacterScene: characterScene, window,
     HTMLDialogElement: class { showModal() {} },
     document: { querySelector: element, querySelectorAll: () => [], body: { style: {} }, addEventListener() {} },
     location: { search: '' }, URLSearchParams, Uint32Array,
     setTimeout(callback) { timers.set(++sequence, callback); return sequence; },
     clearTimeout(id) { timers.delete(id); } };
   if (withSms) globals.CampusSms = sms;
-  if (withNpc) globals.CampusNpc = require('./npc.js');
+  if (withAnimals) globals.CampusAnimals = require('./animals.js');
   const context = vm.createContext(globals);
   vm.runInContext(fs.readFileSync(require.resolve('./app.js'), 'utf8'), context);
   const evaluate = expression => vm.runInContext(expression, context);
@@ -724,159 +725,81 @@ test('进入场所时地图离场、入场动画标记按定时清理，返回�
   assert.equal(placeScreen.classList.contains('is-entering'), true);
 });
 
-test('地图上的偶遇 NPC 渲染，点击直接打开聊天窗口，退出聊天关闭，离场保留淡出', () => {
-  const ui = app(memory(), false, true);
+test('地图只显示已认识的固定人物，三个标记都能打开对应对话', () => {
+  const ui = app();
   ui.start();
-  // 换成立即生成、间隔为 0 的引擎，避免依赖真实时钟；场上限三人由引擎保证。
-  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
-  ui.flush(); ui.flush(); ui.flush();
-  const html = ui.element('#npcLayer').innerHTML;
-  assert.match(html, /npc-figure/);
-  assert.match(html, /npc-svg/);
-  assert.match(html, /npc-label/);
-  assert.equal((html.match(/data-npc-id=/g) || []).length, 3);
-  const id = ui.evaluate('npcSystem.active()[0].id');
-  const label = ui.evaluate('npcSystem.active()[0].label');
-  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
-  assert.equal(ui.evaluate('dialogMode'), 'npc');
-  assert.equal(ui.element('#dialogTitle').textContent, label);
-  // 点击即聊天窗口：气泡历史（含开场白）+ 输入框，没有"再聊一句"按钮。
-  assert.match(ui.element('#dialogBody').innerHTML, /npc-chat-history/);
-  assert.match(ui.element('#dialogBody').innerHTML, /npc-chat-form/);
-  assert.match(ui.element('#dialogBody').innerHTML, /npc-bubble/);
-  assert.doesNotMatch(ui.element('#dialogButtons').innerHTML, /npcTalk/);
-  assert.match(ui.element('#dialogButtons').innerHTML, /data-dialog-action="npcLeave"/);
-  ui.click('#dialogButtons', { dialogAction: 'npcLeave' });
-  assert.equal(ui.element('#termDialog').open, false);
-  // 引擎判定离场后，NPC 保留淡出标记并渲染出 is-fading（模拟 npcTick 对离场事件的记录）。
-  const removed = ui.evaluate('(() => { const events = npcSystem.tick(Date.now() + 80000); for (const npc of events.removed) npcFades.set(npc.id, { npc, since: Date.now() }); return events.removed.length; })()');
-  assert.ok(removed > 0);
-  ui.flush();
-  assert.match(ui.element('#npcLayer').innerHTML, /is-fading/);
-});
+  const layer = ui.element('#npcLayer');
+  assert.equal(layer.innerHTML, '');
 
-test('NPC 离场时关闭当前聊天并清理会话记录', async () => {
-  const ui = app(memory(), false, true);
-  ui.start();
-  ui.evaluate('Date.now = () => 0; npcSystem = CampusNpc.createSystem({ random: () => 0, settings: { firstDelay: [0, 0], gap: [600000, 600000], lifetime: [100, 100] } }); npcTick()');
-  const id = ui.evaluate('npcSystem.active()[0].id');
-  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
-  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"; window.resolveNpcReply = null; fetch = () => new Promise(resolve => { window.resolveNpcReply = resolve; })');
-  ui.element('#npcChatInput').value = '你好';
-  const pendingReply = ui.evaluate('sendNpcChat()');
-  assert.equal(ui.evaluate('dialogMode'), 'npc');
-  ui.evaluate('Date.now = () => 1000; npcTick()');
-  ui.evaluate('window.resolveNpcReply({ ok: true, json: async () => ({ reply: "迟到回复" }) })');
-  await pendingReply;
-  assert.equal(ui.evaluate('dialogMode'), null);
-  assert.equal(ui.evaluate('npcTalking'), null);
-  assert.equal(ui.evaluate('npcChatLogs.has(' + JSON.stringify(id) + ')'), false);
-  assert.equal(ui.element('#dialogBody').innerHTML.includes('迟到回复'), false);
-  assert.match(ui.element('#toast').textContent, /已经离开/);
-});
-
-test('NPC 在线对话：发送消息走云端回复，气泡就地追加且历史保留，输入复位', async () => {
-  const ui = app(memory(), false, true);
-  ui.start();
-  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
-  ui.flush(); ui.flush();
-  const id = ui.evaluate('npcSystem.active()[0].id');
-  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
-  assert.equal(ui.evaluate('dialogMode'), 'npc');
-  // 输入框打开即在；配置中转地址后发送走云端回复，不重建弹窗。
-  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
-  ui.evaluate('fetch = async (url, options) => ({ ok: true, json: async () => ({ reply: "AI 测试回复：同学好！" }) })');
-  ui.element('#npcChatInput').value = '你好呀';
-  await ui.evaluate('sendNpcChat()');
-  const history = ui.element('#npcChatHistory').innerHTML;
-  assert.match(history, /你好呀/, '玩家消息进入历史气泡');
-  assert.match(history, /AI 测试回复：同学好！/, '云端回复就地追加为气泡');
-  assert.equal(ui.element('#npcChatInput').value, '', '发送后输入框清空');
-  assert.equal(ui.element('#npcChatInput').disabled, false, '发送完成后输入框恢复可用');
-  assert.equal(ui.evaluate('npcChatLogs.get(' + JSON.stringify(id) + ').length'), 3, '开场白加一问一答共三条');
-  // 在线回复不带质量标记时用本地启发式评分结算：'你好呀'是零档，只扣精力与该身份本学期首聊时间。
-  assert.match(ui.element('#dialogNotice').textContent, /这次聊天：时间 −1 · 精力 −1/);
-  assert.equal(ui.evaluate('state.history.at(-1).command.operation'), 'chatWithNpc');
-});
-
-test('NPC 在线对话：中转不可达时回退本地台词并提示，聊天不中断', async () => {
-  const ui = app(memory(), false, true);
-  ui.start();
-  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
-  ui.flush(); ui.flush();
-  const id = ui.evaluate('npcSystem.active()[0].id');
-  const identityId = ui.evaluate('npcSystem.active()[0].identityId');
-  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
-  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
-  ui.evaluate('fetch = async () => { throw new Error("offline"); }');
-  ui.element('#npcChatInput').value = '在吗';
-  const before = ui.evaluate('({ revision: state.revision, energy: state.energy, time: state.time })');
-  await ui.evaluate('sendNpcChat()');
-  // 中转失败的提示随后被结算摘要覆盖；离线兜底照常评分扣费（'在吗'是零档，只有消耗）。
-  assert.match(ui.element('#dialogNotice').textContent, /这次聊天：时间 −1 · 精力 −1/);
-  const after = ui.evaluate('({ revision: state.revision, energy: state.energy, time: state.time })');
-  assert.equal(after.revision, before.revision + 1, '聊天消息提交为一条规则命令');
-  assert.equal(after.energy, before.energy - 1, '每条消息扣 1 精力');
-  assert.equal(after.time, before.time - 1, '学期内首次搭话扣 1 时间');
-  const history = ui.element('#npcChatHistory').innerHTML;
-  assert.match(history, /在吗/, '玩家消息留在历史里，聊天不中断');
-  const lines = ui.evaluate('CampusNpc.linesFor(' + JSON.stringify(identityId) + ')');
-  assert.ok(lines.some((line) => history.includes(line)), '回退台词来自该身份台词库');
-});
-
-test('NPC 聊天规则结算：中转返回质量分按档位加属性，旧版中转的尾部标记被前端剥离', async () => {
-  const ui = app(memory(), false, true);
-  ui.start();
-  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
-  ui.flush(); ui.flush();
-  const id = ui.evaluate('npcSystem.active()[0].id');
-  const identityId = ui.evaluate('npcSystem.active()[0].identityId');
-  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
-  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
-  // 新版中转：{ reply, quality } 结构，质量 2 档。
-  ui.evaluate('fetch = async () => ({ ok: true, json: async () => ({ reply: "谢谢你的建议，加油！", quality: 2 }) })');
-  ui.element('#npcChatInput').value = '老师您好，请问期末复习的重点是什么？';
-  const before = ui.evaluate('({ social: state.social, mood: state.mood, preparation: state.preparation })');
-  await ui.evaluate('sendNpcChat()');
-  assert.equal(ui.evaluate('state.history.at(-1).command.quality'), 2, '采用中转返回的质量分');
-  assert.equal(ui.evaluate('state.social'), before.social + 2, '二档社交 +2');
-  assert.equal(ui.evaluate('state.mood'), before.mood + 4, '二档心情 +4');
-  if (['senior', 'seniorGirl', 'lecturer', 'professor'].includes(identityId)) {
-    assert.equal(ui.evaluate('state.preparation'), before.preparation + 5, '学业身份另加学习进度 +5');
+  ui.evaluate('for (const id of Object.keys(game.npcCast.PROFILES)) state = game.npcCast.meet(state, id); renderState()');
+  const ids = [...layer.innerHTML.matchAll(/data-npc-id="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(ids, ['zhouNing', 'chenTeacher', 'linXia']);
+  for (const id of ids) {
+    const name = game.npcCast.profile(id).name;
+    assert.ok(layer.innerHTML.includes(name + ' · 已认识'));
+    ui.click('#npcLayer', { npcId: id });
+    assert.equal(ui.evaluate('activeNpcId'), id);
+    assert.equal(ui.evaluate('dialogMode'), 'relationship');
+    assert.match(ui.element('#dialogTitle').textContent, new RegExp(name));
+    ui.evaluate('dialog.close()');
   }
-  // 旧版中转：回复末尾带标记、不返回 quality，前端负责剥离并取分。
-  ui.evaluate('fetch = async () => ({ ok: true, json: async () => ({ reply: "不客气，去忙吧。【Q:2】" }) })');
-  ui.element('#npcChatInput').value = '谢谢老师，我明白了！';
-  await ui.evaluate('sendNpcChat()');
-  assert.doesNotMatch(ui.element('#npcChatHistory').innerHTML, /【Q:2】/, '质量标记不进聊天气泡');
-  assert.equal(ui.evaluate('state.history.at(-1).command.quality'), 2, '尾部标记里的质量分被采用');
-  assert.equal(ui.evaluate('state.history.at(-1).changes.social'), 2, '第二条照常按二档结算');
+  ui.click('#dialogButtons', { dialogAction: 'confirmRestart' });
+  assert.equal(layer.innerHTML, '');
 });
 
-test('NPC 聊天规则结算：非 playing 阶段纯闲聊零消耗，精力不足时预检拦下不发消息', async () => {
-  const ui = app(memory(), false, true);
-  ui.start();
-  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
-  ui.flush(); ui.flush();
-  const id = ui.evaluate('npcSystem.active()[0].id');
-  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
-  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
-  ui.evaluate('fetch = async () => ({ ok: true, json: async () => ({ reply: "考试加油。", quality: 2 }) })');
-  // 总结阶段：消息照发（观感层），但不走规则命令，零消耗零收益。
-  ui.evaluate('state = { ...state, phase: "summary", summary: { term: 1 } }; renderState()');
-  const idle = ui.evaluate('({ revision: state.revision, energy: state.energy, time: state.time })');
-  ui.element('#npcChatInput').value = '在吗';
-  await ui.evaluate('sendNpcChat()');
-  assert.deepEqual(ui.evaluate('({ revision: state.revision, energy: state.energy, time: state.time })'), idle, '非 playing 阶段不提交规则命令');
-  assert.doesNotMatch(ui.element('#dialogNotice').textContent, /这次聊天/);
-  // 回到 playing 但精力耗尽：预检拦截，消息不发送、输入保留。
-  ui.evaluate('state = { ...state, phase: "playing", energy: 0 }; renderState()');
-  ui.element('#npcChatInput').value = '还想聊聊';
-  await ui.evaluate('sendNpcChat()');
-  assert.match(ui.element('#dialogNotice').textContent, /精力不够/);
-  assert.ok(!ui.element('#npcChatHistory').innerHTML.includes('还想聊聊'), '预检失败时玩家消息不进历史');
-  assert.equal(ui.element('#npcChatInput').value, '还想聊聊', '输入内容保留可修改');
-  assert.equal(ui.element('#npcChatInput').disabled, false, '输入框未被禁用');
+test('含路人聊天历史的旧存档仍可加载，地图不显示路人', () => {
+  const ui = app();
+  const start = game.createGame({ nickname: '旧版进度', seed: 'old-roaming-npc' });
+  const chat = game.chatWithNpc(start, { identityId: 'senior', quality: 2 });
+  assert.equal(chat.ok, true);
+  const written = saves.createSlotService(ui.storage).save(chat.state, 2);
+  assert.equal(written.ok, true, written.reason);
+  ui.evaluate('loadGame(2)');
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state)')), chat.state);
+  assert.equal(ui.element('#npcLayer').innerHTML, '');
+});
+
+test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返回地图', () => {
+  const cases = [
+    { species: 'cat', pose: 'alert', title: '小猫哈气了', result: /小猫压低耳朵/, mood: '心情 −2' },
+    { species: 'goose', pose: 'calm', title: '摸到了', result: /它轻轻抖了抖羽毛/, mood: '心情 +7' }
+  ];
+  for (const { species, pose, title, result, mood } of cases) {
+    const ui = app(memory(), false, true, true);
+    ui.start();
+    ui.window.animal = { id: 1, species };
+    ui.evaluate('animalSystem = { tick: () => window.animal, finish() {} }');
+    ui.click('#animalLayer', { animalId: '1' });
+    assert.equal(ui.element('#animalDialog').open, true);
+    assert.equal(ui.element('#animalDetail').textContent, '');
+    assert.match(ui.element('#animalButtons').innerHTML, /试着摸一下/);
+    ui.click('#animalButtons', { animalAction: 'pet' });
+
+    const world = ui.element('#animalWorld');
+    const controls = ui.element('#animalControls');
+    for (const currentPose of ['calm', 'alert']) {
+      ui.evaluate('animalTiming.startedAt = animalClock() - ' + (currentPose === 'calm' ? 'animalTiming.start' : '0') + '; updateAnimalTiming()');
+      assert.equal(world.dataset.pose, currentPose);
+      assert.equal(controls.hidden, true);
+      assert.equal(ui.element('#animalCue').textContent, '');
+      assert.equal(ui.element('#animalDetail').textContent, '');
+      assert.equal(ui.element('#animalButtons').innerHTML, '');
+    }
+    if (pose === 'calm') ui.evaluate('animalTiming.startedAt = animalClock() - animalTiming.start; updateAnimalTiming()');
+    ui.click('#animalPetTarget');
+    assert.equal(controls.hidden, true);
+    ui.flush();
+
+    assert.equal(world.dataset.mode, 'result');
+    assert.equal(controls.hidden, false);
+    assert.equal(ui.element('#animalTitle').textContent, title);
+    assert.match(ui.element('#animalCue').textContent, result);
+    assert.equal(ui.element('#animalDetail').textContent, mood);
+    assert.equal(ui.element('#animalButtons').innerHTML, '');
+    assert.equal(ui.element('#animalPetTarget').hidden, true);
+    ui.click('#animalExit');
+    assert.equal(ui.element('#animalDialog').open, false);
+  }
 });
 
 test('开学选课、结束学期开考与期末总结界面可依次渲染', () => {
@@ -905,6 +828,63 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
   assert.equal(ui.evaluate('dialogMode'), 'summary');
   assert.match(ui.element('#dialogBody').innerHTML, /平时分/);
   assert.match(ui.element('#dialogBody').innerHTML, /期末考试/);
+});
+
+function queueTermReflections(ui) {
+  const replies = new Map();
+  ui.window.reflectionFetch = (_, { body }) => {
+    const detail = JSON.parse(body).messages[1].content;
+    const name = detail.match(/^人物：(.+?)（/)[1];
+    return new Promise(resolve => replies.set(name, resolve));
+  };
+  ui.evaluate('fetch = window.reflectionFetch');
+  ui.start(false);
+  ui.evaluate('for (const npcId of Object.keys(game.npcCast.PROFILES)) state = game.npcCast.meet(state, npcId)');
+  ui.click('#endTermButton');
+  ui.click('#dialogButtons', { dialogAction: 'settle', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'summary');
+  assert.equal(replies.size, 3);
+  const pending = ui.evaluate('new Map([...npcReflectionJobs].map(([id, job]) => [id, job.promise]))');
+  return async (npcId, text) => {
+    const name = game.npcCast.profile(npcId).name;
+    replies.get(name)({
+      ok: true,
+      json: async () => ({ reply: JSON.stringify({ reflection: text, coreMemory: text, focus: '', memories: [] }) })
+    });
+    await pending.get(npcId);
+  };
+}
+
+test('学期末三位人物的反思乱序返回，进入下学期后也都能写回', async () => {
+  const ui = app();
+  const reply = queueTermReflections(ui);
+  await reply('linXia', '一起练习接力');
+  ui.flush();
+  ui.click('#dialogButtons', { dialogAction: 'next', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.term'), 2);
+  const nextTermState = ui.evaluate('state');
+  await reply('zhouNing', '一起准备课程展示');
+  await reply('chenTeacher', '一起复盘项目方案');
+
+  const memories = nextTermState.npcAgentMemory.byNpc;
+  assert.equal(memories.linXia.lastReflection?.text, '一起练习接力');
+  assert.equal(memories.zhouNing.lastReflection?.text, '一起准备课程展示');
+  assert.equal(memories.chenTeacher.lastReflection?.text, '一起复盘项目方案');
+  assert.equal(ui.evaluate('state'), nextTermState);
+  assert.ok(Object.values(memories).every(memory => memory.lastReflection.term === 1));
+  assert.equal(game.characterAgent.validAgentMemory(nextTermState), true);
+});
+
+test('读档后，旧存档的迟到反思不会写入当前进度', async () => {
+  const ui = app();
+  const saved = game.createGame({ nickname: '其他进度', seed: 'reflection-other-slot' });
+  assert.equal(saves.createSlotService(ui.storage).save(saved, 2).ok, true);
+  const reply = queueTermReflections(ui);
+  ui.evaluate('loadGame(2)');
+
+  await Promise.all(Object.keys(game.npcCast.PROFILES).map(id => reply(id, '旧进度的回忆')));
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state)')), saved);
+  assert.equal(ui.evaluate('hasUnsavedProgress()'), false);
 });
 
 test('开学预算四项各三档可选、低体能警告与不可负担禁用', () => {
@@ -1620,7 +1600,7 @@ test('实习投入卡显示累计进度，达标后出现「办理实习证明�
 });
 
 test('启动页只展示继续、新游戏、设置和退出；无存档时继续禁用', () => {
-  const ui = app(undefined, true, false, false);
+  const ui = app(undefined, true, false);
   assert.equal(ui.element('#startScreen').hidden, false);
   assert.equal(ui.evaluate('state'), null);
   assert.equal(ui.element('#startContinue').disabled, true);

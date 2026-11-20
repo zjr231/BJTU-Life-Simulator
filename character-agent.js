@@ -479,6 +479,9 @@
   function fallback(state, text, candidates, occasion, npcId = 'zhouNing') {
     const p = cast.profile(npcId);
     if (occasion?.kind === 'meet') return { say: p.intro, intent: 'none' };
+    if (!occasion && /你是谁|你(?:是|在|读|上)(?:哪|什么)(?:所|个)?(?:大学|学校)|你在哪[儿里]?(?:上学|读书|教书|任教)|你(?:是|在)(?:北京交通大学|北交)(?:的)?(?:学生|老师|上学|读书|教书|任教)/.test(text)) {
+      return { say: '我是' + p.name + '，' + p.identity + '。', intent: 'none' };
+    }
     if (npcId !== 'zhouNing') {
       if (occasion?.kind === 'cameo') return { say: npcId === 'chenTeacher' ? '先把眼前的问题和依据说清楚，我帮你检查准备。最后的选择仍由你来做。' : '在这里碰到你啦！一起看看情况，按你的计划来。', intent: 'none' };
       if (occasion?.kind === 'proactive') return { say: npcId === 'chenTeacher' ? '最近的项目准备到哪一步了？有具体问题的话，我们找时间一起梳理一下。' : '刚好碰见你！要不要一起活动一下，或者去散散步？', intent: candidates[0]?.id || 'none' };

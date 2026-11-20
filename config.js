@@ -896,10 +896,7 @@
   // 可选在线对话：relay 为云函数中转地址，空字符串表示关闭（NPC 只回本地台词）。
   // 密钥只放在云函数的环境变量里，前端永远接触不到；未连接或超时自动回退本地台词。
   const AI_CHAT = { relay: 'https://deepseek-relay-bsxioiwmxt.cn-hangzhou.fcapp.run', timeoutMs: 15000, agentMemory: true };
-  // NPC 聊天规则：聊天不再纯观感，走统一规则入口 chatWithNpc（见 game.js）。
-  // 每条消息扣精力；学期内每个身份第一次搭话扣时间（整学期有上限）；
-  // 社交/心情按对话质量分档，学长学姐和老师（academicIdentities）还能指点学习进度（平时分）。
-  // identities 是校验白名单与历史标题用的完整身份表，需与 npc.js 的 IDENTITIES 保持一致（有测试守护）。
+  // 旧版路人聊天的身份和结算规则，用于校验存档与重放历史操作。
   const NPC_CHAT = {
     energyPerMessage: 1,
     timeFirstChatPerIdentity: 1,

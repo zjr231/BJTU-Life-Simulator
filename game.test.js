@@ -627,13 +627,9 @@ test('NPC 聊天可重放，存档校验接受新字段并拒绝被篡改的计�
   assert.equal(game.validateState(exceeded).ok, false, '时间标记超过学期上限');
 });
 
-test('NPC 身份表与 config 白名单一致，防止跨模块漂移', () => {
-  const npc = require('./npc.js');
+test('旧版路人聊天保留存档使用的 17 种身份与收益配置', () => {
   const identities = game.NPC_CHAT.identities;
-  assert.equal(Object.keys(identities).length, npc.IDENTITIES.length);
-  for (const identity of npc.IDENTITIES) {
-    assert.equal(identities[identity.id], identity.label, identity.id);
-  }
+  assert.equal(Object.keys(identities).length, 17);
   for (const id of game.NPC_CHAT.academicIdentities) assert.ok(Object.hasOwn(identities, id), id);
   for (const quality of [0, 1, 2]) {
     const effect = game.NPC_CHAT.qualityEffects[quality];

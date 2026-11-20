@@ -2,7 +2,7 @@
   'use strict';
   // 固定人物资料和纯关系规则；游戏状态只由 game.js 的命令提交。
   const ZHOU_NING = {
-    id: 'zhouNing', name: '周宁', gender: '男', identity: '同年级同学', figure: 'student', place: 'library',
+    id: 'zhouNing', name: '周宁', gender: '男', identity: '北京交通大学学生', figure: 'student', place: 'library',
     description: '在图书馆认识的同年级同学。慢热、认真，也喜欢打球、看演出和沿着校园闲逛。学习只是你们故事的开始。',
     strength: '擅长整理笔记，把零散的知识点串成清楚的思路。',
     weakness: '题目会做，上台讲解却容易紧张。',

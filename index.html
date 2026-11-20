@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-title" content="北交人生">
   <meta name="format-detection" content="telephone=no">
   <link rel="preload" as="image" href="assets/start-screen-campus.webp">
-  <link rel="stylesheet" href="styles.css?v=20261120-agent-memory">
+  <link rel="stylesheet" href="styles.css?v=20261120-fixed-cast">
 </head>
 <body>
   <section class="start-screen" id="startScreen" aria-label="北交人生启动页">
@@ -49,7 +49,7 @@
       <div class="map-layer" id="mapLayer">
         <img class="map-art" src="assets/campus-map-reference.png" alt="北交大主校区地点交互地图">
         <div class="map-wash"></div>
-        <div class="npc-layer" id="npcLayer" aria-hidden="true"></div>
+        <div class="npc-layer" id="npcLayer"></div>
         <div class="animal-layer" id="animalLayer" hidden></div>
 
         <button class="map-hotspot hotspot-activity" data-place="activity" aria-label="进入学生活动中心">
@@ -373,7 +373,7 @@
             <span class="animal-frame animal-frame-startled"></span>
           </div>
         </div>
-        <button type="button" class="animal-pet-target" id="animalPetTarget" aria-describedby="animalCue" hidden></button>
+        <button type="button" class="animal-pet-target" id="animalPetTarget" hidden></button>
         <div class="animal-hand" id="animalHand" aria-hidden="true"><span></span></div>
         <header class="animal-hud">
           <div>
@@ -385,7 +385,7 @@
             <button type="button" class="animal-exit" id="animalExit" aria-label="结束偶遇，返回地图">返回地图</button>
           </div>
         </header>
-        <footer class="animal-controls">
+        <footer class="animal-controls" id="animalControls" hidden>
           <div class="animal-cue-block">
             <p class="animal-cue" id="animalCue" aria-live="polite"></p>
             <p class="animal-detail" id="animalDetail"></p>
@@ -435,10 +435,10 @@
   <script src="config.js?v=20261120-agent-memory"></script>
   <script src="courses.js?v=20261106-p3"></script>
   <script src="rng.js?v=20261106-p3"></script>
-  <script src="relationships.js?v=20261106-p3"></script>
-  <script src="npc-cast.js?v=20261106-p3"></script>
+  <script src="relationships.js?v=20261120-npc-identity"></script>
+  <script src="npc-cast.js?v=20261120-npc-identity"></script>
   <script src="npc-support.js?v=20261106-p3"></script>
-  <script src="character-agent.js?v=20261120-agent-memory"></script>
+  <script src="character-agent.js?v=20261120-npc-identity"></script>
   <script src="npc-director.js?v=20261106-p3"></script>
   <script src="npc-game.js?v=20261118-lin-animals"></script>
   <script src="character-scene.js?v=20261106-p3"></script>
@@ -447,13 +447,12 @@
   <script src="save.js?v=20261106-p3"></script>
   <script src="audio.js?v=20261118-lin-animals"></script>
   <script src="sms.js?v=20261106-p3"></script>
-  <script src="npc.js?v=20261106-p3"></script>
   <script src="animals.js?v=20261118-lin-animals"></script>
   <script src="season.js?v=20261106-p3"></script>
   <script src="vendor/planck.min.js?v=20261106-p3"></script>
   <script src="basketball.js?v=20261117-dev1"></script>
   <script src="developer-tools.js?v=20261117-dev1"></script>
   <script src="developer-panel.js?v=20261117-dev2"></script>
-  <script src="app.js?v=20261120-agent-memory"></script>
+  <script src="app.js?v=20261120-fixed-cast"></script>
 </body>
 </html>

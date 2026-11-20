@@ -1385,8 +1385,7 @@
     const result = { kind: 'graduation', direction: ending.id, title: ending.title, term: 8, reason: '', requirements: clone(ending.requirements), average: state.endingOptions.average, passed: state.endingOptions.passed, experiences: clone(state.experiences), courses: clone(state.courses) };
     return commit(state, { ...state, phase: 'finished', result }, { operation: 'chooseEnding', id }, { action: 'chooseEnding', title: ending.title }, command.commandId);
   }
-  // NPC 聊天预检（只读）：界面发消息前 fail-fast 用，与命令内的检查同一套规则。
-  // 返回本次将消耗的精力/时间，以及该身份本学期是否还有收益与学业指点名额。
+  // 旧版路人聊天的资源与收益检查，供历史操作重放。
   function npcChatAvailability(state, identityId) {
     if (!own(NPC_CHAT.identities, identityId)) return { ok: false, reason: '这位路人不认识，聊不上', state };
     if (isSick(state)) return { ok: false, reason: ILLNESS_REASON, state };
@@ -1403,7 +1402,7 @@
       prepAvailable: NPC_CHAT.academicIdentities.includes(identityId) && record.preps < NPC_CHAT.academicPrepPerIdentity
     };
   }
-  // NPC 聊天：效果完全由命令参数（身份 + 对话质量 0/1/2）决定，不消耗随机数，可精确重放。
+  // 旧版路人聊天的结算由身份和对话质量决定，不消耗随机数。
   // 每条消息扣精力；学期内每身份首条消息扣时间（整学期有上限）；质量>0 且未超收益次数时加社交/心情；
   // 学业身份（学长/学姐/任课老师/教授）另有学习进度加成，计入平时分（期末按 40% 结算）。
   // 收益名额用尽后仍可闲聊（照扣精力、写历史）；不触发校园事件调度。

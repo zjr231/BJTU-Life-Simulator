@@ -46,7 +46,7 @@ let developerPanel = null;
 let developerTesting = false;
 let developerPaused = false;
 let developerPauseStarted = 0;
-let developerNpcOffset = 0;
+let developerAnimalOffset = 0;
 const sms = typeof CampusSms !== 'undefined' ? CampusSms : null;
 const LOGIN_KEY = 'bjtu-life:login';
 const LOGIN_SKIP_KEY = 'bjtu-life:login:skipped';
@@ -74,8 +74,6 @@ let placeEnterTimer;
 let lastSeasonClock = null;
 let seasonVisualKey = '';
 let seasonNoticeTimer = null;
-// 校园偶遇 NPC：纯逻辑在 npc.js，渲染与点击对话在这里。
-// 聊天记录与走位仍是观感层、不进存档；playing 阶段每条消息会走规则命令 chatWithNpc 结算消耗与收益。
 const animals = typeof CampusAnimals !== 'undefined' ? CampusAnimals : null;
 let animalSystem = null;
 let animalMarkerId = null;
@@ -86,15 +84,7 @@ let animalReactionTimer = null;
 let animalPortrait = null;
 let animalPose = null;
 let animalPoseFrame = null;
-const npc = typeof CampusNpc !== 'undefined' ? CampusNpc : null;
-let npcSystem = null;
-let npcTimer = null;
-let npcTalking = null;
-const npcFades = new Map();
-const npcNodes = new Map();
-const npcTalkIndex = new Map();
-const npcChatLogs = new Map();
-let npcTyping = false;
+let renderedMapNpcIds = '';
 let commandSequence = 0;
 let savedRevision = -1;
 let savedNpcDialogueSummaries = '';
@@ -280,48 +270,12 @@ const EVENT_CHOICE_FLAVOR = {
   'memorial129:watch': '谢幕时全场起立。身边有人小声说：这台晚会排了三个月。',
   'memorial129:later': '你拍了张节目单。横幅上的字被风吹得猎猎响。'
 };
-// NPC 2D 小人：同一套基础身型（头、袖、上衣、下摆、腿）加各职位配件，班车单独绘制。
-function npcBody(options) {
-  const skin = options.skin || '#f2c9a0';
-  const top = options.top;
-  return '<circle cx="20" cy="12" r="7" fill="' + skin + '"/>'
-    + '<rect x="9" y="21" width="3" height="11" rx="1.5" fill="' + top + '"/>'
-    + '<rect x="28" y="21" width="3" height="11" rx="1.5" fill="' + top + '"/>'
-    + '<rect x="12" y="20" width="16" height="16" rx="4" fill="' + top + '"/>'
-    + '<rect x="13" y="28" width="14" height="6" rx="2" fill="' + (options.bottom || '#3c4450') + '"/>'
-    + (options.accessory || '')
-    + '<rect x="14" y="36" width="4" height="9" rx="2" fill="' + (options.legs || '#333a45') + '"/>'
-    + '<rect x="22" y="36" width="4" height="9" rx="2" fill="' + (options.legs || '#333a45') + '"/>';
-}
-const NPC_HAIR = '<path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#2b2b33"/>';
-const NPC_HAIR_GREY = '<path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#c9ccd1"/>';
-const NPC_GLASSES = '<circle cx="16" cy="12" r="2.2" fill="none" stroke="#22262b" stroke-width="1.1"/><circle cx="24" cy="12" r="2.2" fill="none" stroke="#22262b" stroke-width="1.1"/><path d="M18.2 12h3.6" stroke="#22262b" stroke-width="1.1"/>';
-const NPC_FIGURES = {
-  student: npcBody({ top: '#2e6fae', bottom: '#f4f4f4', accessory: NPC_HAIR + '<rect x="29" y="21" width="7" height="14" rx="2.5" fill="#7c4a21"/>' }),
-  senior: npcBody({ top: '#5b6b7c', bottom: '#8a97a5', accessory: NPC_HAIR + NPC_GLASSES + '<rect x="29" y="21" width="7" height="14" rx="2.5" fill="#6b4a2b"/>' }),
-  seniorGirl: npcBody({ top: '#8a5ba6', bottom: '#4c5866', accessory: NPC_HAIR + '<path d="M26 7 q7 4 6 12 l-2.4 1 q1.4-7-4.6-10z" fill="#2b2b33"/>' + '<rect x="4" y="24" width="7" height="10" rx="1.5" fill="#5d4037"/>' }),
-  canteen: npcBody({ skin: '#f0c39a', top: '#f7f7f2', bottom: '#f7f7f2', accessory: NPC_HAIR + '<rect x="12" y="2" width="16" height="7" rx="2" fill="#f7f7f2"/><rect x="12" y="2" width="16" height="3" rx="1.5" fill="#d94f4f"/>' }),
-  lecturer: npcBody({ top: '#3f5c77', bottom: '#333a45', accessory: NPC_HAIR + '<path d="M19 21l2 6-2 1-2-1z" fill="#b03a2e"/>' }),
-  staff: npcBody({ top: '#6f7f8f', bottom: '#4c5866', accessory: NPC_HAIR + '<rect x="17" y="21" width="6" height="2" fill="#c26a2e"/><rect x="18" y="23" width="4" height="5" rx="0.8" fill="#f7f7f2"/>' }),
-  security: npcBody({ top: '#2b3440', bottom: '#2b3440', accessory: '<rect x="11" y="3" width="18" height="5" rx="2" fill="#2b3440"/><rect x="9" y="7" width="22" height="2" rx="1" fill="#1c232c"/>' }),
-  courier: npcBody({ top: '#f0a020', bottom: '#d9d9d9', accessory: '<rect x="13" y="3" width="14" height="4.5" rx="2" fill="#f0a020"/><rect x="12" y="20" width="16" height="3" rx="1" fill="#b37000"/>' }),
-  professor: npcBody({ top: '#4a4a55', bottom: '#333a45', accessory: NPC_HAIR_GREY + NPC_GLASSES + '<rect x="4" y="25" width="5" height="8" rx="1" fill="#8d5524"/>' }),
-  international: npcBody({ skin: '#8a5a3b', top: '#e84393', bottom: '#d63384', accessory: '<circle cx="14" cy="7" r="2.6" fill="#1d1d24"/><circle cx="20" cy="5.5" r="3" fill="#1d1d24"/><circle cx="26" cy="7" r="2.6" fill="#1d1d24"/>' }),
-  chef: npcBody({ skin: '#f0c39a', top: '#f7f7f2', bottom: '#f7f7f2', accessory: NPC_HAIR + '<rect x="13" y="0" width="14" height="9" rx="2" fill="#f7f7f2"/><rect x="13" y="0" width="14" height="2.6" rx="1.3" fill="#d94f4f"/>' }),
-  dormAunt: npcBody({ skin: '#f2c9a0', top: '#b0553f', bottom: '#8f6b52', accessory: NPC_HAIR_GREY + '<circle cx="20" cy="4.5" r="2.6" fill="#c9ccd1"/>' }),
-  librarian: npcBody({ top: '#3e7d5c', bottom: '#333a45', accessory: NPC_HAIR + NPC_GLASSES + '<rect x="29" y="24" width="7" height="9" rx="1" fill="#c26a2e"/>' }),
-  rider: npcBody({ top: '#2f6fb0', bottom: '#2f6fb0', accessory: '<path d="M12 8 A8 8 0 0 1 28 8 L27.5 10.5 A7.2 7.2 0 0 0 12.5 10.5 Z" fill="#e8a020"/><rect x="12" y="20" width="16" height="3" rx="1" fill="#e8a020"/><rect x="0" y="24" width="6" height="12" rx="2" fill="#d94f4f"/>' }),
-  coach: npcBody({ top: '#a33333', bottom: '#333a45', accessory: NPC_HAIR + '<circle cx="20" cy="26" r="2.2" fill="#e8e8e8"/><path d="M20 28.2v3" stroke="#e8e8e8" stroke-width="1"/>' }),
-  doctor: npcBody({ top: '#f7f7f2', bottom: '#f7f7f2', accessory: NPC_HAIR + '<rect x="18" y="22" width="4" height="5" fill="#d94f4f"/><rect x="16.5" y="23.2" width="7" height="2.4" fill="#d94f4f"/>' }),
-  bus: '<rect x="3" y="9" width="34" height="27" rx="5" fill="#d94f4f"/>'
-    + '<rect x="6" y="13" width="11" height="9" rx="1.5" fill="#cfeef7"/><rect x="23" y="13" width="11" height="9" rx="1.5" fill="#cfeef7"/>'
-    + '<rect x="6" y="25" width="28" height="3.5" rx="1.5" fill="#a33333"/><rect x="6" y="31" width="28" height="2" rx="1" fill="#7d1f1f"/>'
-    + '<circle cx="12" cy="39" r="4.5" fill="#26272b"/><circle cx="12" cy="39" r="1.8" fill="#8f9296"/>'
-    + '<circle cx="28" cy="39" r="4.5" fill="#26272b"/><circle cx="28" cy="39" r="1.8" fill="#8f9296"/>'
-};
-function npcFigureSvg(figure) {
-  return '<svg class="npc-svg" viewBox="0 0 40 48" aria-hidden="true">' + (NPC_FIGURES[figure] || NPC_FIGURES.student) + '</svg>';
-}
+const NPC_MAP_POSITIONS = { zhouNing: [70, 47], chenTeacher: [48, 37], linXia: [27, 66] };
+const NPC_MAP_ICON = '<svg class="npc-svg" viewBox="0 0 40 48" aria-hidden="true">'
+  + '<circle cx="20" cy="12" r="7" fill="#f2c9a0"/><path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#2b2b33"/>'
+  + '<g fill="#2e6fae"><rect x="9" y="21" width="3" height="11" rx="1.5"/><rect x="28" y="21" width="3" height="11" rx="1.5"/><rect x="12" y="20" width="16" height="16" rx="4"/></g>'
+  + '<rect x="13" y="28" width="14" height="6" rx="2" fill="#f4f4f4"/><rect x="29" y="21" width="7" height="14" rx="2.5" fill="#7c4a21"/>'
+  + '<g fill="#333a45"><rect x="14" y="36" width="4" height="9" rx="2"/><rect x="22" y="36" width="4" height="9" rx="2"/></g></svg>';
 const BUDGET_EFFECT_NAMES = { mood: '心情', social: '社交', energy: '精力', fitness: '体能' };
 function budgetEffectText(effects) {
   return Object.entries(effects || {}).filter(([, value]) => value).map(([key, value]) => (BUDGET_EFFECT_NAMES[key] || key) + ' ' + (value > 0 ? '+' : '−') + Math.abs(value)).join('、') || '无属性变化';
@@ -1157,7 +1111,7 @@ function renderState() {
   renderRecordsPanel();
   renderRelationshipsPanel();
   renderNpcLayer();
-  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(dialogMode);
+  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(dialogMode);
   syncBarHeight();
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
@@ -1465,16 +1419,17 @@ function refreshNpcReflection(npcId, trigger = 'term-end') {
   if (existing?.attemptedAt === state.revision) return null;
   const plan = game.characterAgent.reflectionPlan(state, npcId);
   if (!plan) return null;
-  const snapshot = game.characterAgent.markAttempt(state, npcId, plan);
-  state = snapshot;
+  // 人物记忆是存档附加信息，更新它时保留游戏状态对象。
+  state.npcAgentMemory = game.characterAgent.markAttempt(state, npcId, plan).npcAgentMemory;
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), Math.min(game.AI_CHAT.timeoutMs || 15000, 8000)) : null;
   const job = { controller, attemptedAt: state.revision, promise: null };
   npcReflectionJobs.set(npcId, job);
   job.promise = game.characterAgent.requestReflection({ plan, relay: game.AI_CHAT.relay, fetchFn: fetch, signal: controller?.signal })
     .then(result => {
-      if (!result || npcReflectionJobs.get(npcId) !== job || state !== snapshot) return;
-      state = game.characterAgent.applyReflection(state, npcId, result, plan, trigger);
+      // 读档、重开和切换测试副本时会清空任务表。
+      if (!result || npcReflectionJobs.get(npcId) !== job || !state) return;
+      state.npcAgentMemory = game.characterAgent.applyReflection(state, npcId, result, plan, trigger).npcAgentMemory;
       renderSaveStatus();
     })
     .finally(() => {
@@ -1734,237 +1689,23 @@ function closePlace() {
   if (!dialog.open) lastHotspot?.focus();
   if (!dialog.open) setTimeout(maybeShowEndTermCoach, 220);
 }
-function resetNpcSystem() {
-  resetAnimalSystem();
-  if (!npc) return;
-  npcSystem = npc.createSystem({ random: () => Math.random() });
-  npcFades.clear();
-  npcTalkIndex.clear();
-  npcChatLogs.clear();
-  npcTalking = null;
-  for (const node of npcNodes.values()) node.remove();
-  npcNodes.clear();
-  const layer = $('#npcLayer');
-  if (layer) layer.innerHTML = '';
-}
-function npcDisplayList() {
-  const entries = [];
-  if (npcSystem && state) for (const npc of npcSystem.active()) entries.push({ npc, fading: false });
-  if(state)for(const id of game.npcCast.known(state)){const p=game.npcCast.profile(id),pos={zhouNing:[70,47],chenTeacher:[48,37],linXia:[27,66]}[id];entries.push({npc:{id,label:p.name+' · 已认识',figure:p.figure||'student',x:pos[0],y:pos[1]},fading:false});}
-  const now = Date.now();
-  for (const [id, entry] of npcFades) {
-    if (now - entry.since >= 700) npcFades.delete(id);
-    else entries.push({ npc: entry.npc, fading: true });
-  }
-  return entries;
-}
 function renderNpcLayer() {
   const layer = $('#npcLayer');
   if (!layer) return;
-  if (typeof document.createElement !== 'function') {
-    // 没有节点构造能力的环境（自动化测试）：输出等价的文本标记。
-    layer.innerHTML = npcDisplayList().map((entry) => '<button class="npc-figure' + (entry.fading ? ' is-fading' : '') + '" data-npc-id="' + entry.npc.id + '">' + npcFigureSvg(entry.npc.figure) + '<span class="npc-label">' + h(entry.npc.label) + '</span></button>').join('');
-    return;
-  }
-  const wanted = new Set();
-  for (const entry of npcDisplayList()) {
-    wanted.add(entry.npc.id);
-    let node = npcNodes.get(entry.npc.id);
-    if (!node) {
-      node = document.createElement('button');
-      node.type = 'button';
-      node.className = 'npc-figure';
-      node.dataset.npcId = entry.npc.id;
-      node.setAttribute('aria-label', '和' + entry.npc.label + '搭话');
-      node.innerHTML = npcFigureSvg(entry.npc.figure) + '<span class="npc-label">' + h(entry.npc.label) + '</span>';
-      layer.appendChild(node);
-      npcNodes.set(entry.npc.id, node);
-      // 离场淡出：先按不透明插入，强制一次布局后再加淡出类，让过渡动起来。
-      if (entry.fading) {
-        try { node.getBoundingClientRect(); } catch (_) {}
-        node.classList.add('is-fading');
-      }
-    }
-    node.style.left = entry.npc.x + '%';
-    node.style.top = entry.npc.y + '%';
-    if (entry.fading) node.classList.add('is-fading');
-    else node.classList.remove('is-fading');
-  }
-  for (const [id, node] of npcNodes) {
-    if (wanted.has(id)) continue;
-    node.remove();
-    npcNodes.delete(id);
-  }
+  const ids = state ? game.npcCast.known(state) : [];
+  const key = ids.join(',');
+  if (key === renderedMapNpcIds) return;
+  renderedMapNpcIds = key;
+  layer.innerHTML = ids.map((id) => {
+    const { name } = game.npcCast.profile(id);
+    const [x, y] = NPC_MAP_POSITIONS[id];
+    return '<button type="button" class="npc-figure" data-npc-id="' + id + '" style="left:' + x + '%;top:' + y + '%" aria-label="和' + h(name) + '搭话">'
+      + NPC_MAP_ICON + '<span class="npc-label">' + h(name) + ' · 已认识</span></button>';
+  }).join('');
 }
-function npcTick() {
-  if (!developerPaused && npcSystem && state) {
-    const events = npcSystem.tick(Date.now() - developerNpcOffset);
-    for (const removed of events.removed) {
-      npcFades.set(removed.id, { npc: removed, since: Date.now() });
-      npcChatLogs.delete(removed.id);
-      npcTalkIndex.delete(removed.id);
-      if (npcTalking?.id === removed.id) {
-        npcTyping = false;
-        npcTalking = null;
-        if (dialogMode === 'npc') {
-          dialog.close();
-          dialogMode = null;
-          showToast(removed.label + '已经离开了。');
-        }
-      }
-    }
-  }
-  if (!developerPaused) renderNpcLayer();
-  if (typeof setTimeout === 'function') npcTimer = setTimeout(npcTick, 300);
-}
-function talkToNpc(npcId) {
-  if(state&&game.npcCast.get(state,npcId)&&!dialog.open){showCharacter(npcId);return;}
-  if (!npcSystem || !state || dialog.open) return;
-  const found = npcSystem.active().find((item) => item.id === npcId);
-  if (!found) return;
-  npcTalking = { id: found.id, identityId: found.identityId, label: found.label, figure: found.figure };
-  audio?.play('npc');
-  showNpcChat();
-}
-// 聊天窗口：点击即打开，开场白进历史，气泡式展示；配置了在线中转时输入直接走云函数，失败自动回退本地台词。
-// playing 阶段每条消息走规则命令 chatWithNpc：扣精力（学期内每身份首聊再扣时间），按对话质量加社交/心情，
-// 学长学姐和老师还能指点学习进度；其他阶段纯闲聊，不消耗资源。
-function showNpcChat() {
-  npcTyping = false;
-  // 清掉已离场人物的聊天记录，控制总量；每条对话保留最近 12 条消息。
-  if (npcSystem) {
-    const activeIds = new Set(npcSystem.active().map((item) => item.id));
-    for (const id of [...npcChatLogs.keys()]) if (!activeIds.has(id)) npcChatLogs.delete(id);
-  }
-  let history = npcChatLogs.get(npcTalking.id);
-  if (!history) {
-    const lines = npc.linesFor(npcTalking.identityId);
-    history = [{ role: 'assistant', content: lines[0] }];
-    npcChatLogs.set(npcTalking.id, history);
-    npcTalkIndex.set(npcTalking.id, 1);
-  }
-  const chatForm = '<form id="npcChatForm" class="npc-chat-form"><div class="npc-chat-row"><input id="npcChatInput" maxlength="200" placeholder="说点什么…" autocomplete="off"><button type="submit" class="utility-button">发送</button></div></form>';
-  showDialog('npc', npcTalking.label, '<div class="npc-chat"><div class="npc-chat-history" id="npcChatHistory">' + renderNpcHistory(history) + '</div>' + chatForm + '</div>', [{ id: 'npcLeave', text: '退出聊天', secondary: true }]);
-  scrollNpcChat();
-}
-function npcBubbleMarkup(message) {
-  if (message.role === 'user') return '<div class="npc-msg is-me"><div class="npc-bubble">' + h(message.content) + '</div></div>';
-  return '<div class="npc-msg"><span class="npc-avatar">' + npcFigureSvg(npcTalking.figure) + '</span><div class="npc-bubble">' + h(message.content) + '</div></div>';
-}
-function npcTypingMarkup() {
-  return '<div class="npc-msg"><span class="npc-avatar">' + npcFigureSvg(npcTalking.figure) + '</span><div class="npc-bubble is-typing">对方正在输入…</div></div>';
-}
-function renderNpcHistory(history) {
-  return (history || []).map(npcBubbleMarkup).join('');
-}
-function updateNpcHistory() {
-  const node = document.querySelector('#npcChatHistory');
-  if (!node) return;
-  const history = npcTalking ? (npcChatLogs.get(npcTalking.id) || []) : [];
-  node.innerHTML = renderNpcHistory(history) + (npcTyping ? npcTypingMarkup() : '');
-  scrollNpcChat();
-}
-function scrollNpcChat() {
-  const node = document.querySelector('#npcChatHistory');
-  if (node) { try { node.scrollTop = node.scrollHeight; } catch (_) {} }
-}
-// 在线对话的玩家背景速写，随学期推进变化，让人物回答更贴合当前处境。
-function npcPlayerContext() {
-  if (!state) return '一名新生';
-  const grades = state.courses.filter((item) => item.passed).length;
-  const stage = ({ eventPending: '正在处理校园事件', summary: '正在看学期总结', endingChoice: '正在做毕业方向选择', finished: '已经毕业' })[state.phase] || '正常校园生活';
-  return '昵称' + state.nickname + '，' + (state.background ? state.background.major : '') + '专业，' + game.TERM_NAMES[state.courses.length - 1] + '，已通过' + grades + '学期成绩，深造准备' + state.furtherStudy + '，求职准备' + state.jobPreparation + '，' + stage;
-}
-async function sendNpcChat() {
-  if (!npcTalking || dialogMode !== 'npc') return;
-  const talking = npcTalking;
-  const input = $('#npcChatInput');
-  const text = String(input?.value || '').trim();
-  if (!text) { input?.focus(); return; }
-  if (state && game.isSick(state)) { showToast(game.ILLNESS_REASON); audio?.play('deny'); input?.focus(); return; }
-  // playing 阶段聊天要扣资源：先按规则模块预检，不通过就不发这条消息（不写日志、不扣费、输入保留）。
-  if (state && state.phase === 'playing') {
-    const precheck = game.npcChatAvailability(state, talking.identityId);
-    if (!precheck.ok) { showToast(precheck.reason); audio?.play('deny'); input?.focus(); return; }
-  }
-  const history = npcChatLogs.get(talking.id) || [];
-  history.push({ role: 'user', content: text });
-  npcChatLogs.set(talking.id, history.slice(-12));
-  if (input) input.value = '';
-  updateNpcHistory();
-  const relay = game.AI_CHAT && game.AI_CHAT.relay;
-  const online = !!relay && typeof fetch === 'function';
-  const sendButton = $('#npcChatForm button[type="submit"]');
-  const buttonText = sendButton ? sendButton.textContent : '';
-  if (input) input.disabled = true;
-  if (sendButton) { sendButton.disabled = true; sendButton.textContent = '对方正在输入…'; }
-  if (online) { npcTyping = true; updateNpcHistory(); }
-  let controller = null;
-  let timeoutTimer = null;
-  if (online && typeof AbortController !== 'undefined') {
-    controller = new AbortController();
-    timeoutTimer = setTimeout(() => controller.abort(), (game.AI_CHAT && game.AI_CHAT.timeoutMs) || 15000);
-  }
-  let reply = null;
-  let relayQuality = null;
-  if (online) {
-    try {
-      const persona = npc.IDENTITIES.find((item) => item.id === talking.identityId);
-      const messages = [
-        { role: 'system', content: '你是《北交人生》校园游戏地图上的一位NPC：' + talking.label + '。用中文回答，两三句以内，口语化，符合你的身份。不要用列表和表情包，不要透露你是AI。你常说的话例如：' + persona.lines.join('') + '。另外，每次回复的最后一行单独输出对方这句话的对话质量标记，格式必须是【Q:0】【Q:1】【Q:2】之一：0=敷衍或无关，1=正常礼貌，2=真诚具体、对对方有帮助。' },
-        { role: 'system', content: '正在和你说话的是北京交通大学的学生：' + npcPlayerContext() },
-        ...history.slice(-12)
-      ];
-      const response = await fetch(relay, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }), signal: controller ? controller.signal : undefined });
-      const data = await response.json();
-      const candidate = typeof data?.reply === 'string' ? data.reply.trim() : '';
-      if (!response.ok || !candidate) throw new Error('bad relay response');
-      reply = candidate;
-      relayQuality = Number.isSafeInteger(data?.quality) && data.quality >= 0 && data.quality <= 2 ? data.quality : null;
-      $('#dialogNotice').textContent = '';
-    } catch (_) {
-      // 中转不可达或服务异常：回退本地台词，聊天不中断。
-      reply = null;
-      $('#dialogNotice').textContent = '在线对话通道没连上，先用本地台词聊吧。';
-    } finally {
-      if (timeoutTimer !== null) clearTimeout(timeoutTimer);
-    }
-  }
-  if (npcTalking !== talking) return; // 期间换了聊天对象或已退出，不再写入
-  if (developerPaused) { npcTyping = false; return; }
-  // 对话质量（0/1/2）：优先用中转返回的 quality；旧版中转没剥离标记时在前端剥离尾部【Q:n】；都没有用本地启发式。
-  let quality = relayQuality;
-  const marker = reply === null ? null : reply.match(/【\s*Q[:：]?\s*([012])\s*】\s*$/);
-  if (marker) {
-    if (quality === null) quality = Number(marker[1]);
-    reply = reply.slice(0, marker.index).trimEnd();
-  }
-  if (!reply) {
-    // 本地台词兜底：按发送次数轮换该身份台词库，离线或回复只剩标记时也能聊起来。
-    const lines = npc.linesFor(talking.identityId);
-    const index = npcTalkIndex.get(talking.id) || 0;
-    npcTalkIndex.set(talking.id, index + 1);
-    reply = lines[index % lines.length];
-  }
-  if (quality === null) quality = npc.heuristicQuality(text);
-  npcTyping = false;
-  history.push({ role: 'assistant', content: reply });
-  npcChatLogs.set(talking.id, history.slice(-12));
-  updateNpcHistory();
-  // playing 阶段这条消息走规则入口：扣精力（首聊再扣时间），按质量加社交、心情，学业身份另有学习进度。
-  if (state && state.phase === 'playing') {
-    const result = runCommand('chatWithNpc', { identityId: talking.identityId, quality }, state.revision);
-    if (result) {
-      const notice = $('#dialogNotice');
-      const previous = notice.textContent ? notice.textContent + ' ' : '';
-      notice.textContent = previous + '这次聊天：' + changeText(result.changes);
-    }
-  }
-  if (input) { input.disabled = false; input.focus(); }
-  if (sendButton) { sendButton.disabled = false; sendButton.textContent = buttonText; }
-}
+
 function animalClock() {
-  return (developerPaused ? developerPauseStarted : Date.now()) - developerNpcOffset;
+  return (developerPaused ? developerPauseStarted : Date.now()) - developerAnimalOffset;
 }
 
 function resetAnimalSystem() {
@@ -1995,13 +1736,13 @@ function renderAnimalLayer(encounter, visible) {
 
 const ANIMAL_TEXT = {
   cat: {
-    place: '校园小径', calm: '它眯起眼，尾巴慢慢垂了下来。', alert: '耳朵压低了，尾巴还在甩动。',
+    place: '校园小径',
     petted: '小猫闭上眼，把脑袋往你的掌心蹭了蹭。',
     startled: '小猫压低耳朵，张嘴哈了一声。你赶紧把手缩了回来。',
     fed: '小猫闻了闻你放下的零食，才凑过来吃。'
   },
   goose: {
-    place: '明湖岸边', calm: '它低头梳理翅膀，羽毛松了下来。', alert: '它伸直脖子，正盯着你的手。',
+    place: '明湖岸边',
     petted: '它轻轻抖了抖羽毛，让你的手停了一会儿。',
     startled: '鹅的嘴一下伸了过来，你往后缩了缩手。',
     fed: '它向前探了探，低头吃起了饲料。'
@@ -2104,7 +1845,7 @@ function transitionAnimalPose(species, pose, duration) {
   animalPoseFrame = requestAnimationFrame(update);
 }
 
-function showAnimalView(mode, pose, cue, detail, buttons, title) {
+function showAnimalView(mode, pose, cue = '', detail = '', buttons = '', title) {
   const world = $('#animalWorld');
   const target = $('#animalPetTarget');
   const species = animalEncounter.species;
@@ -2123,6 +1864,7 @@ function showAnimalView(mode, pose, cue, detail, buttons, title) {
   $('#animalCue').textContent = cue;
   $('#animalDetail').textContent = detail;
   $('#animalButtons').innerHTML = buttons;
+  $('#animalControls').hidden = !cue && !detail && !buttons;
   target.hidden = mode !== 'pet';
   target.setAttribute('aria-label', '伸手抚摸' + label);
   (mode === 'pet' ? target : $('#animalTitle')).focus({ preventScroll: true });
@@ -2134,8 +1876,7 @@ function showAnimalMenu() {
   const { species } = animalEncounter;
   const profile = game.ANIMALS[species];
   const feed = game.animalAvailability(state, species, 'feed');
-  const moodRange = '抚摸成功 +' + profile.petMood + ' 心情，惊动它 −' + Math.abs(profile.startledMood) + ' 心情。';
-  showAnimalView('menu', 'alert', '你在近处停了下来', moodRange + (feed.ok ? '' : ' ' + feed.reason + '。'),
+  showAnimalView('menu', 'alert', '', feed.ok ? '' : feed.reason,
     animalButton('pet', '试着摸一下', { primary: true })
     + animalButton('feed', '买' + profile.food + ' · ' + profile.price + ' 元', { disabled: !feed.ok }));
 }
@@ -2175,8 +1916,6 @@ function updateAnimalTiming() {
   if (calm !== animalTiming.calm) {
     animalTiming.calm = calm;
     world.dataset.pose = calm ? 'calm' : 'alert';
-    $('#animalCue').textContent = calm ? '现在可以摸' : '先等等';
-    $('#animalDetail').textContent = ANIMAL_TEXT[species][calm ? 'calm' : 'alert'] + (calm ? ' 点击或轻触它。' : '');
   }
   if (typeof requestAnimationFrame === 'function') animalFrame = requestAnimationFrame(updateAnimalTiming);
 }
@@ -2190,7 +1929,7 @@ function startAnimalTiming() {
   const { approach, retreat: preferredRetreat } = ANIMAL_MOTION[species];
   const untilNextApproach = game.ANIMAL_CYCLE_MS - end + start - approach;
   const retreat = Math.min(preferredRetreat, untilNextApproach);
-  showAnimalView('pet', 'alert', '先等等', '', animalButton('back', '先收手'));
+  showAnimalView('pet', 'alert');
   animalTiming = { startedAt: animalClock(), elapsedMs: 0, calm: null, entry, start, end, approach, retreat,
     animate: Boolean(animalPortrait) && animalMotionEnabled() };
   updateAnimalTiming();
@@ -2235,7 +1974,10 @@ function finishAnimalInteraction(choice, event) {
   const result = runCommand('interactWithAnimal', { species, choice, elapsedMs: animalTiming?.elapsedMs }, revision);
   if (!result) {
     const lastFailure = failures.at(-1);
-    if (lastFailure?.operation === 'interactWithAnimal') $('#animalDetail').textContent = lastFailure.reason;
+    if (lastFailure?.operation === 'interactWithAnimal') {
+      $('#animalDetail').textContent = lastFailure.reason;
+      $('#animalControls').hidden = false;
+    }
     return;
   }
   stopAnimalTiming();
@@ -2251,11 +1993,10 @@ function finishAnimalInteraction(choice, event) {
     if (!animalEncounter || !animalDialog.open) return;
     world.dataset.tracking = 'false';
     const resultPose = catHissed && animate ? 'alert' : outcome;
-    showAnimalView('result', resultPose, ANIMAL_TEXT[species][outcome], changeText(result.changes),
-      animalButton('leave', '回到校园', { primary: true }) + animalButton('save', '保存进度'), title);
+    showAnimalView('result', resultPose, ANIMAL_TEXT[species][outcome], changeText(result.changes), '', title);
   };
   if (choice === 'pet') positionAnimalHand(event);
-  showAnimalView('react', outcome, title, '', '');
+  showAnimalView('react', outcome, '', '', '', title);
   if (catHissed) audio?.play('catHiss');
   animalReactionTimer = setTimeout(showResult, animate ? 740 : 0);
 }
@@ -2265,12 +2006,12 @@ function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
   stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ relationship: '人物关系网', relationshipResult: '共同经历', basketballResult: '球场结算', event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', budget: '学期预算', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', npc: '校园偶遇', positionPicker: '南门岗位库' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ relationship: '人物关系网', relationshipResult: '共同经历', basketballResult: '球场结算', event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', budget: '学期预算', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', positionPicker: '南门岗位库' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
   $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary, disabled }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked || disabled ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
-  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(mode);
+  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(mode);
   if (!dialog.open) dialog.showModal();
   (dialog.querySelector('input') || $('#dialogTitle')).focus({ preventScroll: true });
   dialog.scrollTop = 0;
@@ -2302,7 +2043,7 @@ function runCommand(operation, id, expectedRevision, eventInstanceId, investment
   if(['executeAction','completeBasketball','submitEventChoice','resolveNpcProposal','runNpcStory'].includes(operation)){options.npcSupportVersion=1;options.npcCastVersion=1;if(options.companionId)options.characterVersion=2;}
   if(operation==='submitEventChoice'&&state.relationships?.eventCompanion?.instanceId===state.pendingEvent?.instanceId)options.companionId=state.relationships.eventCompanion.npcId;
   if (operation === 'submitEventChoice' && id !== game.SICK_LEAVE_ID && game.characterAgent.read(state).cameo?.instanceId === state.pendingEvent?.instanceId) options.zhouCameo = true;
-  const result = ['executeAction', 'purchaseGrowth', 'chooseBudget', 'setTargetPosition', 'completeBasketball', 'submitEventChoice', 'chooseEnding', 'interactWithAnimal', 'selectCourses', 'updateExamAnswers', 'submitExam', 'chatWithNpc', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal','recordNpcDialogue','resolveNpcProposal','runNpcStory','attachNpcToEvent'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const result = ['executeAction', 'purchaseGrowth', 'chooseBudget', 'setTargetPosition', 'completeBasketball', 'submitEventChoice', 'chooseEnding', 'interactWithAnimal', 'selectCourses', 'updateExamAnswers', 'submitExam', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal','recordNpcDialogue','resolveNpcProposal','runNpcStory','attachNpcToEvent'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
     developerPanel?.record(operation, developerBefore, state, result.reason);
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
@@ -2690,7 +2431,7 @@ function startGame() {
   resetSeasonTracking();
   audio?.play('success');
   audio?.startBgm();
-  resetNpcSystem();
+  resetAnimalSystem();
   hideStartMenu();
   renderState();
   showEnrollment();
@@ -3237,7 +2978,7 @@ function loadGame(slotId, source = 'primary') {
   uiLocked = false;
   failures.length = 0;
   resetSeasonTracking();
-  resetNpcSystem();
+  resetAnimalSystem();
   audio?.play('load');
   audio?.startBgm();
   hideStartMenu();
@@ -3260,7 +3001,6 @@ function exportLog() {
 $('#dialogBody').addEventListener('submit', (event) => {
   if (event.target.id === 'admissionForm') { event.preventDefault(); startGame(); }
   else if (event.target.id === 'loginForm') { event.preventDefault(); doLogin(); }
-  else if (event.target.id === 'npcChatForm') { event.preventDefault(); sendNpcChat(); }
   else if (event.target.id === 'zhouChatForm') { event.preventDefault(); sendZhouChat(); }
   else if (event.target.id === 'courseForm') { event.preventDefault(); submitCourseSelection(event.target); }
   else if (event.target.id === 'examForm') { event.preventDefault(); submitExamForm(event.target); }
@@ -3508,7 +3248,6 @@ $('#dialogButtons').addEventListener('click', (event) => {
     try { storage?.setItem(LOGIN_SKIP_KEY, '1'); } catch (_) {}
     showAdmission();
   }
-  else if (id === 'npcLeave' && dialogMode === 'npc') dialog.close();
   else if (id === 'confirmSave' && dialogMode === 'confirmSave' && saveTarget !== null) finishSave(saveTarget);
   else if (id === 'backToSave') showSave();
   else if (id === 'beginExam' && dialogMode === 'confirmExam') {
@@ -3535,10 +3274,11 @@ $('#dialogButtons').addEventListener('click', (event) => {
     zhouChatDraft = ''; zhouChatNotice = ''; zhouHistoryOpen = false;
     cancelBasketball();
     closePlace();
-    resetNpcSystem();
+    resetAnimalSystem();
     clearSeasonEffects();
     audio?.stopBgm();
     state = null;
+    renderNpcLayer();
     renderGrowth();
     eventDrafts.clear();
     actionDrafts.clear();
@@ -3556,14 +3296,10 @@ $('#dialogButtons').addEventListener('click', (event) => {
 });
 hotspots.forEach((hotspot) => hotspot.addEventListener('click', () => openPlace(hotspot.dataset.place, hotspot)));
 $('#relationshipList')?.addEventListener('click', event=>{const b=event.target.closest('[data-character-open]');if(b&&!dialog.open)showCharacter(b.dataset.characterOpen);});
-const npcLayer = $('#npcLayer');
-if (npc && npcLayer) {
-  npcLayer.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-npc-id]');
-    if (button) talkToNpc(button.dataset.npcId);
-  });
-  npcTick();
-}
+$('#npcLayer')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-npc-id]');
+  if (button && !dialog.open) showCharacter(button.dataset.npcId);
+});
 if (animals) {
   $('#animalLayer')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-animal-id]');
@@ -3574,10 +3310,8 @@ if (animals) {
     const mode = $('#animalWorld').dataset.mode;
     if (action === 'pet' && mode === 'menu') startAnimalTiming();
     else if (action === 'feed' && mode === 'menu') confirmAnimalFeed();
-    else if (action === 'back' && ['pet', 'feed'].includes(mode)) showAnimalMenu();
+    else if (action === 'back' && mode === 'feed') showAnimalMenu();
     else if (action === 'feedYes' && mode === 'feed') finishAnimalInteraction('feed');
-    else if (action === 'leave' && mode === 'result') closeAnimalEncounter();
-    else if (action === 'save' && mode === 'result') { closeAnimalEncounter(); showSave(); }
   });
   $('#animalPetTarget').addEventListener('click', (event) => {
     if ($('#animalWorld').dataset.mode === 'pet' && animalTiming) finishAnimalInteraction('pet', event);
@@ -3878,10 +3612,10 @@ if (typeof CampusDeveloperPanel !== 'undefined') {
     savedRevision = -1; savedAt = ''; saveNotice = developerTesting ? '隔离测试副本，普通游戏存档不受影响。' : '';
     savedNpcDialogueSummaries = '';
     acknowledgedResultRevision = state?.revision ?? -1;
-    resetSeasonTracking(); resetNpcSystem();
+    resetSeasonTracking(); resetAnimalSystem();
     if (dialog.open) dialog.close();
     if (state) { hideStartMenu(); renderState(); if (resume) resumePhase(); }
-    else showStartMenu();
+    else { renderNpcLayer(); showStartMenu(); }
     const drawer = $('#developerPanel');
     if (drawer.open) { drawer.close(); drawer.showModal(); }
   }
@@ -3947,7 +3681,7 @@ if (typeof CampusDeveloperPanel !== 'undefined') {
       if (paused === developerPaused) return;
       developerPaused = paused;
       if (paused) { developerPauseStarted = Date.now(); cancelZhouRequest(); basketballSession?.pause(); hideCoach(); }
-      else { developerNpcOffset += Date.now() - developerPauseStarted; basketballSession?.resume(); maybeZhouNingDirector(); }
+      else { developerAnimalOffset += Date.now() - developerPauseStarted; basketballSession?.resume(); maybeZhouNingDirector(); }
     }
   });
 }
