@@ -11,14 +11,16 @@
     const button = (action, label, value = '') => '<button type="button" data-dev-action="' + action + '" data-value="' + escape(value) + '">' + escape(label) + '</button>';
     const options = (rows, selected) => rows.map(([id, label]) => '<option value="' + escape(id) + '"' + (String(id) === String(selected) ? ' selected' : '') + '>' + escape(label) + '</option>').join('');
     const checks = rows => '<ul class="dev-checks">' + rows.map(row => '<li class="' + (row.met === null ? 'dev-info' : row.met ? 'dev-pass' : 'dev-gap') + '">' + (row.met === null ? '· ' : row.met ? '✓ ' : '缺少：') + escape(row.label) + '</li>').join('') + '</ul>';
-    const details = (label, content) => '<details class="dev-details"><summary>' + escape(label) + '</summary>' + content + '</details>';
+    const openSections = new Set();
+    const details = (label, content, key = '') => '<details class="dev-details"' + (key ? ' data-dev-section="' + key + '"' + (openSections.has(key) ? ' open' : '') : '') + '><summary>' + escape(label) + '</summary>' + content + '</details>';
     const help = text => details('操作说明', '<p class="dev-help">' + escape(text) + '</p>');
     const conditionDetails = (rows, label = '条件') => {
       const missing = rows.filter(row => row.met === false).length;
       return details(label + (missing ? ' · 缺少 ' + missing + ' 项' : ' · 已满足'), checks(rows));
     };
     let tab = 0, selectedEvent = Object.keys(game.EVENTS)[0], eventSearch = '', selectedPerson = 'zhouNing', selectedEnding = 'ordinary', selectedTestSlot = 1, selectedGrowth = Object.keys(game.GROWTH_NODES)[0];
-    let previousFocus = null, busy = false;
+    let selectedEconomyAction = dev.ECONOMY_ACTIONS[0], selectedAnimal = Object.keys(game.ANIMALS)[0], memoryQuery = '';
+    let previousFocus = null, busy = false, memoryJob = null;
     function tell(message, bad = false) { notice.textContent = message; notice.classList.toggle('dev-error', bad); }
     function mark() {
       badge.hidden = !recorder.active;
@@ -35,7 +37,7 @@
       adapter.replace(state ? dev.clone(state) : dev.semester(null, 1).state);
       mark();
     }
-    function mutate(label, operation, reveal = false) {
+    function mutate(label, operation, reveal = false, after) {
       if (busy) return;
       busy = true;
       try {
@@ -51,11 +53,57 @@
           tell(label + ' · 已完成');
           render();
           if (reveal) close();
+          if (after) after(result.state);
         }
       } catch (error) {
         recorder.record(label, adapter.state(), adapter.state(), error.message);
         tell('操作失败：' + error.message, true);
       } finally { busy = false; }
+    }
+    function cancelMemory() {
+      if (!memoryJob) return;
+      memoryJob.controller?.abort(); clearTimeout(memoryJob.timer); memoryJob = null; busy = false;
+      panel.removeAttribute('aria-busy');
+    }
+    async function updateMemory(kind) {
+      if (busy) return;
+      enter(); busy = true;
+      const source = adapter.state(), before = dev.clone(source);
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      const job = { controller, timer: controller ? setTimeout(() => controller.abort(), 8000) : null };
+      memoryJob = job; panel.setAttribute('aria-busy', 'true');
+      const label = kind === 'summary' ? '更新对话摘要' : '触发人物反思';
+      tell(label + ' · 正在请求');
+      try {
+        const result = await dev.refreshMemory(before, selectedPerson, kind, { relay: game.AI_CHAT.relay, fetchFn: typeof fetch === 'function' ? fetch : null, signal: controller?.signal });
+        if (memoryJob !== job || adapter.state() !== source) return;
+        recorder.record(label, before, result.ok ? result.state : before, result.reason || '');
+        if (result.ok) { adapter.replace(result.state); render(); }
+        tell(result.ok ? label + ' · 已完成' : result.reason, !result.ok);
+      } catch (error) {
+        if (memoryJob === job) { recorder.record(label, before, before, error.message); tell(error.message, true); }
+      } finally {
+        clearTimeout(job.timer);
+        if (memoryJob === job) { memoryJob = null; busy = false; panel.removeAttribute('aria-busy'); }
+      }
+    }
+    function economyMarkup(state) {
+      const flow = game.economySummary(state), action = game.getAction(state, selectedEconomyAction), allowed = game.availability(state, selectedEconomyAction);
+      const grant = game.currentGrant(state);
+      const budget = '<form data-dev-form="budget"><div class="dev-fields dev-budget-fields">' + Object.entries(game.BUDGET_DIMENSIONS).map(([key, dimension]) => '<label>' + escape(dimension.title) + '<select name="' + key + '">' + options(dimension.tiers.filter(tier => !tier.legacy).map(tier => [tier.id, tier.label + ' · ' + tier.cost + ' 元']), grant?.budget?.[key] || game.DEFAULT_BUDGET[key]) + '</select></label>').join('') + '</div><button type="submit">重建预算场景</button></form><p class="dev-help">重建本学期开局，按当前余额及预算差额结算；当前学期的行动、人物和动物进度重置。</p>';
+      const actionTest = '<label>收入 / 消费<select id="devEconomyAction">' + options(dev.ECONOMY_ACTIONS.map(id => [id, game.ACTIONS[id].title]), selectedEconomyAction) + '</select></label><p class="dev-help">' + escape(allowed.ok ? '可执行' : allowed.reason) + ' · 收入 ' + (action.income || 0) + ' 元 · 支出 ' + (action.money || 0) + ' 元</p><div class="dev-buttons">' + button('economyRun', '按规则执行') + button('economyPrepare', '构造前置场景') + '</div><p class="dev-help">构造场景会重建到开放学期，并补齐成绩、经历与资源。</p>';
+      return details('预算与收入测试', '<p>本学期收入 ' + flow.earned + ' 元 · 消费 ' + flow.spent + ' 元 · 待还 ' + flow.debt + ' 元 · ' + escape(game.economyTag(state).label) + '</p><div class="dev-grid"><section>' + budget + '</section><section>' + actionTest + '</section></div>', 'economy');
+    }
+    function animalMarkup(state) {
+      const profile = game.ANIMALS[selectedAnimal], window = game.animalCalmWindow(state, selectedAnimal);
+      return details('校园动物', '<form data-dev-form="animal"><div class="dev-person-fields"><label>动物<select id="devAnimal">' + options(Object.entries(game.ANIMALS).map(([id, value]) => [id, value.label]), selectedAnimal) + '</select></label><label>熟悉次数<input name="visits" type="number" min="0" max="2000" step="1" required value="' + (state.animalVisits?.[selectedAnimal] || 0) + '"></label></div><div class="dev-buttons"><button type="submit">设置次数</button>' + button('animalOpen', '打开互动') + button('animalCalm', '抚摸成功') + button('animalStartled', '受惊结果') + button('animalFeed', '喂食') + '</div></form><p class="dev-help">平静窗口 ' + window.start + '～' + window.end + ' 毫秒 · 喂食 ' + profile.price + ' 元。打开互动会替换当前待办；结果测试按游戏规则结算。</p>', 'animals');
+    }
+    function memoryResults(state) {
+      const info = dev.memoryStatus(state, selectedPerson, memoryQuery);
+      return '<p>核心档案：' + escape(info.saved?.core?.text || '暂无') + '</p><p>最近反思：' + escape(info.saved?.lastReflection?.text || '暂无') + '</p><p>对话摘要：' + escape(info.summary?.text || '暂无') + '</p><p class="dev-help">历史记忆 ' + info.derived + ' 条 · 摘要' + (info.summaryReady ? '可更新' : '需六轮新对话') + ' · 反思' + (info.reflectionReady ? '可触发' : '尚不满足条件或本学期已尝试') + '</p>' + (info.retrieved.length ? '<ul class="dev-memory-list">' + info.retrieved.map(item => '<li>' + escape(item.text) + ' <small>相关度 ' + item.score.toFixed(2) + '</small></li>').join('') + '</ul>' : '<p class="dev-help">暂无相关经历</p>');
+    }
+    function memoryMarkup(state) {
+      return details(game.npcCast.profile(selectedPerson).name + ' · 长期记忆', '<label>检索话题<input id="devMemoryQuery" value="' + escape(memoryQuery) + '" placeholder="例如：约定、展示、篮球"></label><div id="devMemoryResults">' + memoryResults(state) + '</div><div class="dev-buttons">' + button('memorySummary', '更新对话摘要') + button('memoryReflection', '触发反思') + button('memoryReset', '清除摘要与反思') + '</div><p class="dev-help">更新使用当前在线服务；关闭面板可取消。清除后仍会从真实历史检索共同经历。</p>', 'memory');
     }
     function resourceMarkup(state) {
       const fields = rows => '<div class="dev-fields">' + rows.map(([key, [label, max]]) => '<label>' + label + '<input name="' + key + '" type="number" min="0" max="' + max + '" step="' + (['money','time','energy'].includes(key) ? '1' : 'any') + '" required value="' + state[key] + '"></label>').join('') + '</div>';
@@ -96,11 +144,17 @@
       return '<div class="dev-grid"><section><h3>恢复</h3><form data-dev-form="checkpoint" class="dev-toolbar"><label><span class="dev-sr-only">检查点名称</span><input name="label" maxlength="60" placeholder="检查点名称（可选）"></label><button type="submit">创建检查点</button></form>' + points.map(point => '<div class="dev-checkpoint"><span>' + escape(point.label) + ' <small>第 ' + point.term + ' 学期</small></span>' + button('checkpointRestore','恢复',point.id) + '</div>').join('') + '<div class="dev-toolbar dev-save-row"><label><span class="dev-sr-only">测试存档</span><select id="devSaveSlot">' + options([1,2,3].map(id => [id, '测试栏位 ' + id]), selectedTestSlot) + '</select></label><div class="dev-buttons">' + button('save','保存') + button('load','读取') + button('backup','上一备份') + '</div></div>' + details('存档状态', '<p class="dev-help">' + escape(store.inspect().slots.map(slot => '测试 ' + slot.id + '：' + (slot.primary.ok ? game.TERM_NAMES[slot.primary.state.term - 1] : slot.primary.reason)).join('；')) + '</p>') + help('本页保留最近 5 个检查点，刷新后清空。测试存档可跨刷新读取，与正常存档分开。') + '</section><section><div class="dev-section-heading"><h3>最近操作</h3>' + button('export','导出日志') + '</div>' + (entries.length ? log(entries.slice(0,5)) + (entries.length > 5 ? details('更多记录', log(entries.slice(5))) : '') : '<p class="dev-help">暂无操作记录</p>') + details('游戏历史与失败记录', '<pre>' + escape(JSON.stringify({ operations: state.history.slice(-15), failures: adapter.failures().slice(-15) }, null, 2)) + '</pre>') + '</section></div>';
     }
     function render() {
+      body.querySelectorAll('details[data-dev-section]').forEach(section => {
+        if (section.open) openSections.add(section.dataset.devSection);
+        else openSections.delete(section.dataset.devSection);
+      });
       mark();
       panel.querySelectorAll('[data-dev-tab]').forEach((node, index) => { node.setAttribute('aria-selected', String(index === tab)); node.tabIndex = index === tab ? 0 : -1; });
       const state = adapter.state();
       body.setAttribute('aria-labelledby', 'developerTab' + tab);
       body.innerHTML = state ? [resourceMarkup, progressMarkup, eventMarkup, growthMarkup, recordsMarkup][tab](state) : '<div class="dev-empty"><h3>尚未进入游戏</h3><p>可以先开始正常游戏，也可以直接建立独立测试场景。</p>' + button('create','创建大一测试场景') + (tab === 4 ? '<div class="dev-buttons"><select id="devSaveSlot">' + options([1,2,3].map(id => [id,'测试栏位 ' + id])) + '</select>' + button('load','读取测试副本') + '</div>' : '') + '</div>';
+      if (state && tab === 1) body.insertAdjacentHTML('beforeend', economyMarkup(state));
+      if (state && tab === 2) body.insertAdjacentHTML('beforeend', animalMarkup(state) + memoryMarkup(state));
       const slot = body.querySelector('#devSaveSlot');
       if (slot) slot.value = String(selectedTestSlot);
     }
@@ -114,6 +168,7 @@
     }
     function close() {
       if (!panel.open) return;
+      cancelMemory();
       panel.close();
       adapter.pause(false);
       if (previousFocus?.isConnected && !previousFocus.closest('[inert]')) previousFocus.focus({ preventScroll: true });
@@ -131,12 +186,16 @@
       if (!form) return;
       event.preventDefault();
       if (!form.reportValidity()) return;
+      if (busy) return;
       const data = new FormData(form);
       if (form.dataset.devForm === 'resources') mutate('修改角色资源', state => dev.applyFields(state, Object.fromEntries([...data].map(([key,value]) => [key,Number(value)]))));
       if (form.dataset.devForm === 'person') mutate('调整' + game.npcCast.profile(selectedPerson).name + '相识度', state => dev.person(state, selectedPerson, Number(data.get('familiarity'))));
+      if (form.dataset.devForm === 'budget') mutate('重建预算场景', state => dev.budgetScene(state, Object.fromEntries(data)));
+      if (form.dataset.devForm === 'animal') mutate('调整动物熟悉次数', state => dev.animalVisits(state, selectedAnimal, Number(data.get('visits'))));
       if (form.dataset.devForm === 'checkpoint') { enter(); const id = recorder.checkpoint(adapter.state(), data.get('label')); recorder.record('创建检查点 ' + id, adapter.state(), adapter.state()); tell('已创建检查点 ' + id); render(); }
     });
     panel.addEventListener('input', event => {
+      if (event.target.id === 'devMemoryQuery') { memoryQuery = event.target.value; panel.querySelector('#devMemoryResults').innerHTML = memoryResults(adapter.state()); return; }
       if (event.target.id !== 'devEventSearch') return;
       eventSearch = event.target.value;
       panel.querySelector('#devEventList').innerHTML = eventOptions();
@@ -148,7 +207,14 @@
       if (event.target.id === 'devEnding') { selectedEnding = event.target.value; render(); }
       if (event.target.id === 'devGrowth') { selectedGrowth = event.target.value; render(); }
       if (event.target.id === 'devSaveSlot') selectedTestSlot = Number(event.target.value);
+      if (event.target.id === 'devEconomyAction') { selectedEconomyAction = event.target.value; render(); }
+      if (event.target.id === 'devAnimal') { selectedAnimal = event.target.value; render(); }
     });
+    panel.addEventListener('toggle', event => {
+      const key = event.target.dataset.devSection;
+      if (!key || !body.contains(event.target)) return;
+      if (event.target.open) openSections.add(key); else openSections.delete(key);
+    }, true);
     panel.addEventListener('click', event => {
       const node = event.target.closest('button');
       if (!node) return;
@@ -158,11 +224,22 @@
       if (action === 'close') { close(); return; }
       if (action === 'expand') { const expanded = panel.classList.toggle('dev-expanded'); node.textContent = expanded ? '收起' : '展开'; node.setAttribute('aria-expanded', String(expanded)); return; }
       if (action === 'exit') {
+        cancelMemory();
         const snapshot = recorder.exit(); if (!snapshot) return;
         adapter.testing(false); adapter.restore(snapshot); recorder.record('退出测试并恢复原进度', null, adapter.state());
         mark(); render(); tell('已恢复原进度'); return;
       }
       if (action === 'export') { exportReport(); return; }
+      if (busy) return;
+      if (action === 'memorySummary' || action === 'memoryReflection') { updateMemory(action === 'memorySummary' ? 'summary' : 'reflection'); return; }
+      if (['animalOpen', 'animalCalm', 'animalStartled', 'animalFeed'].includes(action)) {
+        const choice = ({ animalCalm: 'calm', animalStartled: 'startled', animalFeed: 'feed' })[action];
+        mutate('构造校园动物场景', state => dev.animalScene(state, selectedAnimal), false, next => {
+          close();
+          adapter.animal(selectedAnimal, next, choice);
+        });
+        return;
+      }
       if (action === 'save') {
         enter(); const result = store.save(adapter.state(), Number(read('devSaveSlot')));
         recorder.record('保存独立测试存档', adapter.state(), adapter.state(), result.ok ? '' : result.reason);
@@ -182,6 +259,9 @@
         story: state => game.runNpcStory(state, { npcId: selectedPerson, choice: read('devStoryChoice') }, { npcSupportVersion: 1 }),
         companion: state => read('devCompanionAction') === 'basketball' ? { ok: false, reason: '投篮需要真实操作，请打开人物互动并选择投篮' } : game.executeAction(state, read('devCompanionAction'), { companionId: selectedPerson, characterVersion: 2, npcCastVersion: 1, npcSupportVersion: 1 }),
         eventCompanion: state => game.attachNpcToEvent(state, selectedPerson),
+        economyRun: state => game.executeAction(state, selectedEconomyAction, { npcCastVersion: 1, npcSupportVersion: 1 }),
+        economyPrepare: state => dev.prepareEconomyAction(state, selectedEconomyAction),
+        memoryReset: state => dev.resetMemory(state, selectedPerson),
         growthBuy: state => dev.growth(state,value,'buy'), growthUnlock: state => dev.growth(state,value,'unlock'), growthReset: state => dev.growth(state,value,'reset'), growthResetAll: state => dev.growth(state,null,'resetAll'),
         endingPrepare: state => dev.ending(state,selectedEnding), endingPreview: state => dev.ending(state,selectedEnding,true), checkpointRestore: () => recorder.restore(Number(value))
       };

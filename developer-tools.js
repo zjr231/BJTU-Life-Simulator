@@ -5,6 +5,7 @@
   const FIELDS = { money: ['金钱', 1000000], time: ['时间', 12], energy: ['精力', 100], fitness: ['体能', 100], mood: ['心情', 100], preparation: ['学习进度', 100], social: ['社交', 100], furtherStudy: ['深造准备', 100], jobPreparation: ['求职准备', 100] };
   const ENDINGS = { ordinary: '普通毕业', furtherStudy: '继续深造', employment: '进入就业', blankResume: '三无毕业生', notQualified: '暂未达到毕业条件', delayed: '延毕练习生', cheatNote: '考试作弊', cardThief: '校园卡风波' };
   const PREFIX = 'bjtu-life:developer:v1:';
+  const ECONOMY_ACTIONS = ['scholarship', 'contestPrize', 'researchAssistant', 'creativeIncome', 'dinnerTreat', 'jobTrip', 'graduationTrip'].filter(id => Object.hasOwn(game.ACTIONS, id));
   const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
   const own = (value, key) => Object.hasOwn(value, key);
   const fail = reason => ({ ok: false, reason });
@@ -64,6 +65,85 @@
     }
     next = ready(playing(next));
     next.revision = Math.max(next.revision, (state?.revision || 0) + 1);
+    return success(next);
+  }
+  function budgetScene(state, selection) {
+    if (!game.budgetPlan(selection)) return fail('预算档位无效');
+    const scene = semester(state, state.term);
+    if (!scene.ok) return scene;
+    let next = scene.state;
+    const grant = game.currentGrant(next), defaultGrant = game.currentGrant(next);
+    const setupBudget = next.history.findLast(entry => entry.term === next.term && entry.command.operation === 'chooseBudget');
+    const setupCourses = next.history.findLast(entry => entry.term === next.term && entry.command.operation === 'selectCourses');
+    if (setupBudget) {
+      for (const [key, amount] of Object.entries(setupBudget.changes || {})) if (key !== 'money') next[key] -= amount;
+      next.history = next.history.filter(entry => entry !== setupBudget);
+      next.processedCommands = next.processedCommands.filter(id => id !== setupBudget.commandId);
+    }
+    if (setupCourses) {
+      next.history = next.history.filter(entry => entry !== setupCourses);
+      next.processedCommands = next.processedCommands.filter(id => id !== setupCourses.commandId);
+    }
+    next.money = defaultGrant.moneyAfter;
+    next.selectedCourses = [];
+    grant.budgetChosen = false;
+    const chosen = game.chooseBudget(next, selection);
+    if (!chosen.ok) return chosen;
+    next = ready(chosen.state);
+    return success(next);
+  }
+  function prepareEconomyAction(state, id) {
+    if (!ECONOMY_ACTIONS.includes(id)) return fail('请选择收入或消费测试场景');
+    const action = game.ACTIONS[id];
+    const prerequisiteTerm = action.minAverage || action.requiresExperience ? 2 : 1;
+    const scene = semester(state, Math.max(state.term, action.minTerm || 1, prerequisiteTerm));
+    if (!scene.ok) return scene;
+    const next = scene.state;
+    Object.assign(next, { money: Math.max(next.money, action.money || 0), time: game.RULES.time, energy: game.RULES.maxEnergy, fitness: 60, mood: 50, social: 50, jobPreparation: 0, furtherStudy: 0, preparation: Math.max(60, action.minPreparation || 0) });
+    if (action.minAverage) for (const course of next.courses) { course.grade = Math.max(course.grade, action.minAverage); course.passed = true; }
+    if (action.requiresExperience) next.experiences.push({ type: action.requiresExperience, term: next.term });
+    return success(next);
+  }
+  function animalScene(state, species) {
+    if (!own(game.ANIMALS, species)) return fail('未知校园动物');
+    const next = changed(ready(playing(state)));
+    const allowed = game.animalAvailability(next, species, 'pet');
+    return allowed.ok ? success(next) : fail(allowed.reason);
+  }
+  function animalVisits(state, species, visits) {
+    if (!own(game.ANIMALS, species) || !Number.isSafeInteger(visits) || visits < 0 || visits > 2000) return fail('动物熟悉次数应为 0～2000 的整数');
+    const next = changed(state);
+    next.animalVisits = { cat: 0, goose: 0, ...next.animalVisits, [species]: visits };
+    return success(next);
+  }
+  function animalInteraction(state, species, choice) {
+    if (!own(game.ANIMALS, species) || !['calm', 'startled', 'feed'].includes(choice)) return fail('未知动物测试选项');
+    const window = game.animalCalmWindow(state, species);
+    return game.interactWithAnimal(state, { species, choice: choice === 'feed' ? 'feed' : 'pet', elapsedMs: choice === 'calm' ? window.start : 0 });
+  }
+  function memoryStatus(state, id, query = '') {
+    const agent = game.characterAgent;
+    return { summary: state.npcDialogueSummaries?.[id] || null, saved: clone(agent.memoryOf(state, id)), derived: agent.derivedMemories(state, id).length, retrieved: agent.retrieveMemories(state, id, query), summaryReady: !!agent.summaryPlan(state, id), reflectionReady: !!agent.reflectionPlan(state, id) };
+  }
+  function resetMemory(state, id) {
+    if (!game.npcCast.get(state, id)) return fail('请先认识这位人物');
+    const next = changed(state);
+    if (next.npcDialogueSummaries) delete next.npcDialogueSummaries[id];
+    if (next.npcAgentMemory?.byNpc) delete next.npcAgentMemory.byNpc[id];
+    return success(next);
+  }
+  async function refreshMemory(state, id, kind, options = {}) {
+    if (!game.npcCast.get(state, id)) return fail('请先认识这位人物');
+    if (!['summary', 'reflection'].includes(kind)) return fail('未知记忆操作');
+    const agent = game.characterAgent, plan = kind === 'summary' ? agent.summaryPlan(state, id) : agent.reflectionPlan(state, id);
+    if (!plan) return fail(kind === 'summary' ? '需要累计六轮尚未归纳的对话' : '本学期已尝试反思，或尚无重要经历；可在学期总结时测试');
+    if (!options.relay || !options.fetchFn) return fail('未配置在线对话服务');
+    const result = kind === 'summary' ? await agent.requestSummary({ ...options, plan }) : await agent.requestReflection({ ...options, plan });
+    if (options.signal?.aborted) return fail('记忆更新已取消');
+    if (!result) return fail('在线记忆更新未成功，测试进度保留');
+    let next = changed(state);
+    if (kind === 'summary') next.npcDialogueSummaries = { ...next.npcDialogueSummaries, [id]: { text: result, throughRevision: plan.throughRevision } };
+    else next = agent.applyReflection(next, id, result, plan, 'developer');
     return success(next);
   }
   function eventConditions(state, id) {
@@ -192,6 +272,10 @@
     if (!['history','processedCommands','courses','selectedCourses','eventQueue','eventHistory','experiences'].every(key => Array.isArray(state[key]))) return false;
     if (!state.history.every(entry => entry && typeof entry.command?.operation === 'string') || !state.courses.every(course => course && Number.isFinite(course.grade) && Number.isInteger(course.term)) || !state.selectedCourses.every(id => game.courseById(id))) return false;
     if (!state.chains || !['project','club','internship'].every(id => state.chains[id] && typeof state.chains[id].status === 'string') || !state.counts || !state.eventFlags) return false;
+    if (state.animalVisits !== undefined && (!state.animalVisits || Array.isArray(state.animalVisits) || !Object.entries(state.animalVisits).every(([id, visits]) => own(game.ANIMALS, id) && Number.isSafeInteger(visits) && visits >= 0 && visits <= 2000))) return false;
+    try {
+      if (!game.characterAgent.validSummaries(state) || !game.characterAgent.validAgentMemory(state)) return false;
+    } catch (_) { return false; }
     if (state.phase === 'eventPending' && (!state.pendingEvent || !own(game.EVENTS, state.pendingEvent.id))) return false;
     if (state.phase === 'examPending' && (!state.exam || !Array.isArray(state.exam.questions) || !Array.isArray(state.exam.answers))) return false;
     if (state.phase === 'summary' && !state.summary || state.phase === 'endingChoice' && !Array.isArray(state.endingOptions?.options) || ['finished','ended'].includes(state.phase) && !state.result) return false;
@@ -241,6 +325,6 @@
       restore(id) { const point = checkpoints.find(p => p.id === id); return point ? success(clone(point.state)) : fail('检查点不存在（仅在本页保留最近 5 个）'); }
     };
   }
-  const api = { FIELDS, ENDINGS, PREFIX, clone, applyFields, semester, exam, eventConditions, forceEvent, person, prepareStory, growth, ending, createStore, createRecorder, validateSnapshot };
+  const api = { FIELDS, ENDINGS, PREFIX, ECONOMY_ACTIONS, clone, applyFields, semester, exam, budgetScene, prepareEconomyAction, animalScene, animalVisits, animalInteraction, memoryStatus, resetMemory, refreshMemory, eventConditions, forceEvent, person, prepareStory, growth, ending, createStore, createRecorder, validateSnapshot };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.CampusDeveloperTools = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

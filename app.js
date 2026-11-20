@@ -81,6 +81,8 @@ let animalEncounter = null;
 let animalTiming = null;
 let animalFrame = null;
 let animalReactionTimer = null;
+let animalReactionDueAt = 0;
+let animalReactionCallback = null;
 let animalPortrait = null;
 let animalPose = null;
 let animalPoseFrame = null;
@@ -1715,6 +1717,20 @@ function resetAnimalSystem() {
   renderAnimalLayer(null, false);
 }
 
+function openDeveloperAnimal(species, stateSnapshot, choice) {
+  if (!animals || !game.ANIMALS[species] || !animalDialog) return;
+  closeAnimalEncounter();
+  animalSystem?.finish(animalClock());
+  animalEncounter = { id: 'developer:' + Date.now(), species, x: 50, y: 50, expiresAt: animalClock() + 22000, revision: stateSnapshot.revision };
+  animalDialog.showModal();
+  renderAnimalLayer(null, false);
+  showAnimalMenu();
+  if (!choice) return;
+  const calm = game.animalCalmWindow(state, species);
+  finishAnimalInteraction(choice === 'feed' ? 'feed' : 'pet', null,
+    choice === 'calm' ? calm.start : choice === 'startled' ? calm.end : undefined);
+}
+
 function canMeetAnimal() {
   return !developerPaused && !basketballDialog?.open && state && state.phase === 'playing' && !game.isSick(state) && !needsCourseSelection()
     && !activePlace && !dialog.open && !animalDialog?.open && $('#startScreen').hidden;
@@ -1891,6 +1907,8 @@ function stopAnimalTiming() {
 function closeAnimalEncounter() {
   if (animalReactionTimer !== null) clearTimeout(animalReactionTimer);
   animalReactionTimer = null;
+  animalReactionDueAt = 0;
+  animalReactionCallback = null;
   stopAnimalTiming();
   cancelAnimalPoseTransition();
   animalPose = null;
@@ -1968,10 +1986,11 @@ function trackAnimalHand(event) {
   else positionAnimalHand(event);
 }
 
-function finishAnimalInteraction(choice, event) {
+function finishAnimalInteraction(choice, event, forcedElapsedMs) {
   if (!animalEncounter || uiLocked) return;
   const { species, revision } = animalEncounter;
-  const result = runCommand('interactWithAnimal', { species, choice, elapsedMs: animalTiming?.elapsedMs }, revision);
+  const elapsedMs = forcedElapsedMs === undefined ? animalTiming?.elapsedMs : forcedElapsedMs;
+  const result = runCommand('interactWithAnimal', { species, choice, elapsedMs }, revision);
   if (!result) {
     const lastFailure = failures.at(-1);
     if (lastFailure?.operation === 'interactWithAnimal') {
@@ -1990,6 +2009,8 @@ function finishAnimalInteraction(choice, event) {
   const world = $('#animalWorld');
   const showResult = () => {
     animalReactionTimer = null;
+    animalReactionDueAt = 0;
+    animalReactionCallback = null;
     if (!animalEncounter || !animalDialog.open) return;
     world.dataset.tracking = 'false';
     const resultPose = catHissed && animate ? 'alert' : outcome;
@@ -1998,6 +2019,8 @@ function finishAnimalInteraction(choice, event) {
   if (choice === 'pet') positionAnimalHand(event);
   showAnimalView('react', outcome, '', '', '', title);
   if (catHissed) audio?.play('catHiss');
+  animalReactionCallback = showResult;
+  animalReactionDueAt = Date.now() + (animate ? 740 : 0);
   animalReactionTimer = setTimeout(showResult, animate ? 740 : 0);
 }
 
@@ -3601,6 +3624,40 @@ if (typeof HTMLDialogElement === 'undefined' || typeof HTMLDialogElement.prototy
 if (typeof CampusDeveloperPanel !== 'undefined') {
   let developerOriginalBasketball = null;
   let developerOriginalCompanion = null;
+  let developerOriginalAnimal = null;
+  let developerPauseNpcMemory = null;
+  function captureDeveloperAnimal() {
+    if (!animalDialog?.open || !animalEncounter) return null;
+    const world = $('#animalWorld');
+    return {
+      encounter: CampusDeveloperTools.clone(animalEncounter),
+      timing: animalTiming ? { ...animalTiming, running: Math.max(0, animalClock() - animalTiming.startedAt) } : null,
+      reactionRemaining: animalReactionCallback && animalReactionDueAt ? Math.max(0, animalReactionDueAt - Date.now()) : null,
+      pose: animalPose ? CampusDeveloperTools.clone(animalPose) : null,
+      world: { html: world.innerHTML, dataset: { ...world.dataset }, handStyle: $('#animalHand').getAttribute('style') }
+    };
+  }
+  function restoreDeveloperAnimal(snapshot) {
+    if (!snapshot) return;
+    const world = $('#animalWorld');
+    world.innerHTML = snapshot.world.html;
+    Object.assign(world.dataset, snapshot.world.dataset);
+    const hand = $('#animalHand');
+    if (snapshot.world.handStyle === null) hand.removeAttribute('style'); else hand.setAttribute('style', snapshot.world.handStyle);
+    animalEncounter = CampusDeveloperTools.clone(snapshot.encounter);
+    animalTiming = snapshot.timing ? { ...snapshot.timing, startedAt: animalClock() - snapshot.timing.running } : null;
+    delete animalTiming?.running;
+    animalPose = snapshot.pose ? CampusDeveloperTools.clone(snapshot.pose) : null;
+    animalPortrait = animals?.createPortrait($('#animalMotionCanvas')) || null;
+    if (animalPose) renderAnimalPose(animalPose.species, animalPose.weights);
+    const drawer = $('#developerPanel'), wasOpen = drawer.open;
+    if (wasOpen) drawer.close();
+    animalDialog.showModal();
+    if (wasOpen) drawer.showModal();
+    if (animalTiming) updateAnimalTiming();
+    animalReactionCallback = developerOriginalAnimal?.callback || null;
+    animalReactionDueAt = snapshot.reactionRemaining === null ? 0 : Date.now() + snapshot.reactionRemaining;
+  }
   // Keep all state replacement at the UI boundary; production rule and save validation stay strict.
   function replaceDeveloperState(next, resume = true) {
     cancelZhouRequest(); cancelBasketball(); closePlace(); closePanel(); closePopovers(); hideCoach();
@@ -3625,6 +3682,7 @@ if (typeof CampusDeveloperPanel !== 'undefined') {
     capture: () => ({ state, activeSaveSlot, savedRevision, savedNpcDialogueSummaries, savedAt, saveNotice, failures, activePlace, gateSection,
       budgetDraft, budgetDraftTerm, acknowledgedResultRevision, basketball: !!basketballSession, uiLocked,
       activeNpcId, zhouView, zhouChatDraft, zhouChatNotice, zhouHistoryOpen, saveTarget, terminalChoice,
+      animal: captureDeveloperAnimal(),
       eventDrafts: [...eventDrafts], actionDrafts: [...actionDrafts], openActionCards: [...openActionCards], pendingActionExtra,
       dialog: { open: dialog.open, mode: dialogMode, className: dialog.className, title: $('#dialogTitle').textContent, body: $('#dialogBody').innerHTML, buttons: $('#dialogButtons').innerHTML, notice: $('#dialogNotice').textContent, kicker: $('.dialog-kicker').textContent, saveHidden: $('#dialogSave').hidden } }),
     testing(enabled, testStore) {
@@ -3674,15 +3732,39 @@ if (typeof CampusDeveloperPanel !== 'undefined') {
         basketballDialog.showModal();
         if (wasOpen) drawer.showModal();
       }
+      if (snapshot.animal && developerOriginalAnimal) restoreDeveloperAnimal(snapshot.animal);
       developerOriginalBasketball = null; developerOriginalCompanion = null;
+      developerOriginalAnimal = null;
       if (snapshot.uiLocked) lockUi();
     },
     character: id => showCharacter(id),
+    animal: (species, scene, choice) => openDeveloperAnimal(species, scene, choice),
     pause(paused) {
       if (paused === developerPaused) return;
       developerPaused = paused;
-      if (paused) { developerPauseStarted = Date.now(); cancelZhouRequest(); basketballSession?.pause(); hideCoach(); }
-      else { developerAnimalOffset += Date.now() - developerPauseStarted; basketballSession?.resume(); maybeZhouNingDirector(); }
+      if (paused) {
+        developerPauseStarted = Date.now(); cancelZhouRequest(); basketballSession?.pause(); hideCoach();
+        developerPauseNpcMemory = { summaries: CampusDeveloperTools.clone(state?.npcDialogueSummaries), memory: CampusDeveloperTools.clone(state?.npcAgentMemory) };
+        resetNpcSummaryJobs();
+        if (state) { state.npcDialogueSummaries = CampusDeveloperTools.clone(developerPauseNpcMemory.summaries); state.npcAgentMemory = CampusDeveloperTools.clone(developerPauseNpcMemory.memory); }
+        if (!developerTesting || !developerOriginalAnimal) {
+          developerOriginalAnimal = { callback: animalReactionCallback,
+            remaining: animalReactionCallback && animalReactionDueAt ? Math.max(0, animalReactionDueAt - Date.now()) : null };
+        }
+        if (animalReactionTimer !== null) { clearTimeout(animalReactionTimer); animalReactionTimer = null; }
+      } else {
+        developerAnimalOffset += Date.now() - developerPauseStarted; basketballSession?.resume(); maybeZhouNingDirector();
+        if (!developerTesting && state) {
+          for (const npcId of Object.keys(game.npcCast.PROFILES)) refreshNpcSummary(npcId);
+          maybeQueueNpcReflection('term-end');
+        }
+        developerPauseNpcMemory = null;
+        if (animalReactionCallback && animalDialog?.open && animalReactionDueAt) {
+          const remaining = Math.max(0, animalReactionDueAt - Date.now());
+          animalReactionDueAt = Date.now() + remaining;
+          animalReactionTimer = setTimeout(animalReactionCallback, remaining);
+        }
+      }
     }
   });
 }

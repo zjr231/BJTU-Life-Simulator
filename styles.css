@@ -1481,6 +1481,11 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
 .developer-panel .dev-fields { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
 .developer-panel .dev-fields label { margin-bottom: 4px; }
 .developer-panel .dev-person-fields { display: grid; grid-template-columns: 1fr 100px; gap: 10px; }
+.developer-panel .dev-budget-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 12px 0; }
+.developer-panel .dev-memory-list { max-height: 150px; overflow: auto; padding-left: 18px; color: #c6d2d8; }
+.developer-panel .dev-memory-list li { margin: 4px 0; }
+.developer-panel .dev-memory-list small { color: #8fa29a; }
+.developer-panel[aria-busy="true"] { cursor: progress; }
 .developer-panel .dev-buttons { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 5px 0; }
 .developer-panel .dev-buttons label { margin: 0; }
 .developer-panel .dev-resource-actions { margin-top: 14px; }
@@ -1513,7 +1518,7 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
 .developer-panel .dev-log .dev-error p { color: #edb0a3; }
 .developer-panel footer { border-top: 1px solid #36414a; padding: 6px 20px; color: #9baab4; font-size: 11px; flex-shrink: 0; }
 .developer-panel .dev-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.developer-badge { position: fixed; right: 12px; top: 8px; z-index: 10000; border: 1px solid #60796d; border-radius: 20px; padding: 5px 10px; background: #1c3028; color: #c2e6d9; font-size: 11px; cursor: pointer; }
+.developer-badge { position: fixed; right: 12px; top: var(--bar-bottom, 69px); z-index: 10000; border: 1px solid #60796d; border-radius: 20px; padding: 5px 10px; background: #1c3028; color: #c2e6d9; font-size: 11px; cursor: pointer; }
 .developer-badge[hidden] { display: none; }
 @media (max-width: 680px) {
   .developer-panel { height: 60dvh; min-height: 260px; }
@@ -1527,6 +1532,7 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
   .developer-panel .dev-grid { grid-template-columns: 1fr; gap: 18px; }
   .developer-panel .dev-grid > section + section { border-left: 0; border-top: 1px solid #36414a; padding: 16px 0 0; }
   .developer-panel .dev-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .developer-panel .dev-budget-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .developer-panel .dev-toolbar { flex-wrap: wrap; }
   .developer-panel .dev-toolbar > label { flex-basis: 100px; }
 }
