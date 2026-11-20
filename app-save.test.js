@@ -373,7 +373,11 @@ function app(storage = memory(), withSms = false, autoStart = true, withAnimals 
       const listeners = new Map();
       const classes = new Set();
       elements.set(selector, {
-        innerHTML: '', textContent: '', value: '', open: false, hidden: false, dataset: {}, style: {},
+        innerHTML: '', textContent: '', value: '', open: false, hidden: false, dataset: {},
+        style: {
+          setProperty(name, value) { this[name] = value; },
+          removeProperty(name) { delete this[name]; }
+        },
         classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name),
           toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); } },
         addEventListener: (type, callback) => listeners.set(type, callback),
@@ -812,16 +816,20 @@ test('含路人聊天历史的旧存档仍可加载，地图不显示路人', ()
 
 test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返回地图', () => {
   const cases = [
-    { species: 'cat', pose: 'alert', title: '小猫哈气了', result: /小猫压低耳朵/, mood: '心情 −2' },
-    { species: 'goose', pose: 'calm', title: '摸到了', result: /它轻轻抖了抖羽毛/, mood: '心情 +7' }
+    { species: 'cat', catId: 'wumei', name: '五妹', atlas: 'cat-wumei-v3.webp', pose: 'alert', title: '五妹哈气了', result: /五妹愣了一下/, mood: '心情 −2' },
+    { species: 'cat', catId: 'maolv', name: '毛驴', atlas: 'cat-maolv-v2.webp', pose: 'alert', title: '毛驴哈气了', result: /毛驴愣了一下/, mood: '心情 −2' },
+    { species: 'goose', name: '明湖的鹅', atlas: 'goose-atlas.webp', pose: 'calm', title: '摸到了', result: /它轻轻抖了抖羽毛/, mood: '心情 +7' }
   ];
-  for (const { species, pose, title, result, mood } of cases) {
+  for (const { species, catId, name, atlas, pose, title, result, mood } of cases) {
     const ui = app(memory(), false, true, true);
     ui.start();
-    ui.window.animal = { id: 1, species };
-    ui.evaluate('animalSystem = { tick: () => window.animal, finish() {} }');
+    ui.window.animal = { id: 1, species, catId, x: 25, y: 50 };
+    ui.evaluate('animalSystem = { tick: () => window.animal, finish() {} }; renderAnimalLayer(window.animal, true)');
+    assert.ok(ui.element('#animalLayer').innerHTML.includes('aria-label="遇见' + name + '"'));
+    assert.ok(ui.element('#animalLayer').innerHTML.includes(atlas));
     ui.click('#animalLayer', { animalId: '1' });
     assert.equal(ui.element('#animalDialog').open, true);
+    assert.equal(ui.element('#animalTitle').textContent, name);
     assert.equal(ui.element('#animalDetail').textContent, '');
     assert.match(ui.element('#animalButtons').innerHTML, /试着摸一下/);
     ui.click('#animalButtons', { animalAction: 'pet' });
@@ -842,6 +850,7 @@ test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返�
     ui.flush();
 
     assert.equal(world.dataset.mode, 'result');
+    assert.equal(world.style['--animal-atlas'], 'url("assets/animals/' + atlas + '")');
     assert.equal(controls.hidden, false);
     assert.equal(ui.element('#animalTitle').textContent, title);
     assert.match(ui.element('#animalCue').textContent, result);

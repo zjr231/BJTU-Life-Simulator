@@ -37,6 +37,7 @@ const ACTION_ICONS = {
 const dialog = $('#termDialog');
 const basketballDialog = $('#basketballDialog');
 const animalDialog = $('#animalDialog');
+const catArchiveDialog = $('#catArchiveDialog');
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
 try { storage = window.localStorage; } catch (_) { /* Play remains available without storage. */ }
@@ -76,7 +77,7 @@ let seasonVisualKey = '';
 let seasonNoticeTimer = null;
 const animals = typeof CampusAnimals !== 'undefined' ? CampusAnimals : null;
 let animalSystem = null;
-let animalMarkerId = null;
+let animalMarkerIds = '';
 let animalEncounter = null;
 let animalTiming = null;
 let animalFrame = null;
@@ -1713,15 +1714,15 @@ function animalClock() {
 function resetAnimalSystem() {
   if (!animals) return;
   closeAnimalEncounter();
-  animalSystem = animals.createSystem(animalClock(), () => Math.random());
+  animalSystem = animals.createSystem(animalClock(), Math.random, { keepCatsOnMap: true });
   renderAnimalLayer(null, false);
 }
 
-function openDeveloperAnimal(species, stateSnapshot, choice) {
+function openDeveloperAnimal(species, catId, stateSnapshot, choice) {
   if (!animals || !game.ANIMALS[species] || !animalDialog) return;
   closeAnimalEncounter();
   animalSystem?.finish(animalClock());
-  animalEncounter = { id: 'developer:' + Date.now(), species, x: 50, y: 50, expiresAt: animalClock() + 22000, revision: stateSnapshot.revision };
+  animalEncounter = { id: 'developer:' + Date.now(), species, catId, x: 50, y: 50, expiresAt: animalClock() + 22000, revision: stateSnapshot.revision };
   animalDialog.showModal();
   renderAnimalLayer(null, false);
   showAnimalMenu();
@@ -1736,25 +1737,40 @@ function canMeetAnimal() {
     && !activePlace && !dialog.open && !animalDialog?.open && $('#startScreen').hidden;
 }
 
+function animalName({ species, catId }) {
+  return animals.appearance(species, catId).name || game.ANIMALS[species].label;
+}
+
+function applyAnimalArtwork(world) {
+  const { species, catId } = animalEncounter;
+  world.dataset.species = species;
+  world.style.setProperty('--animal-atlas', 'url("' + animals.appearance(species, catId).atlas + '")');
+}
+
 function renderAnimalLayer(encounter, visible) {
   const layer = $('#animalLayer');
   if (!layer) return;
   layer.hidden = !visible;
-  if (animalMarkerId === (encounter?.id ?? null)) return;
-  animalMarkerId = encounter?.id ?? null;
-  if (!encounter) { layer.innerHTML = ''; return; }
-  const { id, species, x, y } = encounter;
-  const { label } = game.ANIMALS[species];
-  layer.innerHTML = '<button type="button" class="animal-marker" data-animal-id="' + id
-    + '" style="left:' + x + '%;top:' + y + '%" aria-label="遇见' + label + '">'
-    + '<span class="animal-marker-image" data-species="' + species + '" aria-hidden="true"></span>' + '<span class="npc-label">' + label + '</span></button>';
+  const markers = animalSystem?.residentCats ?? [];
+  const encounters = encounter ? [...markers, encounter] : markers;
+  const ids = encounters.map(marker => marker.id).join(',');
+  if (animalMarkerIds === ids) return;
+  animalMarkerIds = ids;
+  layer.innerHTML = encounters.map(marker => {
+    const { id, species, catId, x, y } = marker;
+    const name = h(animalName(marker));
+    const { atlas } = animals.appearance(species, catId);
+    return '<button type="button" class="animal-marker" data-animal-id="' + id
+      + '" style="left:' + x + '%;top:' + y + '%;--animal-atlas:url(' + atlas + ')" aria-label="遇见' + name + '">'
+      + '<span class="animal-marker-image" aria-hidden="true"></span><span class="npc-label">' + name + '</span></button>';
+  }).join('');
 }
 
 const ANIMAL_TEXT = {
   cat: {
     place: '校园小径',
     petted: '小猫闭上眼，把脑袋往你的掌心蹭了蹭。',
-    startled: '小猫压低耳朵，张嘴哈了一声。你赶紧把手缩了回来。',
+    startled: '小猫愣了一下，轻轻哈了一声。你赶紧把手缩了回来。',
     fed: '小猫闻了闻你放下的零食，才凑过来吃。'
   },
   goose: {
@@ -1774,7 +1790,8 @@ function animalTick() {
 
 function openAnimalEncounter(id) {
   if (!canMeetAnimal() || uiLocked || !animalDialog) return;
-  const encounter = animalSystem?.tick(animalClock(), true, false);
+  const residentCat = animalSystem?.residentCats?.find(cat => cat.id === id);
+  const encounter = residentCat ?? animalSystem?.tick(animalClock(), true, false);
   if (!encounter || String(encounter.id) !== id) return;
   animalEncounter = { ...encounter, revision: state.revision };
   animalDialog.showModal();
@@ -1835,7 +1852,7 @@ function animalCalmProgress(timing, elapsed, running) {
 
 function renderAnimalPose(species, weights) {
   animalPose = { species, weights };
-  animalPortrait?.set(species, weights);
+  animalPortrait?.set(species, animalEncounter.catId, weights);
 }
 
 function cancelAnimalPoseTransition() {
@@ -1865,16 +1882,16 @@ function showAnimalView(mode, pose, cue = '', detail = '', buttons = '', title) 
   const world = $('#animalWorld');
   const target = $('#animalPetTarget');
   const species = animalEncounter.species;
-  const { label } = game.ANIMALS[species];
-  world.dataset.species = species;
+  const name = animalName(animalEncounter);
+  applyAnimalArtwork(world);
   world.dataset.mode = mode;
   world.dataset.pose = pose;
   if (mode !== 'pet') {
-    const duration = pose === 'startled' ? (species === 'cat' ? 120 : 360) : 520;
+    const duration = pose === 'startled' ? (species === 'cat' ? 200 : 360) : 520;
     transitionAnimalPose(species, pose, duration);
   }
   $('#animalPlace').textContent = ANIMAL_TEXT[species].place;
-  $('#animalTitle').textContent = title || label;
+  $('#animalTitle').textContent = title || name;
   $('#animalMood').textContent = state.mood;
   $('#animalVisits').textContent = state.animalVisits?.[species] || 0;
   $('#animalCue').textContent = cue;
@@ -1882,7 +1899,7 @@ function showAnimalView(mode, pose, cue = '', detail = '', buttons = '', title) 
   $('#animalButtons').innerHTML = buttons;
   $('#animalControls').hidden = !cue && !detail && !buttons;
   target.hidden = mode !== 'pet';
-  target.setAttribute('aria-label', '伸手抚摸' + label);
+  target.setAttribute('aria-label', '伸手抚摸' + name);
   (mode === 'pet' ? target : $('#animalTitle')).focus({ preventScroll: true });
 }
 
@@ -1897,6 +1914,65 @@ function showAnimalMenu() {
     + animalButton('feed', '买' + profile.food + ' · ' + profile.price + ' 元', { disabled: !feed.ok }));
 }
 
+function showCatArchive(trigger) {
+  if (!catArchiveDialog || catArchiveDialog.open || animalEncounter?.species !== 'cat'
+    || $('#animalWorld').dataset.mode !== 'menu') return;
+  const archive = animals.catArchive(animalEncounter.catId);
+  if (!archive) return;
+  const panel = trigger.dataset.catPanel;
+  const title = $('#catArchiveTitle');
+  const content = $('#catArchiveContent');
+  catArchiveDialog.dataset.panel = panel;
+  catArchiveDialog.style.setProperty('--cat-archive-color', archive.color);
+  $('#catArchiveSeries').hidden = panel !== 'profile';
+  title.textContent = archive.name + ' · ' + (panel === 'profile' ? '猫咪档案' : '猫咪相册');
+  if (panel === 'profile') renderCatProfile(content, archive);
+  else renderCatAlbum(content, archive);
+  trigger.focus({ preventScroll: true });
+  catArchiveDialog.showModal();
+  content.scrollTop = 0;
+  title.focus({ preventScroll: true });
+}
+
+function renderCatProfile(content, archive) {
+  const fields = [['姓名', archive.name], ['性别', archive.sex],
+    ['出生日期', archive.birthYear], ['居住地', archive.residence]];
+  const facts = fields.map(([label, value]) => '<div><dt>' + label + '</dt><dd>' + h(value) + '</dd></div>').join('');
+  const notes = archive.notes.map(note => '<li>' + h(note) + '</li>').join('');
+  content.innerHTML = '<article class="cat-profile">'
+    + '<div class="cat-profile-portrait" role="img" aria-label="' + h(archive.name) + '的游戏立绘"></div>'
+    + '<dl class="cat-profile-facts">' + facts + '</dl>'
+    + '<section class="cat-profile-notes"><h3>注意事项</h3><ul>' + notes + '</ul></section>'
+    + '<section class="cat-profile-story"><h3>背景故事</h3><p>' + h(archive.story) + '</p></section>'
+    + '<footer class="cat-profile-source">资料来源 · 物理科学与工程学院校园介绍牌</footer></article>';
+  content.querySelector('.cat-profile-portrait').style.backgroundImage = 'url("' + archive.atlas + '")';
+}
+
+function renderCatAlbum(content, archive) {
+  content.innerHTML = '<figure class="cat-album"><img class="cat-album-photo">'
+    + '<figcaption class="cat-album-navigation">'
+    + '<button type="button" data-cat-photo-step="-1">上一张</button>'
+    + '<span class="cat-album-page" aria-live="polite"></span>'
+    + '<button type="button" data-cat-photo-step="1">下一张</button>'
+    + '</figcaption></figure>';
+  const photo = content.querySelector('.cat-album-photo');
+  const page = content.querySelector('.cat-album-page');
+  const { photos, name } = archive;
+  let index = 0;
+  function showPhoto() {
+    photo.alt = name + '的实拍照片 ' + (index + 1);
+    photo.src = photos[index];
+    page.textContent = (index + 1) + ' / ' + photos.length;
+  }
+  for (const button of content.querySelectorAll('[data-cat-photo-step]')) {
+    button.addEventListener('click', () => {
+      index = (index + Number(button.dataset.catPhotoStep) + photos.length) % photos.length;
+      showPhoto();
+    });
+  }
+  showPhoto();
+}
+
 function stopAnimalTiming() {
   if (animalFrame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(animalFrame);
   animalFrame = null;
@@ -1905,6 +1981,7 @@ function stopAnimalTiming() {
 }
 
 function closeAnimalEncounter() {
+  if (catArchiveDialog?.open) catArchiveDialog.close();
   if (animalReactionTimer !== null) clearTimeout(animalReactionTimer);
   animalReactionTimer = null;
   animalReactionDueAt = 0;
@@ -2000,12 +2077,15 @@ function finishAnimalInteraction(choice, event, forcedElapsedMs) {
     return;
   }
   stopAnimalTiming();
-  animalSystem.finish(animalClock());
+  animalSystem.finish(animalClock(), animalEncounter.id);
   renderAnimalLayer(null, false);
   const { outcome } = result.entry.animal;
   const catHissed = species === 'cat' && outcome === 'startled';
+  const name = animalName(animalEncounter);
   const animate = animalMotionEnabled();
-  const title = catHissed ? '小猫哈气了' : outcome === 'startled' ? '它被吓了一跳' : outcome === 'fed' ? '喂食完成' : '摸到了';
+  const title = species === 'cat'
+    ? (catHissed ? name + '哈气了' : outcome === 'fed' ? '已喂食' + name : '摸到' + name + '了')
+    : (outcome === 'startled' ? '它被吓了一跳' : outcome === 'fed' ? '喂食完成' : '摸到了');
   const world = $('#animalWorld');
   const showResult = () => {
     animalReactionTimer = null;
@@ -2014,7 +2094,7 @@ function finishAnimalInteraction(choice, event, forcedElapsedMs) {
     if (!animalEncounter || !animalDialog.open) return;
     world.dataset.tracking = 'false';
     const resultPose = catHissed && animate ? 'alert' : outcome;
-    showAnimalView('result', resultPose, ANIMAL_TEXT[species][outcome], changeText(result.changes), '', title);
+    showAnimalView('result', resultPose, ANIMAL_TEXT[species][outcome].replace('小猫', name), changeText(result.changes), '', title);
   };
   if (choice === 'pet') positionAnimalHand(event);
   showAnimalView('react', outcome, '', '', '', title);
@@ -3323,10 +3403,10 @@ $('#npcLayer')?.addEventListener('click', (event) => {
   const button = event.target.closest('[data-npc-id]');
   if (button && !dialog.open) showCharacter(button.dataset.npcId);
 });
-if (animals) {
-  $('#animalLayer')?.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-animal-id]');
-    if (button) openAnimalEncounter(button.dataset.animalId);
+function bindAnimalDialogControls() {
+  $('#catArchiveActions')?.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-cat-panel]');
+    if (trigger) showCatArchive(trigger);
   });
   $('#animalButtons').addEventListener('click', (event) => {
     const action = event.target.closest('[data-animal-action]')?.dataset.animalAction;
@@ -3339,11 +3419,19 @@ if (animals) {
   $('#animalPetTarget').addEventListener('click', (event) => {
     if ($('#animalWorld').dataset.mode === 'pet' && animalTiming) finishAnimalInteraction('pet', event);
   });
+  $('#animalExit').addEventListener('click', closeAnimalEncounter);
+}
+if (animals) {
+  $('#catArchiveClose')?.addEventListener('click', () => catArchiveDialog.close());
+  $('#animalLayer')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-animal-id]');
+    if (button) openAnimalEncounter(button.dataset.animalId);
+  });
+  bindAnimalDialogControls();
   $('#animalWorld').addEventListener('pointermove', trackAnimalHand);
   $('#animalWorld').addEventListener('pointerleave', () => {
     if ($('#animalWorld').dataset.mode === 'pet') $('#animalWorld').dataset.tracking = 'false';
   });
-  $('#animalExit').addEventListener('click', closeAnimalEncounter);
   animalDialog?.addEventListener('cancel', (event) => {
     event.preventDefault();
     closeAnimalEncounter();
@@ -3641,10 +3729,12 @@ if (typeof CampusDeveloperPanel !== 'undefined') {
     if (!snapshot) return;
     const world = $('#animalWorld');
     world.innerHTML = snapshot.world.html;
+    bindAnimalDialogControls();
     Object.assign(world.dataset, snapshot.world.dataset);
     const hand = $('#animalHand');
     if (snapshot.world.handStyle === null) hand.removeAttribute('style'); else hand.setAttribute('style', snapshot.world.handStyle);
     animalEncounter = CampusDeveloperTools.clone(snapshot.encounter);
+    applyAnimalArtwork(world);
     animalTiming = snapshot.timing ? { ...snapshot.timing, startedAt: animalClock() - snapshot.timing.running } : null;
     delete animalTiming?.running;
     animalPose = snapshot.pose ? CampusDeveloperTools.clone(snapshot.pose) : null;
@@ -3738,7 +3828,7 @@ if (typeof CampusDeveloperPanel !== 'undefined') {
       if (snapshot.uiLocked) lockUi();
     },
     character: id => showCharacter(id),
-    animal: (species, scene, choice) => openDeveloperAnimal(species, scene, choice),
+    animal: openDeveloperAnimal,
     pause(paused) {
       if (paused === developerPaused) return;
       developerPaused = paused;

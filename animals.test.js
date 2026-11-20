@@ -6,22 +6,61 @@ const animals = require('./animals.js');
 const saves = require('./save.js');
 
 test('地图一次只生成一只动物，猫分布在不同位置，鹅固定在明湖', () => {
-  const samples = [0.2, 0.01, 0, 0.2, 0.9, 0, 0.9];
+  const samples = [0.2, 0.01, 0, 0, 0.2, 0.9, 0.99, 0, 0.9];
   const encounters = animals.createSystem(0, () => samples.shift());
   assert.equal(encounters.tick(2499, true, false), null);
   const cat = encounters.tick(2500, true, false);
   assert.equal(cat.species, 'cat');
+  assert.equal(cat.catId, 'wumei');
   assert.equal(encounters.tick(25000, false, true), cat, '互动打开时不会过期');
   encounters.finish(25000);
   assert.equal(encounters.tick(42999, true, false), null);
   const next = encounters.tick(43000, true, false);
   assert.equal(next.species, 'cat');
+  assert.equal(next.catId, 'tangyuan');
   assert.notDeepEqual([next.x, next.y], [cat.x, cat.y]);
   encounters.finish(43000);
   assert.equal(encounters.tick(61000, false, false), null);
   const goose = encounters.tick(61000, true, false);
   assert.equal(goose.species, 'goose');
+  assert.equal(goose.catId, undefined);
   assert.deepEqual([goose.x, goose.y], [61.2, 48.7]);
+});
+
+test('每个猫偶遇可取得对应个体的图集，过期后才重选', () => {
+  const ids = ['wumei', 'dunbu', 'tuoba', 'jupi', 'maolv', 'tangyuan'];
+  const atlasVersions = { wumei: 'v3', jupi: 'v8' };
+  for (const [index, catId] of ids.entries()) {
+    const samples = [0.63, 0.5, (index + 0.5) / ids.length, 0, 0.64];
+    const encounters = animals.createSystem(0, () => samples.shift());
+    const cat = encounters.tick(2500, true, false);
+    assert.equal(cat.catId, catId);
+    const atlasVersion = atlasVersions[catId] ?? 'v2';
+    assert.equal(animals.appearance(cat.species, cat.catId).atlas, 'assets/animals/cat-' + catId + '-' + atlasVersion + '.webp');
+    assert.equal(encounters.tick(cat.expiresAt - 1, true, false), cat);
+    assert.equal(encounters.tick(cat.expiresAt, true, false), null);
+    assert.equal(encounters.tick(cat.expiresAt + 18000, true, false).species, 'goose');
+  }
+});
+
+test('六只猫各有常驻位置，互动后继续留在地图，鹅仍会出现和离开', () => {
+  const encounters = animals.createSystem(0, () => 0, { keepCatsOnMap: true });
+  const cats = encounters.residentCats;
+  assert.deepEqual(cats.map(cat => cat.catId), Object.keys(animals.CATS));
+  assert.equal(new Set(cats.map(cat => cat.id)).size, cats.length);
+  assert.equal(new Set(cats.map(cat => [cat.x, cat.y].join(','))).size, cats.length);
+  const jupi = cats.find(cat => cat.catId === 'jupi');
+  assert.deepEqual([jupi.x, jupi.y], [23, 66]);
+  assert.equal(encounters.tick(0, true, false), null);
+  const goose = encounters.tick(2500, true, false);
+  assert.equal(goose.species, 'goose');
+  for (const cat of cats) {
+    assert.equal(cat.expiresAt, undefined);
+    encounters.finish(3000, cat.id);
+    assert.equal(encounters.tick(3000, true, false), goose);
+  }
+  assert.equal(encounters.tick(goose.expiresAt, true, false), null);
+  assert.deepEqual(encounters.residentCats, cats);
 });
 
 test('抚摸按相同的提示窗口结算，猫和鹅的心情收益与损失不同', () => {

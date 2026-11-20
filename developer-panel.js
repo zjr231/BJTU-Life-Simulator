@@ -19,7 +19,10 @@
       return details(label + (missing ? ' · 缺少 ' + missing + ' 项' : ' · 已满足'), checks(rows));
     };
     let tab = 0, selectedEvent = Object.keys(game.EVENTS)[0], eventSearch = '', selectedPerson = 'zhouNing', selectedEnding = 'ordinary', selectedTestSlot = 1, selectedGrowth = Object.keys(game.GROWTH_NODES)[0];
-    let selectedEconomyAction = dev.ECONOMY_ACTIONS[0], selectedAnimal = Object.keys(game.ANIMALS)[0], memoryQuery = '';
+    const animalOptions = Object.entries(root.CampusAnimals.CATS).map(([id, cat]) => [id, cat.name]);
+    animalOptions.push(['goose', game.ANIMALS.goose.label]);
+    let selectedEconomyAction = dev.ECONOMY_ACTIONS[0], selectedAnimal = animalOptions[0][0], memoryQuery = '';
+    const selectedSpecies = () => selectedAnimal === 'goose' ? 'goose' : 'cat';
     let previousFocus = null, busy = false, memoryJob = null;
     function tell(message, bad = false) { notice.textContent = message; notice.classList.toggle('dev-error', bad); }
     function mark() {
@@ -95,8 +98,9 @@
       return details('预算与收入测试', '<p>本学期收入 ' + flow.earned + ' 元 · 消费 ' + flow.spent + ' 元 · 待还 ' + flow.debt + ' 元 · ' + escape(game.economyTag(state).label) + '</p><div class="dev-grid"><section>' + budget + '</section><section>' + actionTest + '</section></div>', 'economy');
     }
     function animalMarkup(state) {
-      const profile = game.ANIMALS[selectedAnimal], window = game.animalCalmWindow(state, selectedAnimal);
-      return details('校园动物', '<form data-dev-form="animal"><div class="dev-person-fields"><label>动物<select id="devAnimal">' + options(Object.entries(game.ANIMALS).map(([id, value]) => [id, value.label]), selectedAnimal) + '</select></label><label>熟悉次数<input name="visits" type="number" min="0" max="2000" step="1" required value="' + (state.animalVisits?.[selectedAnimal] || 0) + '"></label></div><div class="dev-buttons"><button type="submit">设置次数</button>' + button('animalOpen', '打开互动') + button('animalCalm', '抚摸成功') + button('animalStartled', '受惊结果') + button('animalFeed', '喂食') + '</div></form><p class="dev-help">平静窗口 ' + window.start + '～' + window.end + ' 毫秒 · 喂食 ' + profile.price + ' 元。打开互动会替换当前待办；结果测试按游戏规则结算。</p>', 'animals');
+      const species = selectedSpecies();
+      const profile = game.ANIMALS[species], window = game.animalCalmWindow(state, species);
+      return details('校园动物', '<form data-dev-form="animal"><div class="dev-person-fields"><label>动物<select id="devAnimal">' + options(animalOptions, selectedAnimal) + '</select></label><label>熟悉次数<input name="visits" type="number" min="0" max="2000" step="1" required value="' + (state.animalVisits?.[species] || 0) + '"></label></div><div class="dev-buttons"><button type="submit">设置次数</button>' + button('animalOpen', '打开互动') + button('animalCalm', '抚摸成功') + button('animalStartled', '受惊结果') + button('animalFeed', '喂食') + '</div></form><p class="dev-help">平静窗口 ' + window.start + '～' + window.end + ' 毫秒 · 喂食 ' + profile.price + ' 元。六只猫共用熟悉次数。打开互动会替换当前待办；结果测试按游戏规则结算。</p>', 'animals');
     }
     function memoryResults(state) {
       const info = dev.memoryStatus(state, selectedPerson, memoryQuery);
@@ -191,7 +195,7 @@
       if (form.dataset.devForm === 'resources') mutate('修改角色资源', state => dev.applyFields(state, Object.fromEntries([...data].map(([key,value]) => [key,Number(value)]))));
       if (form.dataset.devForm === 'person') mutate('调整' + game.npcCast.profile(selectedPerson).name + '相识度', state => dev.person(state, selectedPerson, Number(data.get('familiarity'))));
       if (form.dataset.devForm === 'budget') mutate('重建预算场景', state => dev.budgetScene(state, Object.fromEntries(data)));
-      if (form.dataset.devForm === 'animal') mutate('调整动物熟悉次数', state => dev.animalVisits(state, selectedAnimal, Number(data.get('visits'))));
+      if (form.dataset.devForm === 'animal') mutate('调整动物熟悉次数', state => dev.animalVisits(state, selectedSpecies(), Number(data.get('visits'))));
       if (form.dataset.devForm === 'checkpoint') { enter(); const id = recorder.checkpoint(adapter.state(), data.get('label')); recorder.record('创建检查点 ' + id, adapter.state(), adapter.state()); tell('已创建检查点 ' + id); render(); }
     });
     panel.addEventListener('input', event => {
@@ -234,9 +238,11 @@
       if (action === 'memorySummary' || action === 'memoryReflection') { updateMemory(action === 'memorySummary' ? 'summary' : 'reflection'); return; }
       if (['animalOpen', 'animalCalm', 'animalStartled', 'animalFeed'].includes(action)) {
         const choice = ({ animalCalm: 'calm', animalStartled: 'startled', animalFeed: 'feed' })[action];
-        mutate('构造校园动物场景', state => dev.animalScene(state, selectedAnimal), false, next => {
+        const species = selectedSpecies();
+        const catId = species === 'cat' ? selectedAnimal : undefined;
+        mutate('构造校园动物场景', state => dev.animalScene(state, species), false, next => {
           close();
-          adapter.animal(selectedAnimal, next, choice);
+          adapter.animal(species, catId, next, choice);
         });
         return;
       }
