@@ -2302,9 +2302,9 @@ function showCoachStep(id, selector, text, onFinish) {
   else setTimeout(positionCoach, 0);
 }
 
-function maybeShowStartCoach() {
+function maybeShowStartCoach(force = false) {
   if (coachDone('start-new')) return;
-  if (startMenuHasSave()) return;
+  if (!force && startMenuHasSave()) return;
   showCoachStep('start-new', '#startNew', '第一次来？先创建角色，开始你的第一学期。');
 }
 
@@ -3561,7 +3561,8 @@ $('#startResetTips')?.addEventListener('click', () => {
   saveCoachProgress();
   hideCoach();
   const status = $('#startStatus');
-  if (status) status.textContent = '新手提示已重置，下次进入游戏会重新显示。';
+  if (status) status.textContent = '新手提示已重置，已重新显示。';
+  maybeShowStartCoach(true);
 });
 $('#startSettingsBack')?.addEventListener('click', () => { const panel = $('#startSettingsPanel'); if (panel) panel.hidden = true; });
 $('#endTermQuick')?.addEventListener('click', () => { finishCoach('semester-end'); requestEndTerm(); });

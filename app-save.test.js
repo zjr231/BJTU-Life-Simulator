@@ -747,6 +747,57 @@ test('地图只显示已认识的固定人物，三个标记都能打开对应�
   assert.equal(layer.innerHTML, '');
 });
 
+test('固定人物对话关闭重开、保存读取和旧档无记忆侧车时恢复上下文', () => {
+  const ui = app();
+  ui.start();
+  const setup = ui.evaluate(`(() => {
+    let current = state;
+    let result = game.executeAction(current, 'soloSport', { commandId: 'memory-action', npcCastVersion: 1 });
+    if (!result.ok) return { error: result.reason };
+    current = result.state;
+    let guard = 0;
+    while (current.pendingEvent && guard++ < 6) {
+      const event = current.pendingEvent;
+      const choice = game.EVENTS[event.id].choices[0];
+      result = game.submitEventChoice(current, choice.id, { commandId: 'memory-event-' + current.revision, eventInstanceId: event.instanceId, npcCastVersion: 1 });
+      if (!result.ok) return { error: result.reason };
+      current = result.state;
+    }
+    const occasion = game.npcOpportunity(current);
+    if (!occasion) return { error: '没有可用的人物相识调度', phase: current.phase };
+    result = game.recordNpcDialogue(current, { npcId: occasion.npcId, kind: occasion.kind, text: '', say: '你好，我是' + game.npcCast.profile(occasion.npcId).name, intent: 'none', source: 'local', trigger: occasion.key });
+    if (!result.ok) return { error: result.reason };
+    result = game.recordNpcDialogue(result.state, { npcId: occasion.npcId, kind: 'chat', text: '我最近在准备课程展示，有点紧张', say: '别急，我们先理清展示的重点。', intent: 'none', source: 'local' });
+    if (!result.ok) return { error: result.reason };
+    state = result.state;
+    renderState();
+    showCharacter(occasion.npcId);
+    return { npcId: occasion.npcId };
+  })()`);
+  assert.ok(setup && !setup.error, setup && setup.error);
+  const npcId = setup.npcId;
+  assert.match(ui.element('#dialogBody').innerHTML, /准备课程展示/);
+  ui.evaluate('dialog.close()');
+  ui.evaluate('showCharacter(' + JSON.stringify(npcId) + ')');
+  assert.match(ui.element('#dialogBody').innerHTML, /准备课程展示/);
+
+  const saved = saves.createSlotService(ui.storage).save(ui.evaluate('state'), 2);
+  assert.equal(saved.ok, true, saved.reason);
+  ui.evaluate('dialog.close(); loadGame(2)');
+  ui.evaluate('showCharacter(' + JSON.stringify(npcId) + ')');
+  assert.match(ui.element('#dialogBody').innerHTML, /准备课程展示/);
+
+  const old = JSON.parse(JSON.stringify(ui.evaluate('state')));
+  delete old.npcAgentMemory;
+  delete old.npcDialogueSummaries;
+  const oldSaved = saves.createSlotService(ui.storage).save(old, 3);
+  assert.equal(oldSaved.ok, true, oldSaved.reason);
+  ui.evaluate('dialog.close(); loadGame(3)');
+  ui.evaluate('showCharacter(' + JSON.stringify(npcId) + ')');
+  assert.equal(ui.evaluate('dialogMode'), 'relationship');
+  assert.match(ui.element('#dialogBody').innerHTML, /准备课程展示/);
+});
+
 test('含路人聊天历史的旧存档仍可加载，地图不显示路人', () => {
   const ui = app();
   const start = game.createGame({ nickname: '旧版进度', seed: 'old-roaming-npc' });
