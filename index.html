@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-title" content="北交人生">
   <meta name="format-detection" content="telephone=no">
   <link rel="preload" as="image" href="assets/start-screen-campus.webp">
-  <link rel="stylesheet" href="styles.css?v=20261121-cat-archive">
+  <link rel="stylesheet" href="styles.css?v=20261122-cat-pose-cycle">
 </head>
 <body>
   <section class="start-screen" id="startScreen" aria-label="北交人生启动页">
@@ -363,17 +363,21 @@
     <dialog class="animal-dialog" id="animalDialog" aria-labelledby="animalTitle">
       <div class="animal-world" id="animalWorld">
         <div class="animal-landscape" aria-hidden="true"></div>
-        <div class="animal-actor" aria-hidden="true">
-          <div class="animal-shadow"></div>
-          <div class="animal-portrait">
+        <div class="animal-actor">
+          <div class="animal-shadow" aria-hidden="true"></div>
+          <div class="animal-portrait" aria-hidden="true">
             <div class="animal-reaction">
               <canvas id="animalMotionCanvas" class="animal-motion-canvas" hidden></canvas>
               <span class="animal-frame animal-frame-alert"></span>
               <span class="animal-frame animal-frame-calm"></span>
               <span class="animal-frame animal-frame-petted"></span>
               <span class="animal-frame animal-frame-startled"></span>
+              <span class="animal-frame animal-frame-special"></span>
+              <span class="animal-frame animal-frame-standing"></span>
+              <span class="animal-frame animal-frame-lying"></span>
             </div>
           </div>
+          <p class="animal-speech" id="animalSpeech" role="status"></p>
         </div>
         <button type="button" class="animal-pet-target" id="animalPetTarget" hidden></button>
         <div class="animal-hand" id="animalHand" aria-hidden="true"><span></span></div>
@@ -464,12 +468,12 @@
   <script src="save.js?v=20261106-p3"></script>
   <script src="audio.js?v=20261118-lin-animals"></script>
   <script src="sms.js?v=20261106-p3"></script>
-  <script src="animals.js?v=20261121-cat-archive"></script>
+  <script src="animals.js?v=20261122-cat-speech"></script>
   <script src="season.js?v=20261106-p3"></script>
   <script src="vendor/planck.min.js?v=20261106-p3"></script>
   <script src="basketball.js?v=20261117-dev1"></script>
   <script src="developer-tools.js?v=20261120-dev3"></script>
-  <script src="developer-panel.js?v=20261120-campus-cats"></script>
-  <script src="app.js?v=20261121-cat-archive"></script>
+  <script src="developer-panel.js?v=20261121-cat-stills"></script>
+  <script src="app.js?v=20261122-cat-pose-cycle"></script>
 </body>
 </html>

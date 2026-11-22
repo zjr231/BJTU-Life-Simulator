@@ -11,7 +11,7 @@
     const button = (action, label, value = '') => '<button type="button" data-dev-action="' + action + '" data-value="' + escape(value) + '">' + escape(label) + '</button>';
     const options = (rows, selected) => rows.map(([id, label]) => '<option value="' + escape(id) + '"' + (String(id) === String(selected) ? ' selected' : '') + '>' + escape(label) + '</option>').join('');
     const checks = rows => '<ul class="dev-checks">' + rows.map(row => '<li class="' + (row.met === null ? 'dev-info' : row.met ? 'dev-pass' : 'dev-gap') + '">' + (row.met === null ? '· ' : row.met ? '✓ ' : '缺少：') + escape(row.label) + '</li>').join('') + '</ul>';
-    const openSections = new Set();
+    const openSections = new Set(['animals']);
     const details = (label, content, key = '') => '<details class="dev-details"' + (key ? ' data-dev-section="' + key + '"' + (openSections.has(key) ? ' open' : '') : '') + '><summary>' + escape(label) + '</summary>' + content + '</details>';
     const help = text => details('操作说明', '<p class="dev-help">' + escape(text) + '</p>');
     const conditionDetails = (rows, label = '条件') => {
@@ -19,9 +19,13 @@
       return details(label + (missing ? ' · 缺少 ' + missing + ' 项' : ' · 已满足'), checks(rows));
     };
     let tab = 0, selectedEvent = Object.keys(game.EVENTS)[0], eventSearch = '', selectedPerson = 'zhouNing', selectedEnding = 'ordinary', selectedTestSlot = 1, selectedGrowth = Object.keys(game.GROWTH_NODES)[0];
-    const animalOptions = Object.entries(root.CampusAnimals.CATS).map(([id, cat]) => [id, cat.name]);
+    const animals = root.CampusAnimals;
+    const animalOptions = Object.entries(animals.CATS).map(([id, cat]) => [id, cat.name]);
+    const catActionButtons = animalOptions.filter(([id]) => animals.catPosePreview(id, 'special'))
+      .map(([id, name]) => button('animalShowSpecial', '查看' + name + '的专属动作', id)).join('');
+    const catPoseOptions = [['sitting', '坐姿'], ['lying', '趴着'], ['standing', '四脚站立']];
     animalOptions.push(['goose', game.ANIMALS.goose.label]);
-    let selectedEconomyAction = dev.ECONOMY_ACTIONS[0], selectedAnimal = animalOptions[0][0], memoryQuery = '';
+    let selectedEconomyAction = dev.ECONOMY_ACTIONS[0], selectedAnimal = animalOptions[0][0], selectedCatPose = 'sitting', memoryQuery = '';
     const selectedSpecies = () => selectedAnimal === 'goose' ? 'goose' : 'cat';
     let previousFocus = null, busy = false, memoryJob = null;
     function tell(message, bad = false) { notice.textContent = message; notice.classList.toggle('dev-error', bad); }
@@ -97,10 +101,24 @@
       const actionTest = '<label>收入 / 消费<select id="devEconomyAction">' + options(dev.ECONOMY_ACTIONS.map(id => [id, game.ACTIONS[id].title]), selectedEconomyAction) + '</select></label><p class="dev-help">' + escape(allowed.ok ? '可执行' : allowed.reason) + ' · 收入 ' + (action.income || 0) + ' 元 · 支出 ' + (action.money || 0) + ' 元</p><div class="dev-buttons">' + button('economyRun', '按规则执行') + button('economyPrepare', '构造前置场景') + '</div><p class="dev-help">构造场景会重建到开放学期，并补齐成绩、经历与资源。</p>';
       return details('预算与收入测试', '<p>本学期收入 ' + flow.earned + ' 元 · 消费 ' + flow.spent + ' 元 · 待还 ' + flow.debt + ' 元 · ' + escape(game.economyTag(state).label) + '</p><div class="dev-grid"><section>' + budget + '</section><section>' + actionTest + '</section></div>', 'economy');
     }
+    function catPoseImage() {
+      const { asset, atlas } = animals.catPosePreview(selectedAnimal, selectedCatPose);
+      const label = animals.CATS[selectedAnimal].name + ' · '
+        + (selectedCatPose === 'special' ? '专属动作' : catPoseOptions.find(([id]) => id === selectedCatPose)[1]);
+      return '<span class="dev-cat-pose-art' + (atlas ? ' is-atlas' : '') + '" role="img" aria-label="' + escape(label)
+        + '" style="--dev-cat-image:url(' + escape(asset) + ')"></span>';
+    }
     function animalMarkup(state) {
       const species = selectedSpecies();
       const profile = game.ANIMALS[species], window = game.animalCalmWindow(state, species);
-      return details('校园动物', '<form data-dev-form="animal"><div class="dev-person-fields"><label>动物<select id="devAnimal">' + options(animalOptions, selectedAnimal) + '</select></label><label>熟悉次数<input name="visits" type="number" min="0" max="2000" step="1" required value="' + (state.animalVisits?.[species] || 0) + '"></label></div><div class="dev-buttons"><button type="submit">设置次数</button>' + button('animalOpen', '打开互动') + button('animalCalm', '抚摸成功') + button('animalStartled', '受惊结果') + button('animalFeed', '喂食') + '</div></form><p class="dev-help">平静窗口 ' + window.start + '～' + window.end + ' 毫秒 · 喂食 ' + profile.price + ' 元。六只猫共用熟悉次数。打开互动会替换当前待办；结果测试按游戏规则结算。</p>', 'animals');
+      const poses = animals.catPosePreview(selectedAnimal, 'special')
+        ? [...catPoseOptions, ['special', '专属动作']] : catPoseOptions;
+      const posePreview = species === 'cat'
+        ? '<div class="dev-cat-pose"><label>姿态预览<select id="devCatPose">' + options(poses, selectedCatPose)
+          + '</select></label>' + catPoseImage() + '</div>'
+        : '';
+      return details('校园动物', '<div class="dev-buttons">' + catActionButtons + '</div>'
+        + '<form data-dev-form="animal"><div class="dev-person-fields"><label>动物<select id="devAnimal">' + options(animalOptions, selectedAnimal) + '</select></label><label>熟悉次数<input name="visits" type="number" min="0" max="2000" step="1" required value="' + (state.animalVisits?.[species] || 0) + '"></label></div><div class="dev-buttons"><button type="submit">设置次数</button>' + button('animalOpen', '打开互动') + button('animalCalm', '抚摸成功') + button('animalStartled', '受惊结果') + button('animalFeed', '喂食') + '</div></form>' + posePreview + '<p class="dev-help">平静窗口 ' + window.start + '～' + window.end + ' 毫秒 · 喂食 ' + profile.price + ' 元。六只猫共用熟悉次数。打开互动会替换当前待办；结果测试按游戏规则结算。</p>', 'animals');
     }
     function memoryResults(state) {
       const info = dev.memoryStatus(state, selectedPerson, memoryQuery);
@@ -158,7 +176,10 @@
       body.setAttribute('aria-labelledby', 'developerTab' + tab);
       body.innerHTML = state ? [resourceMarkup, progressMarkup, eventMarkup, growthMarkup, recordsMarkup][tab](state) : '<div class="dev-empty"><h3>尚未进入游戏</h3><p>可以先开始正常游戏，也可以直接建立独立测试场景。</p>' + button('create','创建大一测试场景') + (tab === 4 ? '<div class="dev-buttons"><select id="devSaveSlot">' + options([1,2,3].map(id => [id,'测试栏位 ' + id])) + '</select>' + button('load','读取测试副本') + '</div>' : '') + '</div>';
       if (state && tab === 1) body.insertAdjacentHTML('beforeend', economyMarkup(state));
-      if (state && tab === 2) body.insertAdjacentHTML('beforeend', animalMarkup(state) + memoryMarkup(state));
+      if (state && tab === 2) {
+        body.insertAdjacentHTML('afterbegin', animalMarkup(state));
+        body.insertAdjacentHTML('beforeend', memoryMarkup(state));
+      }
       const slot = body.querySelector('#devSaveSlot');
       if (slot) slot.value = String(selectedTestSlot);
     }
@@ -212,12 +233,21 @@
       if (event.target.id === 'devGrowth') { selectedGrowth = event.target.value; render(); }
       if (event.target.id === 'devSaveSlot') selectedTestSlot = Number(event.target.value);
       if (event.target.id === 'devEconomyAction') { selectedEconomyAction = event.target.value; render(); }
-      if (event.target.id === 'devAnimal') { selectedAnimal = event.target.value; render(); }
+      if (event.target.id === 'devAnimal') {
+        selectedAnimal = event.target.value;
+        if (selectedCatPose === 'special' && !animals.catPosePreview(selectedAnimal, 'special')) selectedCatPose = 'sitting';
+        render();
+      }
+      if (event.target.id === 'devCatPose') {
+        selectedCatPose = event.target.value;
+        body.querySelector('.dev-cat-pose-art').outerHTML = catPoseImage();
+      }
     });
     panel.addEventListener('toggle', event => {
       const key = event.target.dataset.devSection;
       if (!key || !body.contains(event.target)) return;
-      if (event.target.open) openSections.add(key); else openSections.delete(key);
+      if (event.target.open) openSections.add(key);
+      else openSections.delete(key);
     }, true);
     panel.addEventListener('click', event => {
       const node = event.target.closest('button');
@@ -226,6 +256,14 @@
       const action = node.dataset.devAction, value = node.dataset.value;
       const read = id => panel.querySelector('#' + id)?.value;
       if (action === 'close') { close(); return; }
+      if (action === 'animalShowSpecial') {
+        selectedAnimal = value;
+        selectedCatPose = 'special';
+        render();
+        body.querySelector('[data-dev-action="animalShowSpecial"][data-value="' + value + '"]')
+          ?.focus({ preventScroll: true });
+        return;
+      }
       if (action === 'expand') { const expanded = panel.classList.toggle('dev-expanded'); node.textContent = expanded ? '收起' : '展开'; node.setAttribute('aria-expanded', String(expanded)); return; }
       if (action === 'exit') {
         cancelMemory();

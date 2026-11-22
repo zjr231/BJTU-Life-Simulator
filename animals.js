@@ -12,96 +12,54 @@
   };
   const MINGHU = [61.2, 48.7];
 
-  // 每行是同一个部位在警觉、放松、受抚摸、受惊四张素材中的位置。
-  // 坐标以图集内 627 像素的单张图为基准。四帧共用同一只猫的落地位置。
-  const ATLAS_TILE = 627;
-  const anchors = (...points) => points.map(point => [point, point, point, point]);
-  const FEATURES = {
-    wumei: [
-      [[122, 27], [128, 48], [121, 25], [124, 28]], // 耳尖（画面左、右）
-      [[286, 35], [288, 48], [285, 34], [283, 35]],
-      [[178, 139], [177, 160], [181, 107], [177, 134]], // 眼睛
-      [[245, 143], [246, 163], [249, 112], [243, 136]],
-      [[215, 181], [211, 207], [218, 133], [216, 169]], // 鼻尖
-      [[210, 217], [211, 241], [216, 187], [212, 209]], // 下巴
-      ...anchors([344, 222], [148, 548], [210, 550], [431, 510], [503, 563])
-    ],
-    dunbu: [
-      [[111, 26], [116, 56], [111, 23], [115, 26]],
-      [[301, 33], [299, 51], [300, 31], [300, 31]],
-      [[175, 138], [176, 163], [175, 106], [175, 132]],
-      [[247, 137], [248, 163], [248, 108], [247, 134]],
-      [[217, 177], [215, 209], [216, 121], [214, 170]],
-      [[217, 218], [214, 253], [218, 178], [214, 216]],
-      ...anchors([333, 202], [141, 550], [203, 553], [436, 514], [558, 553])
-    ],
-    tuoba: [
-      [[108, 26], [103, 53], [107, 26], [107, 22]],
-      [[301, 25], [306, 50], [298, 24], [310, 24]],
-      [[182, 142], [182, 175], [183, 116], [182, 137]],
-      [[245, 141], [246, 174], [251, 115], [246, 137]],
-      [[223, 178], [222, 214], [231, 126], [220, 169]],
-      [[223, 219], [224, 250], [227, 163], [221, 209]],
-      ...anchors([344, 241], [148, 548], [210, 552], [429, 481], [356, 556])
-    ],
-    jupi: [
-      [[124, 47], [120, 62], [122, 52], [122, 46]],
-      [[272, 52], [273, 62], [271, 58], [270, 51]],
-      [[176, 132], [168, 155], [177, 118], [175, 133]],
-      [[242, 134], [239, 157], [247, 119], [244, 134]],
-      [[217, 167], [210, 196], [220, 139], [217, 166]],
-      [[218, 207], [208, 234], [220, 170], [214, 207]],
-      [[431, 419], [439, 419], [431, 419], [434, 419]], // 右侧腰胯
-      ...anchors([324, 226], [102, 410], [155, 550], [208, 553], [428, 512], [485, 565])
-    ],
-    maolv: [
-      [[123, 23], [122, 52], [118, 25], [122, 23]],
-      [[296, 32], [294, 52], [286, 26], [294, 30]],
-      [[179, 141], [176, 167], [181, 114], [179, 135]],
-      [[245, 143], [243, 168], [258, 117], [246, 136]],
-      [[217, 183], [212, 213], [224, 134], [216, 179]],
-      [[219, 219], [212, 249], [225, 167], [214, 218]],
-      ...anchors([323, 221], [151, 548], [211, 550], [431, 508], [519, 562])
-    ],
-    tangyuan: [
-      [[123, 26], [122, 49], [116, 27], [123, 25]],
-      [[292, 36], [285, 49], [288, 34], [284, 30]],
-      [[178, 141], [174, 163], [180, 108], [177, 136]],
-      [[245, 145], [244, 163], [251, 108], [245, 136]],
-      [[217, 182], [213, 208], [223, 127], [216, 171]],
-      [[219, 218], [213, 248], [222, 164], [213, 211]],
-      ...anchors([342, 222], [153, 548], [210, 548], [432, 510], [517, 559])
-    ],
-    goose: [
-      [[343, 14], [212, 116], [305, 35], [329, 77]],    // 头顶
-      [[345, 54], [196, 168], [294, 61], [330, 115]],   // 眼睛之间
-      [[343, 87], [193, 223], [321, 157], [329, 200]],  // 喙尖
-      [[325, 64], [181, 200], [285, 111], [304, 153]],  // 喙的两侧
-      [[365, 66], [224, 196], [344, 115], [356, 154]],
-      [[304, 98], [242, 164], [237, 94], [277, 147]],   // 脖子上段两侧
-      [[380, 98], [245, 90], [332, 115], [382, 145]],
-      [[302, 153], [291, 157], [221, 148], [268, 198]], // 脖子中段两侧
-      [[380, 161], [332, 78], [304, 178], [367, 201]],
-      [[296, 237], [329, 208], [222, 230], [256, 254]], // 脖子接入胸口
-      [[391, 236], [425, 179], [320, 201], [378, 246]],
-      [[231, 247], [179, 222], [218, 228], [213, 150]], // 翼背和肩线
-      [[411, 268], [460, 244], [397, 194], [418, 219]],
-      [[465, 320], [504, 300], [467, 272], [448, 284]],
-      [[167, 348], [69, 334], [162, 345], [130, 325]],  // 翅膀外侧
-      [[488, 389], [526, 389], [512, 393], [478, 390]], // 胸腹外侧
-      [[428, 478], [473, 481], [456, 481], [426, 455]],
-      [[300, 484], [314, 480], [299, 472], [299, 454]], // 腹部
-      [[248, 602], [248, 602], [243, 602], [226, 598]], // 双脚
-      [[370, 602], [379, 602], [377, 602], [387, 599]]
-    ]
-  };
+  // Each row tracks one feature across the goose's four atlas poses.
+  const GOOSE_LANDMARKS = [
+    [[343, 14], [212, 116], [305, 35], [329, 77]],    // 头顶
+    [[345, 54], [196, 168], [294, 61], [330, 115]],   // 眼睛之间
+    [[343, 87], [193, 223], [321, 157], [329, 200]],  // 喙尖
+    [[325, 64], [181, 200], [285, 111], [304, 153]],  // 喙的两侧
+    [[365, 66], [224, 196], [344, 115], [356, 154]],
+    [[304, 98], [242, 164], [237, 94], [277, 147]],   // 脖子上段两侧
+    [[380, 98], [245, 90], [332, 115], [382, 145]],
+    [[302, 153], [291, 157], [221, 148], [268, 198]], // 脖子中段两侧
+    [[380, 161], [332, 78], [304, 178], [367, 201]],
+    [[296, 237], [329, 208], [222, 230], [256, 254]], // 脖子接入胸口
+    [[391, 236], [425, 179], [320, 201], [378, 246]],
+    [[231, 247], [179, 222], [218, 228], [213, 150]], // 翼背和肩线
+    [[411, 268], [460, 244], [397, 194], [418, 219]],
+    [[465, 320], [504, 300], [467, 272], [448, 284]],
+    [[167, 348], [69, 334], [162, 345], [130, 325]],  // 翅膀外侧
+    [[488, 389], [526, 389], [512, 393], [478, 390]], // 胸腹外侧
+    [[428, 478], [473, 481], [456, 481], [426, 455]],
+    [[300, 484], [314, 480], [299, 472], [299, 454]], // 腹部
+    [[248, 602], [248, 602], [243, 602], [226, 598]], // 双脚
+    [[370, 602], [379, 602], [377, 602], [387, 599]]
+  ];
   const CATS = Object.freeze({
-    wumei: { name: '五妹', atlas: 'assets/animals/cat-wumei-v3.webp', landmarks: FEATURES.wumei },
-    dunbu: { name: '墩布', atlas: 'assets/animals/cat-dunbu-v2.webp', landmarks: FEATURES.dunbu },
-    tuoba: { name: '拖把', atlas: 'assets/animals/cat-tuoba-v2.webp', landmarks: FEATURES.tuoba },
-    jupi: { name: '橘皮', atlas: 'assets/animals/cat-jupi-v8.webp', landmarks: FEATURES.jupi },
-    maolv: { name: '毛驴', atlas: 'assets/animals/cat-maolv-v2.webp', landmarks: FEATURES.maolv },
-    tangyuan: { name: '汤圆', atlas: 'assets/animals/cat-tangyuan-v2.webp', landmarks: FEATURES.tangyuan }
+    wumei: {
+      name: '五妹', atlas: 'assets/animals/cat-wumei-v4.webp',
+      special: 'assets/animals/cat-wumei-curl-sleep-v1.webp', specialCue: '呼呼呼......（睡大觉）', speechAnchor: [30, 40]
+    },
+    dunbu: {
+      name: '墩布', atlas: 'assets/animals/cat-dunbu-v3.webp',
+      special: 'assets/animals/cat-dunbu-cautious-peek-v8.webp', specialCue: '别欺负我~', speechAnchor: [24, 59]
+    },
+    tuoba: {
+      name: '拖把', atlas: 'assets/animals/cat-tuoba-v3.webp',
+      special: 'assets/animals/cat-tuoba-long-stretch-v1.webp', specialCue: '和我玩！', speechAnchor: [34, 54]
+    },
+    jupi: {
+      name: '橘皮', atlas: 'assets/animals/cat-jupi-v10.webp',
+      special: 'assets/animals/cat-jupi-paw-swipe-v1.webp', specialCue: '吃我喵喵拳！', speechAnchor: [42, 14]
+    },
+    maolv: {
+      name: '毛驴', atlas: 'assets/animals/cat-maolv-v3.webp',
+      special: 'assets/animals/cat-maolv-listening-tilt-v1.webp', specialCue: '嗯哼？（疑惑）', speechAnchor: [60, 5]
+    },
+    tangyuan: {
+      name: '汤圆', atlas: 'assets/animals/cat-tangyuan-v3.webp',
+      special: 'assets/animals/cat-tangyuan-tree-leap-v1.webp', specialCue: '看我上树~~', speechAnchor: [36, 12]
+    }
   });
   const CAT_IDS = Object.keys(CATS);
   // 文字录自 assets/bjtu_cat 中物理科学与工程学院的校园介绍牌。
@@ -137,7 +95,8 @@
       story: '疫情前一年，梅园突然出现了一个猫包，里面就装着汤圆（强烈谴责丢猫行为）。因为它全身雪白，异瞳非常漂亮，被大家取名为汤圆。他性格霸道，不允许其他猫来他的领地。之前被狗咬伤非常严重，在大家的救助下最后重返校园。'
     }
   };
-  const GOOSE = { atlas: 'assets/animals/goose-atlas.webp', landmarks: FEATURES.goose };
+  const GOOSE = { atlas: 'assets/animals/goose-atlas.webp', landmarks: GOOSE_LANDMARKS };
+  const ATLAS_TILE = 627;
   const GRID = 9;
   const PORTRAIT_SIZE = 512;
 
@@ -155,6 +114,16 @@
       atlas,
       photos: [1, 2, 3].map(number => 'assets/bjtu_cat/' + name + '/' + name + '_' + number + '.jpg')
     };
+  }
+
+  function catPosePreview(catId, pose) {
+    if (!Object.hasOwn(CATS, catId)) return null;
+    if (pose === 'sitting') return { asset: CATS[catId].atlas, atlas: true };
+    if (pose === 'special' && CATS[catId].special) return { asset: CATS[catId].special, atlas: false };
+    if (pose === 'lying' || pose === 'standing') {
+      return { asset: 'assets/animals/cat-' + catId + '-' + pose + '-v1.webp', atlas: false };
+    }
+    return null;
   }
 
   function createPortrait(canvas) {
@@ -321,7 +290,7 @@
     return { residentCats, tick, finish };
   }
 
-  const api = { CATS, appearance, catArchive, createSystem, createPortrait };
+  const api = { CATS, appearance, catArchive, catPosePreview, createSystem, createPortrait };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusAnimals = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

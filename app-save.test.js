@@ -816,8 +816,8 @@ test('含路人聊天历史的旧存档仍可加载，地图不显示路人', ()
 
 test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返回地图', () => {
   const cases = [
-    { species: 'cat', catId: 'wumei', name: '五妹', atlas: 'cat-wumei-v3.webp', pose: 'alert', title: '五妹哈气了', result: /五妹愣了一下/, mood: '心情 −2' },
-    { species: 'cat', catId: 'maolv', name: '毛驴', atlas: 'cat-maolv-v2.webp', pose: 'alert', title: '毛驴哈气了', result: /毛驴愣了一下/, mood: '心情 −2' },
+    { species: 'cat', catId: 'wumei', name: '五妹', atlas: 'cat-wumei-v4.webp', pose: 'alert', title: '五妹哈气了', result: /五妹愣了一下/, mood: '心情 −2' },
+    { species: 'cat', catId: 'maolv', name: '毛驴', atlas: 'cat-maolv-v3.webp', pose: 'alert', title: '毛驴哈气了', result: /毛驴愣了一下/, mood: '心情 −2' },
     { species: 'goose', name: '明湖的鹅', atlas: 'goose-atlas.webp', pose: 'calm', title: '摸到了', result: /它轻轻抖了抖羽毛/, mood: '心情 +7' }
   ];
   for (const { species, catId, name, atlas, pose, title, result, mood } of cases) {
@@ -846,7 +846,12 @@ test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返�
     }
     if (pose === 'calm') ui.evaluate('animalTiming.startedAt = animalClock() - animalTiming.start; updateAnimalTiming()');
     ui.click('#animalPetTarget');
-    assert.equal(controls.hidden, true);
+    if (species === 'cat') {
+      assert.equal(world.dataset.mode, 'result');
+      assert.equal(world.dataset.pose, 'startled');
+    } else {
+      assert.equal(controls.hidden, true);
+    }
     ui.flush();
 
     assert.equal(world.dataset.mode, 'result');

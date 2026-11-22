@@ -29,13 +29,13 @@ test('地图一次只生成一只动物，猫分布在不同位置，鹅固定�
 
 test('每个猫偶遇可取得对应个体的图集，过期后才重选', () => {
   const ids = ['wumei', 'dunbu', 'tuoba', 'jupi', 'maolv', 'tangyuan'];
-  const atlasVersions = { wumei: 'v3', jupi: 'v8' };
+  const atlasVersions = { wumei: 'v4', jupi: 'v10' };
   for (const [index, catId] of ids.entries()) {
     const samples = [0.63, 0.5, (index + 0.5) / ids.length, 0, 0.64];
     const encounters = animals.createSystem(0, () => samples.shift());
     const cat = encounters.tick(2500, true, false);
     assert.equal(cat.catId, catId);
-    const atlasVersion = atlasVersions[catId] ?? 'v2';
+    const atlasVersion = atlasVersions[catId] ?? 'v3';
     assert.equal(animals.appearance(cat.species, cat.catId).atlas, 'assets/animals/cat-' + catId + '-' + atlasVersion + '.webp');
     assert.equal(encounters.tick(cat.expiresAt - 1, true, false), cat);
     assert.equal(encounters.tick(cat.expiresAt, true, false), null);

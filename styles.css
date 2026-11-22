@@ -1481,6 +1481,17 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
 .developer-panel .dev-fields { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
 .developer-panel .dev-fields label { margin-bottom: 4px; }
 .developer-panel .dev-person-fields { display: grid; grid-template-columns: 1fr 100px; gap: 10px; }
+.developer-panel .dev-cat-pose { display: grid; justify-items: start; gap: 8px; margin-top: 12px; }
+.developer-panel .dev-cat-pose label { width: 100%; }
+.dev-cat-pose-art {
+  display: block;
+  width: min(240px, 100%);
+  aspect-ratio: 1;
+  justify-self: center;
+  border-radius: 6px;
+  background: #ddd7c8 var(--dev-cat-image) 0 0 / 100% 100% no-repeat;
+}
+.dev-cat-pose-art.is-atlas { background-size: 200% 200%; }
 .developer-panel .dev-budget-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 12px 0; }
 .developer-panel .dev-memory-list { max-height: 150px; overflow: auto; padding-left: 18px; color: #c6d2d8; }
 .developer-panel .dev-memory-list li { margin: 4px 0; }
@@ -1625,6 +1636,38 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
   transform: translate(-50%, var(--footline));
   pointer-events: none;
 }
+.animal-speech {
+  position: absolute;
+  top: var(--animal-speech-y, 10%);
+  left: var(--animal-speech-x, 50%);
+  transform: translate(-50%, calc(-100% - 12px));
+  width: max-content;
+  max-width: 90%;
+  margin: 0;
+  padding: 8px 14px;
+  border: 1px solid #c6a978;
+  border-radius: 15px;
+  background: #fff3d3;
+  color: #362718;
+  box-shadow: 0 3px 12px #17180f45;
+  font-size: clamp(14px, 2vw, 19px);
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+}
+.animal-speech:empty { opacity: 0; }
+.animal-speech::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border-right: inherit;
+  border-bottom: inherit;
+  background: inherit;
+}
 .animal-shadow {
   position: absolute;
   inset: 84% 20% 6%;
@@ -1639,6 +1682,8 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
   inset: 0;
   transform-origin: 50% 91%;
   filter: drop-shadow(2px 4px 4px #27220d38);
+}
+.animal-world[data-species="goose"] .animal-portrait {
   animation: animal-breathe 3.1s ease-in-out infinite;
 }
 .animal-reaction {
@@ -1652,7 +1697,8 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
   width: 100%;
   height: 100%;
 }
-.animal-motion-canvas:not([hidden]) ~ .animal-frame { visibility: hidden; }
+.animal-world[data-species="cat"] .animal-motion-canvas { display: none; }
+.animal-world[data-species="goose"] .animal-motion-canvas:not([hidden]) ~ .animal-frame { visibility: hidden; }
 .animal-frame {
   position: absolute;
   inset: 0;
@@ -1662,14 +1708,19 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
 .animal-frame-calm { background-position: 100% 0; }
 .animal-frame-petted { background-position: 0 100%; }
 .animal-frame-startled { background-position: 100% 100%; }
+.animal-frame-special { background: var(--animal-special, none) 0 0 / 100% 100% no-repeat; }
+.animal-frame-standing { background: var(--animal-standing, none) 0 0 / 100% 100% no-repeat; }
+.animal-frame-lying { background: var(--animal-lying, none) 0 0 / 100% 100% no-repeat; }
 [data-pose="alert"] .animal-frame-alert,
 [data-pose="calm"] .animal-frame-calm,
 [data-pose="petted"] .animal-frame-petted,
 [data-pose="fed"] .animal-frame-petted,
-[data-pose="startled"] .animal-frame-startled { visibility: visible; }
-.animal-world[data-mode="react"][data-pose="petted"] .animal-reaction { animation: animal-lean .74s ease-in-out both; }
-.animal-world[data-mode="react"][data-pose="fed"] .animal-reaction { animation: animal-feed-lean .74s ease-in-out both; }
-.animal-world[data-species="cat"][data-mode="react"][data-pose="startled"] .animal-reaction { animation: animal-cat-hiss .74s ease-out both; }
+[data-pose="startled"] .animal-frame-startled,
+[data-pose="special"] .animal-frame-special,
+[data-pose="standing"] .animal-frame-standing,
+[data-pose="lying"] .animal-frame-lying { visibility: visible; }
+.animal-world[data-species="goose"][data-mode="react"][data-pose="petted"] .animal-reaction { animation: animal-lean .74s ease-in-out both; }
+.animal-world[data-species="goose"][data-mode="react"][data-pose="fed"] .animal-reaction { animation: animal-feed-lean .74s ease-in-out both; }
 .animal-world[data-species="goose"][data-mode="react"][data-pose="startled"] .animal-reaction { animation: animal-peck .74s ease-out both; }
 
 .animal-pet-target {
@@ -1905,11 +1956,6 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
 @keyframes animal-breathe { 50% { transform: translateY(-.5%) scale(1.004, 1.018); } }
 @keyframes animal-lean { 46% { transform: translate(1.8%, .8%) rotate(2deg) scale(1.035); } }
 @keyframes animal-feed-lean { 40% { transform: translate(-1%, 2%) scale(.99, .95); } 72% { transform: translate(-.6%, .8%) scaleY(.98); } }
-@keyframes animal-cat-hiss {
-  18% { transform: translateY(2.5%) scale(.97, .98); }
-  48% { transform: translateY(1%) scale(1.01, .99); }
-  78% { transform: translateY(1%) scale(.99); }
-}
 @keyframes animal-peck { 23% { transform: translate(0, 1%) scale(1.12); } 56% { transform: translate(0, -.8%) scale(.99); } }
 @keyframes animal-hand-stroke {
   0% { transform: translate(25%, 36%) scale(.91) rotate(11deg); opacity: 1; }

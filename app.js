@@ -1741,10 +1741,22 @@ function animalName({ species, catId }) {
   return animals.appearance(species, catId).name || game.ANIMALS[species].label;
 }
 
+const CAT_POSE_CYCLE = ['alert', 'special', 'standing', 'lying'];
+
 function applyAnimalArtwork(world) {
   const { species, catId } = animalEncounter;
+  const appearance = animals.appearance(species, catId);
   world.dataset.species = species;
-  world.style.setProperty('--animal-atlas', 'url("' + animals.appearance(species, catId).atlas + '")');
+  world.style.setProperty('--animal-atlas', 'url("' + appearance.atlas + '")');
+  for (const pose of CAT_POSE_CYCLE.slice(1)) {
+    const art = species === 'cat' ? animals.catPosePreview(catId, pose) : null;
+    world.style.setProperty('--animal-' + pose, art ? 'url("' + art.asset + '")' : 'none');
+  }
+  if (appearance.speechAnchor) {
+    const [x, y] = appearance.speechAnchor;
+    world.style.setProperty('--animal-speech-x', x + '%');
+    world.style.setProperty('--animal-speech-y', y + '%');
+  }
 }
 
 function renderAnimalLayer(encounter, visible) {
@@ -1811,10 +1823,7 @@ const ANIMAL_POSES = {
   fed: [0, 0, 1, 0],
   startled: [0, 0, 0, 1]
 };
-const ANIMAL_MOTION = {
-  cat: { approach: 750, retreat: 640 },
-  goose: { approach: 820, retreat: 700 }
-};
+const GOOSE_MOTION = { approach: 820, retreat: 700 };
 
 function animalMotionEnabled() {
   return motionOn && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
@@ -1829,9 +1838,8 @@ function mixAnimalPose(from, to, progress) {
   return from.map((weight, i) => weight * (1 - progress) + to[i] * progress);
 }
 
-function animalSettlePose(species, progress) {
+function gooseSettlePose(progress) {
   const t = easeAnimalMotion(progress);
-  if (species === 'cat') return mixAnimalPose(ANIMAL_POSES.alert, ANIMAL_POSES.calm, t);
   // 整段动作只缓动一次，让侧头的速度延续到弯颈这一步。
   const tilt = .44;
   return t < tilt
@@ -1886,14 +1894,14 @@ function showAnimalView(mode, pose, cue = '', detail = '', buttons = '', title) 
   applyAnimalArtwork(world);
   world.dataset.mode = mode;
   world.dataset.pose = pose;
-  if (mode !== 'pet') {
-    const duration = pose === 'startled' ? (species === 'cat' ? 200 : 360) : 520;
-    transitionAnimalPose(species, pose, duration);
+  if (species === 'goose' && mode !== 'pet') {
+    transitionAnimalPose(species, pose, pose === 'startled' ? 360 : 520);
   }
   $('#animalPlace').textContent = ANIMAL_TEXT[species].place;
   $('#animalTitle').textContent = title || name;
   $('#animalMood').textContent = state.mood;
   $('#animalVisits').textContent = state.animalVisits?.[species] || 0;
+  $('#animalSpeech').textContent = '';
   $('#animalCue').textContent = cue;
   $('#animalDetail').textContent = detail;
   $('#animalButtons').innerHTML = buttons;
@@ -1911,7 +1919,16 @@ function showAnimalMenu() {
   const feed = game.animalAvailability(state, species, 'feed');
   showAnimalView('menu', 'alert', '', feed.ok ? '' : feed.reason,
     animalButton('pet', '试着摸一下', { primary: true })
-    + animalButton('feed', '买' + profile.food + ' · ' + profile.price + ' 元', { disabled: !feed.ok }));
+    + animalButton('feed', '买' + profile.food + ' · ' + profile.price + ' 元', { disabled: !feed.ok })
+    + (species === 'cat' ? animalButton('cyclePose', '切换动作') : ''));
+}
+
+function cycleCatPose() {
+  const world = $('#animalWorld');
+  const next = (CAT_POSE_CYCLE.indexOf(world.dataset.pose) + 1) % CAT_POSE_CYCLE.length;
+  const pose = CAT_POSE_CYCLE[next];
+  world.dataset.pose = pose;
+  $('#animalSpeech').textContent = pose === 'special' ? animals.CATS[animalEncounter.catId].specialCue : '';
 }
 
 function showCatArchive(trigger) {
@@ -2002,12 +2019,14 @@ function updateAnimalTiming() {
   const elapsed = running % game.ANIMAL_CYCLE_MS;
   animalTiming.elapsedMs = elapsed;
   const calm = elapsed >= start && elapsed < end;
-  let weights = ANIMAL_POSES[calm ? 'calm' : 'alert'];
-  if (animate) {
-    weights = animalSettlePose(species, animalCalmProgress(animalTiming, elapsed, running));
-    if (entry && running < 240) weights = mixAnimalPose(entry, weights, easeAnimalMotion(running / 240));
+  if (species === 'goose') {
+    let weights = ANIMAL_POSES[calm ? 'calm' : 'alert'];
+    if (animate) {
+      weights = gooseSettlePose(animalCalmProgress(animalTiming, elapsed, running));
+      if (entry && running < 240) weights = mixAnimalPose(entry, weights, easeAnimalMotion(running / 240));
+    }
+    renderAnimalPose(species, weights);
   }
-  renderAnimalPose(species, weights);
   if (calm !== animalTiming.calm) {
     animalTiming.calm = calm;
     world.dataset.pose = calm ? 'calm' : 'alert';
@@ -2021,12 +2040,12 @@ function startAnimalTiming() {
   const { species } = animalEncounter;
   const { start, end } = game.animalCalmWindow(state, species);
   const entry = animalPose?.species === species && animalPose.weights[0] !== 1 ? animalPose.weights : null;
-  const { approach, retreat: preferredRetreat } = ANIMAL_MOTION[species];
+  const { approach, retreat: preferredRetreat } = GOOSE_MOTION;
   const untilNextApproach = game.ANIMAL_CYCLE_MS - end + start - approach;
   const retreat = Math.min(preferredRetreat, untilNextApproach);
   showAnimalView('pet', 'alert');
   animalTiming = { startedAt: animalClock(), elapsedMs: 0, calm: null, entry, start, end, approach, retreat,
-    animate: Boolean(animalPortrait) && animalMotionEnabled() };
+    animate: species === 'goose' && Boolean(animalPortrait) && animalMotionEnabled() };
   updateAnimalTiming();
 }
 
@@ -2093,12 +2112,15 @@ function finishAnimalInteraction(choice, event, forcedElapsedMs) {
     animalReactionCallback = null;
     if (!animalEncounter || !animalDialog.open) return;
     world.dataset.tracking = 'false';
-    const resultPose = catHissed && animate ? 'alert' : outcome;
-    showAnimalView('result', resultPose, ANIMAL_TEXT[species][outcome].replace('小猫', name), changeText(result.changes), '', title);
+    showAnimalView('result', outcome, ANIMAL_TEXT[species][outcome].replace('小猫', name), changeText(result.changes), '', title);
   };
+  if (species === 'cat') {
+    if (catHissed) audio?.play('catHiss');
+    showResult();
+    return;
+  }
   if (choice === 'pet') positionAnimalHand(event);
   showAnimalView('react', outcome, '', '', '', title);
-  if (catHissed) audio?.play('catHiss');
   animalReactionCallback = showResult;
   animalReactionDueAt = Date.now() + (animate ? 740 : 0);
   animalReactionTimer = setTimeout(showResult, animate ? 740 : 0);
@@ -3413,6 +3435,7 @@ function bindAnimalDialogControls() {
     const mode = $('#animalWorld').dataset.mode;
     if (action === 'pet' && mode === 'menu') startAnimalTiming();
     else if (action === 'feed' && mode === 'menu') confirmAnimalFeed();
+    else if (action === 'cyclePose' && mode === 'menu' && animalEncounter?.species === 'cat') cycleCatPose();
     else if (action === 'back' && mode === 'feed') showAnimalMenu();
     else if (action === 'feedYes' && mode === 'feed') finishAnimalInteraction('feed');
   });
