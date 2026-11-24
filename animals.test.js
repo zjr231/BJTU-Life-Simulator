@@ -29,7 +29,7 @@ test('地图一次只生成一只动物，猫分布在不同位置，鹅固定�
 
 test('每个猫偶遇可取得对应个体的图集，过期后才重选', () => {
   const ids = ['wumei', 'dunbu', 'tuoba', 'jupi', 'maolv', 'tangyuan'];
-  const atlasVersions = { wumei: 'v4', jupi: 'v10' };
+  const atlasVersions = { wumei: 'v4-20261124', dunbu: 'v3-20261124', tuoba: 'v3-20261124', jupi: 'v10-20261124', maolv: 'v3-20261124', tangyuan: 'v3-20261124' };
   for (const [index, catId] of ids.entries()) {
     const samples = [0.63, 0.5, (index + 0.5) / ids.length, 0, 0.64];
     const encounters = animals.createSystem(0, () => samples.shift());
@@ -61,6 +61,18 @@ test('六只猫各有常驻位置，互动后继续留在地图，鹅仍会出�
   }
   assert.equal(encounters.tick(goose.expiresAt, true, false), null);
   assert.deepEqual(encounters.residentCats, cats);
+});
+
+test('地图上的猫共用轻量图集，互动场景仍使用高清原图', () => {
+  for (const [index, catId] of Object.keys(animals.CATS).entries()) {
+    assert.deepEqual(animals.mapMarker('cat', catId), {
+      atlas: animals.CAT_MAP_ATLAS,
+      position: (index % 3 * 50) + '% ' + (Math.floor(index / 3) * 100) + '%',
+      size: '300% 200%'
+    });
+    assert.notEqual(animals.mapMarker('cat', catId).atlas, animals.appearance('cat', catId).atlas);
+  }
+  assert.deepEqual(animals.mapMarker('goose'), { atlas: animals.appearance('goose').atlas, position: '0% 0%', size: '200% 200%' });
 });
 
 test('抚摸按相同的提示窗口结算，猫和鹅的心情收益与损失不同', () => {

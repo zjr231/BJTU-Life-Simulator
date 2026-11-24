@@ -37,27 +37,27 @@
   ];
   const CATS = Object.freeze({
     wumei: {
-      name: '五妹', atlas: 'assets/animals/cat-wumei-v4.webp',
+      name: '五妹', atlas: 'assets/animals/cat-wumei-v4-20261124.webp',
       special: 'assets/animals/cat-wumei-curl-sleep-v1.webp', specialCue: '呼呼呼......（睡大觉）', speechAnchor: [30, 40]
     },
     dunbu: {
-      name: '墩布', atlas: 'assets/animals/cat-dunbu-v3.webp',
+      name: '墩布', atlas: 'assets/animals/cat-dunbu-v3-20261124.webp',
       special: 'assets/animals/cat-dunbu-cautious-peek-v8.webp', specialCue: '别欺负我~', speechAnchor: [24, 59]
     },
     tuoba: {
-      name: '拖把', atlas: 'assets/animals/cat-tuoba-v3.webp',
+      name: '拖把', atlas: 'assets/animals/cat-tuoba-v3-20261124.webp',
       special: 'assets/animals/cat-tuoba-long-stretch-v1.webp', specialCue: '和我玩！', speechAnchor: [34, 54]
     },
     jupi: {
-      name: '橘皮', atlas: 'assets/animals/cat-jupi-v10.webp',
+      name: '橘皮', atlas: 'assets/animals/cat-jupi-v10-20261124.webp',
       special: 'assets/animals/cat-jupi-paw-swipe-v1.webp', specialCue: '吃我喵喵拳！', speechAnchor: [42, 14]
     },
     maolv: {
-      name: '毛驴', atlas: 'assets/animals/cat-maolv-v3.webp',
+      name: '毛驴', atlas: 'assets/animals/cat-maolv-v3-20261124.webp',
       special: 'assets/animals/cat-maolv-listening-tilt-v1.webp', specialCue: '嗯哼？（疑惑）', speechAnchor: [60, 5]
     },
     tangyuan: {
-      name: '汤圆', atlas: 'assets/animals/cat-tangyuan-v3.webp',
+      name: '汤圆', atlas: 'assets/animals/cat-tangyuan-v3-20261124.webp',
       special: 'assets/animals/cat-tangyuan-tree-leap-v1.webp', specialCue: '看我上树~~', speechAnchor: [36, 12]
     }
   });
@@ -96,6 +96,7 @@
     }
   };
   const GOOSE = { atlas: 'assets/animals/goose-atlas.webp', landmarks: GOOSE_LANDMARKS };
+  const CAT_MAP_ATLAS = 'assets/animals/cat-map-20261124.webp';
   const ATLAS_TILE = 627;
   const GRID = 9;
   const PORTRAIT_SIZE = 512;
@@ -103,6 +104,16 @@
   function appearance(species, catId) {
     if (species === 'goose') return GOOSE;
     return Object.hasOwn(CATS, catId) ? CATS[catId] : CATS.wumei;
+  }
+
+  function mapMarker(species, catId) {
+    if (species === 'goose') return { atlas: GOOSE.atlas, position: '0% 0%', size: '200% 200%' };
+    const index = CAT_IDS.indexOf(Object.hasOwn(CATS, catId) ? catId : 'wumei');
+    return {
+      atlas: CAT_MAP_ATLAS,
+      position: (index % 3 * 50) + '% ' + (Math.floor(index / 3) * 100) + '%',
+      size: '300% 200%'
+    };
   }
 
   function catArchive(catId) {
@@ -290,7 +301,7 @@
     return { residentCats, tick, finish };
   }
 
-  const api = { CATS, appearance, catArchive, catPosePreview, createSystem, createPortrait };
+  const api = { CATS, appearance, mapMarker, CAT_MAP_ATLAS, catArchive, catPosePreview, createSystem, createPortrait };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CampusAnimals = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -816,17 +816,17 @@ test('含路人聊天历史的旧存档仍可加载，地图不显示路人', ()
 
 test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返回地图', () => {
   const cases = [
-    { species: 'cat', catId: 'wumei', name: '五妹', atlas: 'cat-wumei-v4.webp', pose: 'alert', title: '五妹哈气了', result: /五妹愣了一下/, mood: '心情 −2' },
-    { species: 'cat', catId: 'maolv', name: '毛驴', atlas: 'cat-maolv-v3.webp', pose: 'alert', title: '毛驴哈气了', result: /毛驴愣了一下/, mood: '心情 −2' },
-    { species: 'goose', name: '明湖的鹅', atlas: 'goose-atlas.webp', pose: 'calm', title: '摸到了', result: /它轻轻抖了抖羽毛/, mood: '心情 +7' }
+    { species: 'cat', catId: 'wumei', name: '五妹', mapAtlas: 'cat-map-20261124.webp', atlas: 'cat-wumei-v4-20261124.webp', pose: 'alert', title: '五妹哈气了', result: /五妹愣了一下/, mood: '心情 −2' },
+    { species: 'cat', catId: 'maolv', name: '毛驴', mapAtlas: 'cat-map-20261124.webp', atlas: 'cat-maolv-v3-20261124.webp', pose: 'alert', title: '毛驴哈气了', result: /毛驴愣了一下/, mood: '心情 −2' },
+    { species: 'goose', name: '明湖的鹅', mapAtlas: 'goose-atlas.webp', atlas: 'goose-atlas.webp', pose: 'calm', title: '摸到了', result: /它轻轻抖了抖羽毛/, mood: '心情 +7' }
   ];
-  for (const { species, catId, name, atlas, pose, title, result, mood } of cases) {
+  for (const { species, catId, name, mapAtlas, atlas, pose, title, result, mood } of cases) {
     const ui = app(memory(), false, true, true);
     ui.start();
     ui.window.animal = { id: 1, species, catId, x: 25, y: 50 };
     ui.evaluate('animalSystem = { tick: () => window.animal, finish() {} }; renderAnimalLayer(window.animal, true)');
     assert.ok(ui.element('#animalLayer').innerHTML.includes('aria-label="遇见' + name + '"'));
-    assert.ok(ui.element('#animalLayer').innerHTML.includes(atlas));
+    assert.ok(ui.element('#animalLayer').innerHTML.includes(mapAtlas));
     ui.click('#animalLayer', { animalId: '1' });
     assert.equal(ui.element('#animalDialog').open, true);
     assert.equal(ui.element('#animalTitle').textContent, name);
@@ -1671,4 +1671,56 @@ test('启动页只展示继续、新游戏、设置和退出；无存档时继�
   assert.equal(ui.element('#startContinue').disabled, true);
   ui.click('#startNew');
   assert.equal(ui.evaluate('dialogMode'), 'login');
+});
+
+test('点击新游戏或继续游戏后立即进入流程，并在后台预载场景与猫咪图片', async () => {
+  const createDelayedImages = ui => {
+    ui.evaluate('Image = class { constructor() { this.complete = false; this.naturalWidth = 0; window.entryImages = (window.entryImages || []).concat(this); } set src(value) { this.url = value; } }');
+  };
+  const finishImages = async ui => {
+    const count = ui.evaluate('window.entryImages.length');
+    assert.equal(count, 9);
+    const urls = JSON.parse(ui.evaluate('JSON.stringify(window.entryImages.map(image => image.url))'));
+    assert.deepEqual(urls.slice(0, 2), [
+      'assets/animals/fengye-20261124.webp',
+      'assets/animals/minghu-20261124.webp'
+    ]);
+    assert.ok(urls.includes('assets/animals/cat-jupi-v10-20261124.webp'));
+    for (let index = 0; index < count; index++) {
+      ui.evaluate('window.entryImages[' + index + '].naturalWidth = 1200; window.entryImages[' + index + '].onload()');
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    await new Promise(resolve => setImmediate(resolve));
+  };
+
+  const fresh = app(memory(), false, false, true);
+  createDelayedImages(fresh);
+  fresh.click('#startNew');
+  assert.equal(fresh.evaluate('dialogMode'), 'admission');
+  await finishImages(fresh);
+
+  const storage = memory();
+  assert.equal(saves.createSlotService(storage).save(game.createGame({ nickname: '继续玩家' }), 1).ok, true);
+  const resumed = app(storage, false, false, true);
+  createDelayedImages(resumed);
+  resumed.evaluate('startContinueGame()');
+  assert.equal(resumed.evaluate('dialogMode'), 'load');
+  await finishImages(resumed);
+});
+
+test('猫咪图集尚未载入时显示等待提示并停用互动，载入后恢复互动', async () => {
+  const ui = app(memory(), false, true, true);
+  ui.start();
+  ui.evaluate('Image = class { constructor() { this.complete = false; this.naturalWidth = 0; window.catImageLoads = (window.catImageLoads || []).concat(this); } set src(value) { this.url = value; } }');
+  ui.evaluate('openDeveloperAnimal(\"cat\", \"jupi\", state)');
+  const loading = ui.element('#animalPortraitLoading');
+  assert.equal(loading.hidden, false);
+  assert.equal(ui.element('#animalControls').inert, true);
+  assert.equal(ui.element('#catArchiveActions').inert, true);
+  assert.match(ui.element('#animalButtons').innerHTML, /试着摸一下/);
+  ui.evaluate('window.catImageLoads[0].naturalWidth = 1254; window.catImageLoads[0].onload()');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(loading.hidden, true);
+  assert.equal(ui.element('#animalControls').inert, false);
+  assert.equal(ui.element('#catArchiveActions').inert, false);
 });

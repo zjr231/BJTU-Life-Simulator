@@ -621,7 +621,7 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 }
 
 /* ===== 全屏地图 + 顶部应用栏（主流 App 风格） ===== */
-.map-screen::before { content: ""; position: absolute; z-index: 0; inset: -60px; background: url('assets/campus-map-reference.png') center / cover no-repeat; filter: blur(22px) brightness(.42) saturate(.8); opacity: .6; pointer-events: none; }
+.map-screen::before { content: ""; position: absolute; z-index: 0; inset: -60px; background: url('assets/campus-map-20261124.webp') center / cover no-repeat; filter: blur(22px) brightness(.42) saturate(.8); opacity: .6; pointer-events: none; }
 .map-screen .map-layer { z-index: 1; }
 .map-screen { display: block; height: 100vh; height: 100svh; min-height: 0; padding: 0; overflow: hidden; background: #0f2a23; }
 .map-screen .map-layer { position: absolute; left: 50%; top: calc(var(--bar-h, 61px) + 16px + (100svh - var(--bar-h, 61px) - 32px - env(safe-area-inset-bottom, 0px)) / 2); transform: translate(-50%, -50%); width: min(calc(100vw - 32px), calc((100svh - var(--bar-h, 61px) - 32px - env(safe-area-inset-bottom, 0px)) * 1.6234)); height: auto; aspect-ratio: 1956 / 1205; max-width: none; transition: none; container-type: inline-size; }
@@ -1569,7 +1569,7 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
   aspect-ratio: 1;
   border: 1px solid #ab905b;
   border-radius: 50%;
-  background: #fff5dc var(--animal-atlas) 0 0 / 200% 200% no-repeat;
+  background: #fff5dc var(--animal-atlas) var(--animal-map-position, 0% 0%) / var(--animal-map-size, 200% 200%) no-repeat;
   box-shadow: 0 2px 6px #233b2e65;
 }
 .animal-marker:hover .animal-marker-image { background-color: #ffe8ad; }
@@ -1599,7 +1599,7 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
   --floor: 77%;
   --footline: -90%;
   --mark-y: .45;
-  --landscape: url("assets/animals/fengye.webp");
+  --landscape: url("assets/animals/fengye-20261124.webp");
   position: relative;
   isolation: isolate;
   width: 100%;
@@ -1610,7 +1610,7 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
   --actor-size: min(66dvh, 75vw, 660px);
   --footline: -98%;
   --mark-y: .53;
-  --landscape: url("assets/animals/minghu.webp");
+  --landscape: url("assets/animals/minghu-20261124.webp");
 }
 .animal-landscape {
   position: absolute;
@@ -1682,6 +1682,33 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
   inset: 0;
   transform-origin: 50% 91%;
   filter: drop-shadow(2px 4px 4px #27220d38);
+}
+.animal-portrait-loading {
+  position: absolute;
+  z-index: 4;
+  top: 44%;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  transform: translate(-50%, -50%);
+  color: #fff6dd;
+  font-size: 13px;
+  text-shadow: 0 1px 4px #10150e;
+  pointer-events: none;
+}
+.animal-portrait-loading[hidden] { display: none; }
+.animal-portrait-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #fff6dd60;
+  border-top-color: #fff6dd;
+  border-radius: 50%;
+  animation: entry-loading-spin .8s linear infinite;
+}
+@keyframes entry-loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .animal-portrait-loading-spinner { animation: none; }
 }
 .animal-world[data-species="goose"] .animal-portrait {
   animation: animal-breathe 3.1s ease-in-out infinite;

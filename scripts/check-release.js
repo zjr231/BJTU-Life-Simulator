@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
-const { CATS, appearance, catArchive, catPosePreview } = require('../animals.js');
+const { CATS, appearance, mapMarker, catArchive, catPosePreview } = require('../animals.js');
 const root = path.resolve(__dirname, '..');
 const scripts = ['config.js', 'courses.js', 'rng.js', 'relationships.js', 'npc-cast.js', 'npc-support.js', 'character-agent.js', 'npc-director.js', 'npc-game.js', 'character-scene.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'animals.js', 'season.js', 'vendor/planck.min.js', 'basketball.js', 'developer-tools.js', 'developer-panel.js', 'app.js'];
 const files = new Set(['index.html', 'styles.css', '.nojekyll', 'vendor/planck.LICENSE.txt', 'assets/characters/zhou-ning-casual-v1.png', 'assets/characters/chen-teacher-casual-v1.png', 'assets/characters/lin-xia-sports-v1.png', 'assets/scenes/campus-afternoon-v1.png', ...scripts]);
@@ -26,6 +26,12 @@ async function main() {
   for (const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) localReference(match[1], 'index.html');
   for (const match of css.matchAll(/url\(\s*["']?([^\s"')]+)["']?\s*\)/g)) localReference(match[1], 'styles.css');
   for (const { atlas } of [...Object.values(CATS), appearance('goose')]) localReference(atlas, 'index.html');
+  localReference('assets/campus-map-20261124.webp', 'index.html');
+  localReference('assets/animals/cat-map-20261124.webp', 'index.html');
+  for (const catId of Object.keys(CATS)) {
+    const marker = mapMarker('cat', catId);
+    localReference(marker.atlas, 'index.html');
+  }
   for (const catId of Object.keys(CATS)) {
     for (const photo of catArchive(catId).photos) localReference(photo, 'index.html');
     for (const pose of ['lying', 'standing', 'special']) {
@@ -35,6 +41,10 @@ async function main() {
   }
   const loaded = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/g)].map(match => match[1].split(/[?#]/)[0]);
   if (JSON.stringify(loaded) !== JSON.stringify(scripts)) throw new Error('运行脚本的加载顺序与接口约定不一致');
+  if ([...html.matchAll(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*>/g)].some(match => !/\bdefer(?:\s|>|=)/.test(match[0]))) {
+    throw new Error('运行脚本必须使用 defer 并行下载');
+  }
+  if (!/id="startContinue"[^>]*\bdisabled\b/.test(html)) throw new Error('无存档时应默认禁用继续游戏');
   for (const file of files) {
     let directory = root;
     for (const segment of file.split('/')) {

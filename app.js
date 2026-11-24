@@ -79,6 +79,8 @@ const animals = typeof CampusAnimals !== 'undefined' ? CampusAnimals : null;
 let animalSystem = null;
 let animalMarkerIds = '';
 let animalEncounter = null;
+const sceneAssetLoads = new Map();
+const sceneAssetImages = new Map();
 let animalTiming = null;
 let animalFrame = null;
 let animalReactionTimer = null;
@@ -1771,9 +1773,9 @@ function renderAnimalLayer(encounter, visible) {
   layer.innerHTML = encounters.map(marker => {
     const { id, species, catId, x, y } = marker;
     const name = h(animalName(marker));
-    const { atlas } = animals.appearance(species, catId);
+    const mapArt = animals.mapMarker(species, catId);
     return '<button type="button" class="animal-marker" data-animal-id="' + id
-      + '" style="left:' + x + '%;top:' + y + '%;--animal-atlas:url(' + atlas + ')" aria-label="遇见' + name + '">'
+      + '" style="left:' + x + '%;top:' + y + '%;--animal-atlas:url(' + mapArt.atlas + ');--animal-map-position:' + mapArt.position + ';--animal-map-size:' + mapArt.size + '" aria-label="遇见' + name + '">'
       + '<span class="animal-marker-image" aria-hidden="true"></span><span class="npc-label">' + name + '</span></button>';
   }).join('');
 }
@@ -1891,6 +1893,9 @@ function showAnimalView(mode, pose, cue = '', detail = '', buttons = '', title) 
   const target = $('#animalPetTarget');
   const species = animalEncounter.species;
   const name = animalName(animalEncounter);
+  const artwork = animals.appearance(species, animalEncounter.catId);
+  const imageLoad = preloadSceneBackground(artwork.atlas, 'high');
+  updateAnimalPortraitLoading(imageLoad, animalEncounter.id);
   applyAnimalArtwork(world);
   world.dataset.mode = mode;
   world.dataset.pose = pose;
@@ -1909,6 +1914,33 @@ function showAnimalView(mode, pose, cue = '', detail = '', buttons = '', title) 
   target.hidden = mode !== 'pet';
   target.setAttribute('aria-label', '伸手抚摸' + name);
   (mode === 'pet' ? target : $('#animalTitle')).focus({ preventScroll: true });
+}
+
+function updateAnimalPortraitLoading(imageLoad, encounterId) {
+  const loading = $('#animalPortraitLoading');
+  const world = $('#animalWorld');
+  const controls = $('#animalControls');
+  const archives = $('#catArchiveActions');
+  const petTarget = $('#animalPetTarget');
+  const setLoading = (active) => {
+    loading.hidden = !active;
+    world.dataset.artLoading = active ? 'true' : 'false';
+    controls.inert = active;
+    archives.inert = active;
+    petTarget.inert = active;
+  };
+  if (imageLoad === true) { setLoading(false); return; }
+  if (imageLoad === false) {
+    setLoading(false);
+    showToast('动物图片暂时无法载入，请返回地图重试。');
+    return;
+  }
+  setLoading(true);
+  Promise.resolve(imageLoad).then(loaded => {
+    if (animalEncounter?.id !== encounterId) return;
+    setLoading(false);
+    if (!loaded) showToast('动物图片暂时无法载入，请返回地图重试。');
+  });
 }
 
 function showAnimalMenu() {
@@ -2326,14 +2358,71 @@ function showStartMenu() {
   maybeShowStartCoach();
 }
 
+const SCENE_BACKGROUND_ASSETS = [
+  'assets/animals/fengye-20261124.webp',
+  'assets/animals/minghu-20261124.webp',
+  ...(animals ? Object.values(animals.CATS).map(cat => cat.atlas) : []),
+  ...(animals ? [animals.appearance('goose').atlas] : [])
+];
+
+function preloadSceneBackground(src, priority = 'low') {
+  if (typeof Image !== 'function') return true;
+  const cached = sceneAssetLoads.get(src);
+  if (cached === true) return true;
+  if (cached) {
+    if (priority === 'high') {
+      const image = sceneAssetImages.get(src);
+      if (image) image.fetchPriority = 'high';
+    }
+    return cached;
+  }
+
+  const image = new Image();
+  let resolveLoad;
+  let settled = false;
+  const pending = new Promise(resolve => { resolveLoad = resolve; });
+  const finish = (loaded) => {
+    if (settled) return;
+    settled = true;
+    if (loaded) sceneAssetLoads.set(src, true);
+    else {
+      sceneAssetLoads.delete(src);
+      sceneAssetImages.delete(src);
+    }
+    resolveLoad(loaded);
+  };
+  const decode = () => typeof image.decode === 'function'
+    ? image.decode().then(() => finish(image.naturalWidth > 0), () => finish(image.naturalWidth > 0))
+    : finish(image.naturalWidth > 0);
+
+  image.onload = decode;
+  image.onerror = () => finish(false);
+  image.fetchPriority = priority;
+  image.decoding = 'async';
+  sceneAssetLoads.set(src, pending);
+  sceneAssetImages.set(src, image);
+  image.src = src;
+  if (image.complete) {
+    decode();
+    return image.naturalWidth > 0;
+  }
+  return pending;
+}
+
+function preloadSceneBackgrounds() {
+  for (const asset of SCENE_BACKGROUND_ASSETS) preloadSceneBackground(asset);
+}
+
 function startNewGame() {
   finishCoach('start-new');
   showAdmission();
+  preloadSceneBackgrounds();
 }
 
 function startContinueGame() {
   if (!startMenuHasSave()) return;
   showLoad();
+  preloadSceneBackgrounds();
 }
 
 function toggleStartSettings() {
