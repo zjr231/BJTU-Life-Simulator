@@ -41,6 +41,16 @@ const catArchiveDialog = $('#catArchiveDialog');
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
 try { storage = window.localStorage; } catch (_) { /* Play remains available without storage. */ }
+let runId = null;
+let outbox;
+try { if (window.indexedDB && typeof CampusPlaythrough !== 'undefined') outbox = CampusPlaythrough.openQueue(window.indexedDB); } catch {}
+const playthroughs = typeof CampusPlaythrough === 'undefined' ? null : CampusPlaythrough.createClient({
+  storage, queue: outbox,
+  post: body => fetch('/api/playthroughs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    credentials: 'omit', body, signal: AbortSignal.timeout(15000) }),
+  retry: (fn, ms) => setTimeout(fn, ms),
+  onFeedback: (id, status) => { if (id === runId && !developerTesting) updateFeedbackStatus(status); }
+});
 const normalSaves = CampusSave.createSlotService(storage);
 let saves = normalSaves;
 let developerPanel = null;
@@ -2225,12 +2235,16 @@ function saveCurrent(automatic = false, slotId = activeSaveSlot) {
   if (!state) return;
   if (slotId === null) {
     saveNotice = '尚未选择存档栏位，请点击“保存当前进度”选择栏位；当前进度保留在本页。';
-    showToast(saveNotice);
+    if (!automatic || !['finished', 'ended'].includes(state.phase)) showToast(saveNotice);
     return { ok: false, reason: saveNotice };
   }
-  const result = saves.save(state, slotId);
+  const result = saves.save(state, slotId, developerTesting ? undefined : runId);
   if (result.ok) {
     activeSaveSlot = slotId;
+    if (!developerTesting && runId && playthroughs) {
+      const kind = automatic && ['finished', 'ended'].includes(state.phase) ? 'ending' : automatic ? 'auto' : 'manual';
+      playthroughs.capture(runId, state, kind, slotId, Date.parse(result.savedAt));
+    }
     savedRevision = state.revision;
     savedNpcDialogueSummaries = npcSummarySaveStamp();
     savedAt = result.savedAt;
@@ -2643,6 +2657,7 @@ function startGame() {
   if (loginSession) { loginSession.nickname = checked.value; try { storage?.setItem(LOGIN_KEY, JSON.stringify(loginSession)); } catch (_) {} }
   const seed = debug ? $('#seedInput').value : (window.crypto?.getRandomValues ? String(window.crypto.getRandomValues(new Uint32Array(1))[0]) : String(Date.now()));
   try { state = game.createGame({ nickname: checked.value, seed }); } catch (error) { $('#admissionError').textContent = error.message; return; }
+  if (!developerTesting) runId = playthroughs?.newId() || null;
   resetNpcSummaryJobs();
   savedRevision = -1;
   savedNpcDialogueSummaries = '';
@@ -3151,12 +3166,33 @@ const ENDING_TEXT = {
   cheatNote: '你刚把小抄展开，监考老师已经在你身后站了半分钟。小抄第一行写着：不要紧张。教务处通报：本届最快结束期末考试的同学诞生了。',
   cardThief: '保卫处老师把消费记录打印出来，时间精确到你犹豫的那三秒。家长被请到学校，你签了退学申请。校园卡大盗的职业生涯，只有一次消费。'
 };
+const feedbackMessages = {
+  sent: '谢谢，你的建议已送达。', queued: '建议已保存在此设备，联网后将自动发送。',
+  temporary: '建议正在等待发送，请暂时保持页面打开。', skipped: '已跳过本局反馈。',
+  error: '建议未能提交，可以修改后再试。'
+};
+function updateFeedbackStatus(status) {
+  const form = $('#playFeedbackForm');
+  if (!form) return;
+  form.hidden = Boolean(status && status !== 'error');
+  $('#playFeedbackStatus').textContent = feedbackMessages[status] || '';
+}
+function playFeedbackMarkup() {
+  return '<section class="play-feedback" aria-label="本局反馈"><form id="playFeedbackForm">' +
+    '<label for="playSuggestion">这局玩得怎么样？ <small>选填</small></label>' +
+    '<textarea id="playSuggestion" maxlength="1000" rows="2" placeholder="哪一段有趣，哪里可以改进？"></textarea>' +
+    '<div class="dialog-buttons"><button type="button" class="secondary" id="skipPlayFeedback">跳过</button>' +
+    '<button type="submit">提交建议</button></div></form><p id="playFeedbackStatus" role="status"></p></section>';
+}
 function showResult() {
   audio?.play('fanfare');
   const terminal = state.result.kind === 'terminal';
   const economy = game.economyTag(state);
   const intro = '<p>' + (ENDING_TEXT[state.result.direction] || '') + '</p>' + (terminal ? '<p class="dialog-note">触发原因：' + h(state.result.reason) + '</p>' : '') + '<p>平均成绩 <b>' + state.result.average.toFixed(1) + '</b>，达标 <b>' + state.result.passed + '/8</b> 学期。</p>' + (terminal ? '<p>本局在第 <b>' + state.result.term + '</b> 学期结束。</p>' : '') + '<p>毕业时余额 <b>' + state.money + ' 元</b> · 经济状态 <b>' + h(economy.label) + '</b></p>' + '<p>' + h(saveNotice || '可以把这段结局保存下来。') + '</p>' + (terminal ? '' : requirementsMarkup(state.result.requirements)) + growthRecord();
-  showDialog(terminal ? 'ended' : 'finished', state.result.title, intro, [{ id: 'resume', text: '返回地图', secondary: true }, { id: 'restart', text: '重新开始' }]);
+  const collect = !developerTesting && runId && playthroughs;
+  if (collect) playthroughs.capture(runId, state, 'ending', activeSaveSlot);
+  showDialog(terminal ? 'ended' : 'finished', state.result.title, (collect ? playFeedbackMarkup() : '') + intro, [{ id: 'resume', text: '返回地图', secondary: true }, { id: 'restart', text: '重新开始' }]);
+  if (collect) updateFeedbackStatus(playthroughs.feedbackStatus(runId));
 }
 function resumePhase() {
   if (!state) { showStartMenu(); return; }
@@ -3187,6 +3223,7 @@ function loadGame(slotId, source = 'primary') {
   cancelBasketball();
   closePlace();
   state = game.resumeRequiredEvents(result.state);
+  if (!developerTesting) runId = result.runId || playthroughs?.legacyId(result.state) || null;
   activeSaveSlot = slotId;
   actionDrafts.clear();
   pendingActionExtra = null;
@@ -3221,6 +3258,18 @@ function exportLog() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 $('#dialogBody').addEventListener('submit', (event) => {
+  if (event.target.id === 'playFeedbackForm') {
+    event.preventDefault();
+    if (developerTesting || !runId || !['finished', 'ended'].includes(state?.phase)) return;
+    const form = event.target;
+    const suggestion = $('#playSuggestion').value.trim();
+    if (!suggestion) { playthroughs.skip(runId); return; }
+    if (form.dataset.sending || suggestion.length > 1000) return;
+    form.dataset.sending = '1';
+    playthroughs.capture(runId, state, 'ending', activeSaveSlot, Date.now(), suggestion)
+      .finally(() => { delete form.dataset.sending; });
+    return;
+  }
   if (event.target.id === 'admissionForm') { event.preventDefault(); startGame(); }
   else if (event.target.id === 'loginForm') { event.preventDefault(); doLogin(); }
   else if (event.target.id === 'zhouChatForm') { event.preventDefault(); sendZhouChat(); }
@@ -3322,6 +3371,10 @@ $('#actionList').addEventListener('click', (event) => {
 $('#dialogBody').addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
+  if (button.id === 'skipPlayFeedback' && !developerTesting && runId) {
+    if (!$('#playFeedbackForm').dataset.sending) playthroughs.skip(runId);
+    return;
+  }
   if (button.dataset.vnUi) {
     const command = button.dataset.vnUi;
     if (command === 'account') { npcAccount?.open(); return; }
@@ -3823,6 +3876,8 @@ document.addEventListener('keydown', (event) => {
   if (openPanelName) { closePanel(); return; }
   if (activePlace && !dialog.open) closePlace();
 });
+window.addEventListener('online', () => playthroughs?.flush());
+playthroughs?.flush();
 window.addEventListener('beforeunload', guardUnsavedProgress);
 if (typeof HTMLDialogElement === 'undefined' || typeof HTMLDialogElement.prototype.showModal !== 'function') {
   $('.game-shell').innerHTML = '<div class="browser-notice"><h2>请使用较新的浏览器打开</h2><p>本游戏需要支持弹窗等现代网页特性的浏览器。请升级微信或浏览器，或用系统浏览器打开本地址。</p><p class="browser-notice-url">https://zjr231.github.io/BJTU-Life-Simulator/</p></div>';

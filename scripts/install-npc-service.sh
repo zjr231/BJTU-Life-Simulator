@@ -11,7 +11,7 @@ bundle=$(cd -- "$(dirname -- "$0")" && pwd)
 site=/var/www/bjtu-life
 api=/opt/bjtu-npc
 conf=/etc/nginx/sites-available/bjtu-life
-[[ -f "$conf" && -L "$site/current" && -f "$bundle/site/index.html" && -f "$bundle/service/scripts/npc-server.js" ]]
+[[ -f "$conf" && -L "$site/current" && -f "$bundle/site/index.html" && -f "$bundle/site/playthrough.js" && -f "$bundle/service/scripts/npc-server.js" && -f "$bundle/service/scripts/playthrough-store.js" ]]
 node_bin=$(command -v node) || { echo 'Install Node.js 24 first.' >&2; exit 1; }
 "$node_bin" -e "require('node:sqlite'); if (+process.versions.node.split('.')[0] < 24) process.exit(1)" || { echo 'Install Node.js 24 first.' >&2; exit 1; }
 if ! id -u bjtu-npc >/dev/null 2>&1; then useradd --system --home-dir /var/lib/bjtu-npc --shell /usr/sbin/nologin bjtu-npc; fi
@@ -35,6 +35,8 @@ cp -p "$conf" "$backup/nginx"
 old_api=$(readlink -f "$api/current" || true)
 old_site=$(readlink -f "$site/current")
 rollback() {
+  local failed_line=$1
+  echo "Update failed at line $failed_line. Restoring the previous release." >&2
   trap - ERR
   set +e
   cp -p "$backup/nginx" "$conf"
@@ -52,7 +54,7 @@ rollback() {
   echo "Update failed. Previous site restored. Backup: $backup" >&2
   exit 1
 }
-trap rollback ERR
+trap 'rollback "$LINENO"' ERR
 cat > "$unit" <<UNIT
 [Unit]
 Description=BJTU Life NPC chat
@@ -93,25 +95,55 @@ if marker not in old:
     updated, count = re.subn(r'(?m)^\s*root\s+/var/www/bjtu-life/current/?;', lambda m: m[0] + '\n' + block, old)
     if not count:
         sys.exit('Cannot find bjtu-life site root in nginx config.')
-    conf.write_text(updated)
+    old = updated
+if 'location = /api/playthroughs {' not in old:
+    archive_location = '''location = /api/playthroughs {
+        client_max_body_size 2m;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_pass http://127.0.0.1:8787;
+    }
+    '''
+    old = old.replace(marker, archive_location + marker)
+conf.write_text(old)
 PY
 nginx -t
 ln -sfnT "$api_release" "$api/current"
 systemctl daemon-reload
 systemctl enable bjtu-npc
 systemctl restart bjtu-npc
-status=000
-for i in {1..20}; do
-  status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/api/npc-account/session || true)
-  [[ $status == 401 ]] && break
-  sleep 0.25
-done
-[[ $status == 401 ]]
-ln -sfnT "$web_release" "$site/current"
-systemctl reload nginx
+wait_for_http() {
+  local label=$1 expected=$2 status attempt
+  shift 2
+  for attempt in {1..40}; do
+    if status=$(curl --silent --noproxy '*' --connect-timeout 1 --max-time 3 \
+        --output /dev/null --write-out '%{http_code}' "$@") && [[ $status == "$expected" ]]; then
+      echo "$label ready (HTTP $status, attempt $attempt)."
+      return 0
+    fi
+    sleep 0.25
+  done
+  echo "$label failed: expected HTTP $expected, last HTTP ${status:-000}." >&2
+  return 1
+}
+local_api=http://127.0.0.1:8787
+# The empty object checks validation without inserting test records.
+probe=(--header 'Content-Type: application/json' --data '{}')
+wait_for_http 'Account service' 401 "$local_api/api/npc-account/session"
+wait_for_http 'Save service' 400 "${probe[@]}" "$local_api/api/playthroughs"
+"$api_release/node" - /var/lib/bjtu-npc/playthroughs.sqlite <<'JS'
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync(process.argv[2], {readOnly: true});
+db.prepare('SELECT s.run_id, f.suggestion FROM game_saves s JOIN game_feedback f ON s.run_id=f.run_id AND s.snapshot_id=f.snapshot_id LIMIT 0').all();
+db.close();
+console.log('Production database ready: game_saves and game_feedback.');
+JS
 host_port=$("$node_bin" -p "const u=new URL(process.argv[1]); u.hostname+':'+(u.port || (u.protocol==='https:'?'443':'80'))" "$origin")
-status=$(curl --silent --show-error --noproxy '*' --max-time 8 --resolve "$host_port:127.0.0.1" \
-  --output /dev/null --write-out '%{http_code}' "$origin/api/npc-account/session")
-[[ $status == 401 ]]
+proxy=(--resolve "$host_port:127.0.0.1")
+systemctl reload nginx
+# Nginx can report a successful reload while old workers still serve the previous routes.
+wait_for_http 'Account route' 401 "${proxy[@]}" "$origin/api/npc-account/session"
+wait_for_http 'Save route' 400 "${proxy[@]}" "${probe[@]}" "$origin/api/playthroughs"
+ln -sfnT "$web_release" "$site/current"
 trap - ERR
 echo "Installed. Add DEEPSEEK_API_KEY to /etc/bjtu-npc.env and restart bjtu-npc if the key is new."

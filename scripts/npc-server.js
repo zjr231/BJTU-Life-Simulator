@@ -5,30 +5,41 @@ const os = require('node:os');
 const { openAccounts, sessionAge } = require('./npc-accounts.js');
 const { validRequest, modelRequest, record } = require('./npc-request.js');
 const agent = require('../character-agent.js');
+const { openPlaythroughs } = require('./playthrough-store.js');
+const playthroughPath = '/api/playthroughs';
 
 const chatPath = '/api/npc-chat';
 const accountPath = '/api/npc-account/';
 const maxBody = 24 * 1024;
 const cookieName = 'bjtu_npc_session';
 const empty = record({});
-async function readJson(req) {
+async function readJson(req, limit = maxBody) {
   if (req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'application/json') throw new Error('类型');
   const chunks = [];
   let size = 0;
   for await (const chunk of req.iterator({ destroyOnReturn: false })) {
     size += chunk.length;
-    if (size > maxBody) { req.resume(); throw new Error('长度'); }
+    if (size > limit) { req.resume(); throw new Error('长度'); }
     chunks.push(chunk);
   }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { throw new Error('JSON'); }
 }
 
-function createService({ store, apiKey, origin, fetchFn = fetch, trustProxy = false }) {
+function createService({ store, playthroughs, apiKey, origin, fetchFn = fetch, trustProxy = false, servePage }) {
   const originUrl = origin && new URL(origin);
   const secure = originUrl?.protocol === 'https:' ? '; Secure' : '';
   function cookie(token) {
     return cookieName + '=' + token + '; Path=/api/; HttpOnly; SameSite=Strict; Max-Age=' + (token ? sessionAge / 1000 : 0) + secure;
+  }
+  const uploadCounts = new Map();
+  let uploadWindowEnds = 0;
+  function allowUpload(client) {
+    if (Date.now() >= uploadWindowEnds) { uploadCounts.clear(); uploadWindowEnds = Date.now() + 60000; }
+    const count = uploadCounts.get(client) || 0;
+    if (count >= 120) return false;
+    uploadCounts.set(client, count + 1);
+    return true;
   }
   async function handle(req, res) {
     function send(status, data, extra = {}) {
@@ -38,12 +49,23 @@ function createService({ store, apiKey, origin, fetchFn = fetch, trustProxy = fa
     const reject = result => send(result.status, { error: result.error });
     const token = (req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith(cookieName + '='))?.slice(cookieName.length + 1) || '';
     const url = req.url;
+    if (servePage && !url.startsWith('/api/')) return servePage(req, res);
     const action = url.startsWith(accountPath) ? url.slice(accountPath.length) : '';
-    if (url !== chatPath && !['session', 'register', 'login', 'logout'].includes(action)) return send(404, { error: '未知接口' });
+    if (url !== chatPath && url !== playthroughPath && !['session', 'register', 'login', 'logout'].includes(action)) return send(404, { error: '未知接口' });
     if (req.method !== (action === 'session' ? 'GET' : 'POST')) return send(405, { error: '请求方式不正确' });
     if (!originUrl && !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(req.headers.host || '')) return send(403, { error: '请配置游戏站点地址' });
     const expectedOrigin = originUrl?.origin || 'http://' + req.headers.host;
     if (req.headers.origin && req.headers.origin !== expectedOrigin || req.headers['sec-fetch-site'] === 'cross-site') return send(403, { error: '请从游戏站点访问' });
+    const client = trustProxy && req.headers['x-real-ip'] || req.socket.remoteAddress;
+    if (url === playthroughPath) {
+      if (!playthroughs) return send(503, { error: '存档服务尚未启动' });
+      if (!allowUpload(client)) return send(429, { error: '请稍后重试' });
+      let capture;
+      try { capture = await readJson(req, 2 * 1024 * 1024); }
+      catch (error) { return send(error.message === '长度' ? 413 : 400, { error: '存档请求大小或格式有误' }); }
+      const result = playthroughs.record(capture);
+      return result.error ? reject(result) : send(200, { ok: true });
+    }
     if (action === 'session' || url === chatPath) {
       const account = store.identify(token);
       if (account.error) return reject(account);
@@ -59,7 +81,6 @@ function createService({ store, apiKey, origin, fetchFn = fetch, trustProxy = fa
         store.logout(token);
         return send(200, {}, { 'Set-Cookie': cookie('') });
       }
-      const client = trustProxy && req.headers['x-real-ip'] || req.socket.remoteAddress;
       const result = store.authenticate(action, body.code?.trim().toUpperCase(), client);
       if (result.error) return reject(result);
       store.logout(token);
@@ -88,10 +109,12 @@ function createService({ store, apiKey, origin, fetchFn = fetch, trustProxy = fa
 }
 
 if (require.main === module) {
-  const store = openAccounts(process.env.NPC_DB || path.join(os.homedir(), '.bjtu-life', 'npc.sqlite'));
+  const accountFile = process.env.NPC_DB || path.join(os.homedir(), '.bjtu-life', 'npc.sqlite');
+  const store = openAccounts(accountFile);
   const [command = 'serve', id] = process.argv.slice(2);
   if (command === 'serve') {
-    const server = createService({ store, apiKey: process.env.DEEPSEEK_API_KEY, origin: process.env.NPC_ORIGIN, trustProxy: process.env.NPC_TRUST_PROXY === '1' });
+    const playthroughs = openPlaythroughs(path.join(path.dirname(accountFile), 'playthroughs.sqlite'));
+    const server = createService({ store, playthroughs, apiKey: process.env.DEEPSEEK_API_KEY, origin: process.env.NPC_ORIGIN, trustProxy: process.env.NPC_TRUST_PROXY === '1' });
     server.listen(Number(process.env.NPC_PORT || 8080), '127.0.0.1', () => console.log('NPC API listening on', server.address().port));
   } else {
     try {

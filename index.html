@@ -11,7 +11,7 @@
   <meta name="format-detection" content="telephone=no">
   <link rel="preload" as="image" href="assets/campus-map-20261124.webp" fetchpriority="high">
   <link rel="preload" as="image" href="assets/start-screen-campus.webp">
-  <link rel="stylesheet" href="styles.css?v=20261125-npc-api">
+  <link rel="stylesheet" href="styles.css?v=20261125-playthrough">
 </head>
 <body>
   <section class="start-screen" id="startScreen" aria-label="北交人生启动页">
@@ -43,6 +43,7 @@
         <button type="button" class="utility-button" id="startSettingsBack">返回</button>
       </section>
       <p class="start-status" id="startStatus" role="status"></p>
+      <p class="start-data-notice">保存进度或达成结局时，游戏会上传本局存档（含昵称、行动和人物对话），供开发团队分析玩法。</p>
       <p class="start-version" id="startVersion"></p>
     </div>
   </section>
@@ -490,7 +491,7 @@
   <script defer src="character-scene.js?v=20261125-npc-api"></script>
   <script defer src="state-validation.js?v=20261120-agent-memory"></script>
   <script defer src="game.js?v=20261120-economy"></script>
-  <script defer src="save.js?v=20261106-p3"></script>
+  <script defer src="save.js?v=20261125-playthrough"></script>
   <script defer src="audio.js?v=20261118-lin-animals"></script>
   <script defer src="sms.js?v=20261106-p3"></script>
   <script defer src="animals.js?v=20261122-cat-speech"></script>
@@ -500,6 +501,7 @@
   <script defer src="developer-tools.js?v=20261120-dev3"></script>
   <script defer src="developer-panel.js?v=20261125-npc-api"></script>
   <script defer src="npc-account.js?v=20261125-npc-api"></script>
-  <script defer src="app.js?v=20261125-npc-api"></script>
+  <script defer src="playthrough.js?v=20261125-playthrough"></script>
+  <script defer src="app.js?v=20261125-playthrough"></script>
 </body>
 </html>

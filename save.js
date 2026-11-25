@@ -29,7 +29,8 @@
       if (typeof envelope.appVersion !== 'string' || !envelope.appVersion.length || envelope.appVersion.length > 64) return { ok: false, reason: '程序版本标记无效' };
       if (!Number.isSafeInteger(envelope.saveSequence) || envelope.saveSequence < 1 || typeof envelope.savedAt !== 'string' || !Number.isFinite(Date.parse(envelope.savedAt))) return { ok: false, reason: '存档序号或保存时间无效' };
       const checked = game.validateState(envelope.state);
-      return checked.ok ? { ok: true, state: envelope.state, savedAt: envelope.savedAt, saveSequence: envelope.saveSequence } : checked;
+      return checked.ok ? { ok: true, state: envelope.state, savedAt: envelope.savedAt, saveSequence: envelope.saveSequence,
+        ...(typeof envelope.runId === 'string' && /^[a-f0-9]{32}$/.test(envelope.runId) ? { runId: envelope.runId } : {}) } : checked;
     } catch (_) { return { ok: false, reason: '存档 JSON 损坏或字段缺失' }; }
   }
   function createSaveService(storage, options = {}) {
@@ -70,7 +71,7 @@
         return result;
       } catch (_) { return { ok: false, reason: '读取存档失败，当前进度保持不变' }; }
     }
-    function save(state) {
+    function save(state, runId) {
       const checked = game.validateState(state);
       if (!checked.ok) return checked;
       if (observedMain === undefined) {
@@ -82,7 +83,7 @@
         const previousRaw = read(keys.primary);
         if (previousRaw !== observedMain) return { ok: false, conflict: true, reason: '另一个标签页更新了存档，请先读取最新存档再保存' };
         const previous = parse(previousRaw);
-        const envelope = { saveFormatVersion: game.RULES.saveFormatVersion, rulesVersion: game.RULES.version, appVersion: game.RULES.appVersion, saveSequence: Math.max(observedSequence, previous.ok ? previous.saveSequence : 0) + 1, savedAt: now(), state };
+        const envelope = { saveFormatVersion: game.RULES.saveFormatVersion, rulesVersion: game.RULES.version, appVersion: game.RULES.appVersion, saveSequence: Math.max(observedSequence, previous.ok ? previous.saveSequence : 0) + 1, savedAt: now(), state, ...(runId ? { runId } : {}) };
         const encoded = JSON.stringify(envelope);
         const valid = parse(encoded);
         if (!valid.ok) return valid;
@@ -124,8 +125,8 @@
         const slots = stores.map((store, index) => ({ id: index + 1, ...store.inspect() }));
         return { ok: slots.some(slot => slot.ok), slots, reason: slots.every(slot => !slot.ok) ? slots[0].reason : '' };
       },
-      save(state, slotId) {
-        return getSlotKeys(slotId) ? { ...stores[slotId - 1].save(state), slotId } : unknown();
+      save(state, slotId, runId) {
+        return getSlotKeys(slotId) ? { ...stores[slotId - 1].save(state, runId), slotId } : unknown();
       },
       load(slotId, source = 'primary') {
         return getSlotKeys(slotId) ? { ...stores[slotId - 1].load(source), slotId } : unknown();

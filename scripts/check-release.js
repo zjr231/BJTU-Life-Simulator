@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const crypto = require('node:crypto');
 const { CATS, appearance, mapMarker, catArchive, catPosePreview } = require('../animals.js');
 const root = path.resolve(__dirname, '..');
-const scripts = ['config.js', 'courses.js', 'rng.js', 'relationships.js', 'npc-cast.js', 'npc-support.js', 'character-agent.js', 'npc-director.js', 'npc-game.js', 'character-scene.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'animals.js', 'season.js', 'vendor/planck.min.js', 'basketball.js', 'developer-tools.js', 'developer-panel.js', 'npc-account.js', 'app.js'];
+const scripts = ['config.js', 'courses.js', 'rng.js', 'relationships.js', 'npc-cast.js', 'npc-support.js', 'character-agent.js', 'npc-director.js', 'npc-game.js', 'character-scene.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'animals.js', 'season.js', 'vendor/planck.min.js', 'basketball.js', 'developer-tools.js', 'developer-panel.js', 'npc-account.js', 'playthrough.js', 'app.js'];
 const files = new Set(['index.html', 'styles.css', '.nojekyll', 'vendor/planck.LICENSE.txt', 'assets/characters/zhou-ning-casual-v1.png', 'assets/characters/zhou-ning-casual-v1-20261125.webp', 'assets/characters/chen-teacher-casual-v1-20261125.webp', 'assets/characters/lin-xia-sports-v1-20261125.webp', 'assets/scenes/campus-afternoon-v1-20261125.webp', ...scripts]);
 
 function localReference(reference, from) {
