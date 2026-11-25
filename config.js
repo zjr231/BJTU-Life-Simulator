@@ -893,9 +893,8 @@
     danceParty: { actions: ['clubWork'] },
     memorial129: { actions: ['show'], season: 'autumn', minElapsed: 8 }
   };
-  // 可选在线对话：relay 为云函数中转地址，空字符串表示关闭（NPC 只回本地台词）。
-  // 密钥只放在云函数的环境变量里，前端永远接触不到；未连接或超时自动回退本地台词。
-  const AI_CHAT = { relay: 'https://deepseek-relay-bsxioiwmxt.cn-hangzhou.fcapp.run', timeoutMs: 15000, agentMemory: true };
+  // 在线对话由本站游戏服务验证账号并统一计费。
+  const AI_CHAT = { relay: '/api/npc-chat', timeoutMs: 15000, agentMemory: true };
   // 旧版路人聊天的身份和结算规则，用于校验存档与重放历史操作。
   const NPC_CHAT = {
     energyPerMessage: 1,

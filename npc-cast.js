@@ -6,12 +6,12 @@
     zhouNing: { ...rules.ZHOU_NING, role: 'student', places: ['library', 'think', 'ginkgo', 'track'], interests: ['study', 'life'], goalId: 'presentation', storyId: 'presentation', greeting: '又见面了，今天有什么想聊的？', intro: '我是周宁，那天在图书馆聊完还挺开心的。', activities: Object.keys(rules.ACTIVITIES), events: ['campusDiscussion', 'cat', 'seat', 'snow', 'ginkgo', 'drama'] },
     chenTeacher: { id: 'chenTeacher', name: '陈老师', role: 'teacher', gender: '男', identity: '北京交通大学老师', place: 'yifu', places: ['yifu', 'think', 'library', 'auditorium'], interests: ['study', 'campus'], figure: 'teacher', abilities: { academic: 90, social: 70, sport: 50 },
       description: '负责学生项目与竞赛指导的青年教师。说话直接，但会认真听完学生的想法，习惯通过提问帮助学生自己发现问题。', strength: '梳理项目思路、检查论证漏洞、模拟答辩。', weakness: '时间安排较紧，指导前希望学生先准备具体问题。', preference: '喜欢有依据的讨论，也愿意听学生谈研究方向；重视学生自己的投入。', goal: '陪学生把一个真实问题讲清楚，完成有准备的项目展示。', goalId: 'mentorReview', storyId: 'mentorReview',
-      portrait: 'assets/characters/chen-teacher-casual-v1.png', background: rules.ZHOU_NING.background,
+      portrait: 'assets/characters/chen-teacher-casual-v1-20261125.webp', background: rules.ZHOU_NING.background,
       intro: '你好，我是陈老师，负责一些学生项目和竞赛的指导。先说说你想解决什么问题，我们再一起看看思路。', greeting: '最近项目或竞赛准备得怎么样？可以先说一个最具体的问题。',
       activities: ['selfStudy', 'projectWork', 'furtherStudy', 'jobPreparation'], events: ['projectOffer', 'projectReview', 'contest1', 'contest2', 'seminar', 'lecture'] },
     linXia: { id: 'linXia', name: '林夏', role: 'student', gender: '女', identity: '北京交通大学学生', place: 'track', places: ['track', 'ginkgo', 'activity', 'dorm'], interests: ['sport', 'life'], figure: 'student', abilities: { academic: 50, social: 55, sport: 80 },
       description: '在操场认识的同年级同学。跑步时很有冲劲，也喜欢散步和听歌；会为团队比赛认真准备，偶尔担心自己拖累别人。', strength: '安排运动节奏，陪人坚持训练，也乐于尝试校园里的新鲜事。', weakness: '失利后容易自责，训练忙起来时会把复习计划往后推。', preference: '喜欢傍晚跑步、轻松球局和运动后的闲聊；也想把学习与训练安排得更从容。', goal: '练好接力配合，学会在比赛前和队友说出自己的担心。', goalId: 'relayPractice', storyId: 'relayPractice',
-      portrait: 'assets/characters/lin-xia-sports-v1.png', background: rules.ZHOU_NING.background,
+      portrait: 'assets/characters/lin-xia-sports-v1-20261125.webp', background: rules.ZHOU_NING.background,
       intro: '刚才看你也在这边活动，我叫林夏，平时喜欢傍晚来操场。下次有空可以一起练，按自己的节奏就好。', greeting: '你来啦！今天想活动一下，还是坐下来聊聊？', activities: Object.keys(rules.ACTIVITIES), events: ['sportsMeet', 'injury', 'cat', 'snow', 'ginkgo'] }
   };
   const MEMORIES = { ...rules.MEMORIES, metTeacher: '在准备项目或竞赛时认识了陈老师', metAthlete: '运动后在操场认识了林夏', story_mentorReview: '和陈老师完成一次方案复盘，学会把依据讲清楚', story_relayPractice: '陪林夏练习接力配合，也听她说出了赛前的担心' };

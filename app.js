@@ -49,6 +49,8 @@ let developerPaused = false;
 let developerPauseStarted = 0;
 let developerAnimalOffset = 0;
 const sms = typeof CampusSms !== 'undefined' ? CampusSms : null;
+const npcAccount = typeof CampusNpcAccount !== 'undefined' ? CampusNpcAccount : null;
+function onlineNpcFetch() { return npcAccount?.available() ? npcAccount.request : null; }
 const LOGIN_KEY = 'bjtu-life:login';
 const LOGIN_SKIP_KEY = 'bjtu-life:login:skipped';
 let loginSession = null;
@@ -1325,6 +1327,8 @@ function vnChoice(label, command, extra = {}, note = '', disabled = false) {
 }
 function showVisualNovel(mode, title, speech, choices, options = {}) {
   const id=options.npcId || activeNpcId, cast=game.npcCast, p=cast.profile(id), person=cast.get(state,id), status=cast.status(state,id);
+  preloadSceneBackground(p.background, 'high');
+  preloadSceneBackground(p.portrait, 'high');
   const place=options.place || (zhouView.screen==='activity'?game.ACTIONS[zhouView.activity]?.place:activePlace) || status.lastPlace || p.place;
   const oldConversation=$('#vnConversation');
   const oldScroll=oldConversation?.dataset?.npcId===id?{top:oldConversation.scrollTop,key:oldConversation.dataset.lastKey}:null;
@@ -1392,7 +1396,7 @@ function resetNpcSummaryJobs() {
 }
 
 function refreshNpcSummary(npcId) {
-  if (!state || !game.AI_CHAT.relay || typeof fetch !== 'function') return null;
+  if (!state || !game.AI_CHAT.relay || !onlineNpcFetch()) return null;
   const existing = npcSummaryJobs.get(npcId);
   if (existing?.promise) return existing.promise;
   if (existing?.attemptedAt === state.revision) return null;
@@ -1402,7 +1406,7 @@ function refreshNpcSummary(npcId) {
   const timer = controller ? setTimeout(() => controller.abort(), Math.min(game.AI_CHAT.timeoutMs || 15000, 6000)) : null;
   const job = { controller, attemptedAt: state.revision, promise: null };
   npcSummaryJobs.set(npcId, job);
-  job.promise = game.characterAgent.requestSummary({ plan, relay: game.AI_CHAT.relay, fetchFn: fetch, signal: controller?.signal })
+  job.promise = game.characterAgent.requestSummary({ plan, relay: game.AI_CHAT.relay, fetchFn: onlineNpcFetch(), signal: controller?.signal })
     .then(text => {
       if (!text || npcSummaryJobs.get(npcId) !== job || !state) return;
       // 摘要是存档附加信息。保留游戏状态对象，避免打断正在等待的对话请求。
@@ -1417,7 +1421,7 @@ function refreshNpcSummary(npcId) {
 }
 
 function refreshNpcReflection(npcId, trigger = 'term-end') {
-  if (!state || !game.AI_CHAT.relay || typeof fetch !== 'function' || game.AI_CHAT.agentMemory === false) return null;
+  if (!state || !game.AI_CHAT.relay || !onlineNpcFetch() || game.AI_CHAT.agentMemory === false) return null;
   if (!game.npcCast.get(state, npcId)) return null;
   const existing = npcReflectionJobs.get(npcId);
   if (existing?.promise) return existing.promise;
@@ -1430,7 +1434,7 @@ function refreshNpcReflection(npcId, trigger = 'term-end') {
   const timer = controller ? setTimeout(() => controller.abort(), Math.min(game.AI_CHAT.timeoutMs || 15000, 8000)) : null;
   const job = { controller, attemptedAt: state.revision, promise: null };
   npcReflectionJobs.set(npcId, job);
-  job.promise = game.characterAgent.requestReflection({ plan, relay: game.AI_CHAT.relay, fetchFn: fetch, signal: controller?.signal })
+  job.promise = game.characterAgent.requestReflection({ plan, relay: game.AI_CHAT.relay, fetchFn: onlineNpcFetch(), signal: controller?.signal })
     .then(result => {
       // 读档、重开和切换测试副本时会清空任务表。
       if (!result || npcReflectionJobs.get(npcId) !== job || !state) return;
@@ -1444,7 +1448,7 @@ function refreshNpcReflection(npcId, trigger = 'term-end') {
   return job.promise;
 }
 function maybeQueueNpcReflection(trigger = 'term-end') {
-  if (!state || !game.AI_CHAT.relay || typeof fetch !== 'function' || game.AI_CHAT.agentMemory === false) return;
+  if (!state || !game.AI_CHAT.relay || !onlineNpcFetch() || game.AI_CHAT.agentMemory === false) return;
   for (const npcId of Object.keys(game.npcCast.PROFILES)) refreshNpcReflection(npcId, trigger);
 }
 
@@ -1479,24 +1483,24 @@ async function sendZhouChat(message) {
     }
   }
   const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
-  const decision=await game.characterAgent.request({state:snapshot,npcId,text,candidates:game.npcCandidates(snapshot,npcId),relay:game.AI_CHAT.relay,fetchFn:typeof fetch==='function'?fetch:null,signal:controller?.signal});
+  const decision=await game.characterAgent.request({state:snapshot,npcId,text,candidates:game.npcCandidates(snapshot,npcId),relay:game.AI_CHAT.relay,fetchFn:onlineNpcFetch(),signal:controller?.signal});
   if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence||activeNpcId!==npcId)return;zhouRequest=null;
   if(state!==snapshot||dialogMode!=='relationship'||!dialog.open){zhouChatDraft=text;return;}
   const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:'chat',text},snapshot.revision);if(!result){zhouChatDraft=text;showZhouNing({preserve:true});return;}
   refreshNpcSummary(npcId);
-  acknowledgedResultRevision=state.revision;zhouChatNotice=decision.source==='local'?'在线对话暂时没连上，先继续本地对话。':result.entry.dialogue.gained?'你们多了解了彼此一点 · 相识度 +'+result.entry.dialogue.gained+'。':'';showZhouNing({preserve:true});
+  acknowledgedResultRevision=state.revision;zhouChatNotice=decision.source==='local'?(npcAccount?.localNotice() || '当前使用本地台词。'):result.entry.dialogue.gained?'你们多了解了彼此一点 · 相识度 +'+result.entry.dialogue.gained+'。':'';showZhouNing({preserve:true});
 }
 async function maybeZhouNingDirector() {
   if(developerPaused||!state||zhouRequest||uiLocked||basketballSession||animalDialog?.open||needsCourseSelection())return;
   const occasion=game.npcOpportunity(state);if(!occasion||(dialog.open&&dialogMode!=='event'))return;
   const snapshot=state,sequence=++zhouRequestSequence,controller=typeof AbortController==='function'?new AbortController():null,npcId=occasion.npcId;
   zhouRequest={controller,npcId};const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
-  const decision=await game.characterAgent.request({state:snapshot,npcId,candidates:occasion.candidates,occasion,relay:game.AI_CHAT.relay,fetchFn:typeof fetch==='function'?fetch:null,signal:controller?.signal});
+  const decision=await game.characterAgent.request({state:snapshot,npcId,candidates:occasion.candidates,occasion,relay:game.AI_CHAT.relay,fetchFn:onlineNpcFetch(),signal:controller?.signal});
   if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence)return;zhouRequest=null;
   if(state!==snapshot||basketballSession||animalDialog?.open||(dialog.open&&dialogMode!=='event')){if(state&&dialogMode==='relationship')showZhouNing({preserve:true});return;}
   const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:occasion.kind,text:'',trigger:occasion.key},snapshot.revision);if(!result)return;
   acknowledgedResultRevision=state.revision;
-  if(state.pendingEvent)showEvent();else{zhouChatNotice=decision.source==='local'?'在线对话暂时没连上，先继续本地对话。':'';showCharacter(npcId,{text:decision.say,place:occasion.place});}
+  if(state.pendingEvent)showEvent();else{zhouChatNotice=decision.source==='local'?(npcAccount?.localNotice() || '当前使用本地台词。'):'';showCharacter(npcId,{text:decision.say,place:occasion.place});}
 }
 function showRelationshipResult(entry, mode='relationshipResult') {
   const r=entry.relationship,id=r.characterId||'zhouNing',p=game.npcCast.profile(id);activeNpcId=id;
@@ -2359,6 +2363,10 @@ function showStartMenu() {
 }
 
 const SCENE_BACKGROUND_ASSETS = [
+  'assets/scenes/campus-afternoon-v1-20261125.webp',
+  'assets/characters/zhou-ning-casual-v1-20261125.webp',
+  'assets/characters/chen-teacher-casual-v1-20261125.webp',
+  'assets/characters/lin-xia-sports-v1-20261125.webp',
   'assets/animals/fengye-20261124.webp',
   'assets/animals/minghu-20261124.webp',
   ...(animals ? Object.values(animals.CATS).map(cat => cat.atlas) : []),
@@ -3316,6 +3324,7 @@ $('#dialogBody').addEventListener('click', (event) => {
   if (!button) return;
   if (button.dataset.vnUi) {
     const command = button.dataset.vnUi;
+    if (command === 'account') { npcAccount?.open(); return; }
     if (uiLocked) return;
     if (command === 'profile') {
       zhouHistoryOpen = false;
@@ -3809,7 +3818,7 @@ dialog.addEventListener('cancel', (event) => {
   else if (dialogMode === 'relationship') cancelZhouRequest();
 });
 document.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape' || basketballDialog?.open || animalDialog?.open) return;
+  if (event.key !== 'Escape' || $('#npcAccountDialog')?.open || basketballDialog?.open || animalDialog?.open) return;
   if (openPopoverName) { closePopovers(); return; }
   if (openPanelName) { closePanel(); return; }
   if (activePlace && !dialog.open) closePlace();

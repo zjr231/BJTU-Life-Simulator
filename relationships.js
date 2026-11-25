@@ -9,7 +9,7 @@
     goal: '准备好课程展示，也练习把自己的想法讲给别人听。',
     preference: '喜欢安静的散步、轻松的球局和有趣的演出；重视约定，愿意听朋友认真说话。',
     abilities: { academic: 80, social: 45, sport: 60 },
-    portrait: 'assets/characters/zhou-ning-casual-v1.png', background: 'assets/scenes/campus-afternoon-v1.png'
+    portrait: 'assets/characters/zhou-ning-casual-v1-20261125.webp', background: 'assets/scenes/campus-afternoon-v1-20261125.webp'
   };
   const MEMORIES = {
     met: '在图书馆因同一门课的作业相识', discussed: '第一次见面就一起解开了一处难点',

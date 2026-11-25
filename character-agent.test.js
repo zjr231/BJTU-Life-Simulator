@@ -6,6 +6,14 @@ const game = require('./game.js');
 const agent = game.characterAgent;
 const cast = game.npcCast;
 
+test('NPC场景背景和人物立绘使用压缩WebP资源', () => {
+  for (const npcId of Object.keys(cast.PROFILES)) {
+    const profile = cast.profile(npcId);
+    assert.match(profile.background, /^assets\/scenes\/.+\.webp$/);
+    assert.match(profile.portrait, /^assets\/characters\/.+\.webp$/);
+  }
+});
+
 test('固定人物长上下文优先保留本人的最近六轮完整问答', () => {
   const npcId = 'linXia';
   let state = cast.meet(cast.meet(game.createGame({ seed: 'dialogue-context' }), npcId), 'zhouNing');
@@ -26,23 +34,13 @@ test('固定人物长上下文优先保留本人的最近六轮完整问答', ()
   });
   const candidates = cast.profile(npcId).activities.map(id => ({ id, label: cast.activityLabel(npcId, id) }));
   const current = { role: 'user', content: '我上次说过什么？' };
-  const payload = agent.messages(state, current.content, candidates, null, npcId);
-  assert.ok(payload.length <= 14);
-  assert.ok(payload.every(row => row.content.length <= 600));
-  assert.ok(payload.filter(row => row.role === 'system').some(row => row.content.includes(candidates.at(-1).id)));
-  assert.deepEqual(payload.at(-1), current);
+  const payload = agent.chatPayload(state, current.content, candidates, null, npcId);
+  assert.equal(payload.text, current.content);
+  assert.equal(payload.kind, 'chat');
+  assert.deepEqual(payload.context.candidates, candidates.map(item => item.id));
+  assert.deepEqual(payload.context.turns, texts.slice(1).map((text, i) => ({ text, reply: replies[i + 1] })));
+  assert.equal(require('./scripts/npc-request.js').validRequest(payload), true);
   assert.doesNotMatch(JSON.stringify(payload), /周宁话题记号|周宁回复记号/);
-  const exchanged = payload.slice(0, -1).filter(row => row.role !== 'system');
-  const earlier = exchanged.slice(0, 4);
-  earlier.forEach((row, i) => {
-    assert.equal(row.role, 'user');
-    assert.match(row.content, /^历史问答/);
-    assert.ok(row.content.includes('玩家原话：' + texts[i + 1] + '\n人物原话：' + replies[i + 1]));
-  });
-  assert.deepEqual(exchanged.slice(4), texts.slice(-2).flatMap((text, i) => [
-    { role: 'user', content: text },
-    { role: 'assistant', content: replies.at(i - 2) }
-  ]));
 });
 
 test('固定人物续聊能读取旧版周宁历史和旧档的近期消息', () => {
@@ -52,13 +50,13 @@ test('固定人物续聊能读取旧版周宁历史和旧档的近期消息', ()
     ...agent.read(state, npcId),
     messages: [{ role: 'user', content: '旧档保留的原话' }, { role: 'assistant', content: '旧档保留的回应' }]
   } });
-  const recent = input => agent.messages(input, '继续聊', [], null, npcId).filter(row => row.role !== 'system');
-  assert.deepEqual(recent(state).slice(0, 2).map(row => row.content), ['旧档保留的原话', '旧档保留的回应']);
+  const recent = input => agent.chatPayload(input, '继续聊', [], null, npcId).context.turns;
+  assert.deepEqual(recent(state), [{ text: '旧档保留的原话', reply: '旧档保留的回应' }]);
   const entry = {
     command: { operation: 'recordZhouNingDialogue' },
     dialogue: { kind: 'chat', text: '旧版周宁完整历史', say: '周宁的原始回复' }
   };
-  assert.deepEqual(recent({ ...state, history: [entry] }).slice(0, 2).map(row => row.content), ['旧版周宁完整历史', '周宁的原始回复']);
+  assert.deepEqual(recent({ ...state, history: [entry] }), [{ text: '旧版周宁完整历史', reply: '周宁的原始回复' }]);
 });
 
 test('人物摘要按六轮累计且不删除原话或串用其他人物的记忆', async () => {
@@ -93,14 +91,14 @@ test('人物摘要按六轮累计且不删除原话或串用其他人物的记�
     relay,
     fetchFn: async (url, options) => {
       assert.equal(url, relay);
-      request = JSON.parse(options.body).messages;
+      request = JSON.parse(options.body);
       return { ok: true, json: async () => ({ reply: summary }) };
     }
   });
   assert.equal(response, summary);
-  assert.ok(request.length <= 14 && request.every(row => row.content.length <= 600));
-  assert.ok(request.some(row => row.content.includes(playerLine(1)) && row.content.includes(npcLine(1))));
-  assert.ok(request.every(row => !row.content.includes('周宁专属')));
+  assert.equal(require('./scripts/npc-request.js').validRequest(request), true);
+  assert.deepEqual(request.context.turns, first.turns);
+  assert.doesNotMatch(JSON.stringify(request), /周宁专属/);
   assert.equal(await agent.requestSummary({
     plan: first,
     relay,
@@ -118,14 +116,10 @@ test('人物摘要按六轮累计且不删除原话或串用其他人物的记�
   assert.equal(agent.summaryPlan(state, npcId), null);
   assert.ok(agent.conversation(state, npcId).some(row => row.content === playerLine(1)));
   const current = { role: 'user', content: '继续测试' };
-  const seventhRequest = agent.messages(state, current.content, [], null, npcId).filter(row => row.role !== 'system');
-  assert.ok(seventhRequest[0].content.startsWith('此前对话摘要'));
-  assert.ok(seventhRequest[0].content.includes(summary));
-  assert.deepEqual(seventhRequest.slice(1), [
-    { role: 'user', content: playerLine(5) }, { role: 'assistant', content: npcLine(5) },
-    { role: 'user', content: playerLine(6) }, { role: 'assistant', content: npcLine(6) }, current
-  ]);
-  assert.ok(agent.messages(state, current.content, [], null, 'zhouNing').every(row => !row.content.includes(summary)));
+  const seventhRequest = agent.chatPayload(state, current.content, [], null, npcId);
+  assert.equal(seventhRequest.context.summary, summary);
+  assert.deepEqual(seventhRequest.context.turns, [5, 6].map(i => ({ text: playerLine(i), reply: npcLine(i) })));
+  assert.equal(agent.chatPayload(state, current.content, [], null, 'zhouNing').context.summary, '');
 
   for (let round = 7; round <= 11; round++) chat(npcId, round);
   assert.equal(agent.summaryPlan(state, npcId), null);
@@ -224,11 +218,11 @@ test('人物反思请求受消息预算限制，并能解析结构化结果', as
   const result = await agent.requestReflection({
     plan, relay,
     fetchFn: async (url, options) => {
-      request = JSON.parse(options.body).messages;
+      request = JSON.parse(options.body);
       return { ok: true, json: async () => ({ reply: JSON.stringify({ reflection: '我开始愿意承认自己害怕。', coreMemory: '我想准备好展示，也愿意向信任的人求助。', focus: '准备展示', memories: [{ kind: 'promise', text: '玩家答应陪我练习展示', importance: 5 }] }) }) };
     }
   });
   assert.equal(result.core, '我想准备好展示，也愿意向信任的人求助。');
-  assert.ok(request.length <= 14 && request.every(row => row.content.length <= 600));
-  assert.ok(request.some(row => row.content.includes('害怕上台')) || request.some(row => row.content.includes('展示')));
+  assert.equal(require('./scripts/npc-request.js').validRequest(request), true);
+  assert.match(JSON.stringify(request.context), /展示/);
 });

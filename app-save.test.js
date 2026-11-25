@@ -394,6 +394,7 @@ function app(storage = memory(), withSms = false, autoStart = true, withAnimals 
   window.localStorage = storage;
   window.crypto = { getRandomValues(values) { values[0] = 1; return values; } };
   const globals = { CampusGame: game, CampusSave: saves, CampusCharacterScene: characterScene, window,
+    CampusNpcAccount: { available: () => !!window.reflectionFetch, request: (...args) => window.reflectionFetch(...args) },
     HTMLDialogElement: class { showModal() {} },
     document: { querySelector: element, querySelectorAll: () => [], body: { style: {} }, addEventListener() {} },
     location: { search: '' }, URLSearchParams, Uint32Array,
@@ -898,11 +899,10 @@ test('开学选课、结束学期开考与期末总结界面可依次渲染', ()
 function queueTermReflections(ui) {
   const replies = new Map();
   ui.window.reflectionFetch = (_, { body }) => {
-    const detail = JSON.parse(body).messages[1].content;
-    const name = detail.match(/^人物：(.+?)（/)[1];
+    const { npcId } = JSON.parse(body);
+    const name = game.npcCast.profile(npcId).name;
     return new Promise(resolve => replies.set(name, resolve));
   };
-  ui.evaluate('fetch = window.reflectionFetch');
   ui.start(false);
   ui.evaluate('for (const npcId of Object.keys(game.npcCast.PROFILES)) state = game.npcCast.meet(state, npcId)');
   ui.click('#endTermButton');
@@ -1679,13 +1679,13 @@ test('点击新游戏或继续游戏后立即进入流程，并在后台预载�
   };
   const finishImages = async ui => {
     const count = ui.evaluate('window.entryImages.length');
-    assert.equal(count, 9);
+    assert.equal(count, 13);
     const urls = JSON.parse(ui.evaluate('JSON.stringify(window.entryImages.map(image => image.url))'));
-    assert.deepEqual(urls.slice(0, 2), [
-      'assets/animals/fengye-20261124.webp',
-      'assets/animals/minghu-20261124.webp'
-    ]);
+    assert.ok(urls.includes('assets/scenes/campus-afternoon-v1-20261125.webp'));
+    assert.ok(urls.includes('assets/characters/chen-teacher-casual-v1-20261125.webp'));
+    assert.ok(urls.includes('assets/characters/lin-xia-sports-v1-20261125.webp'));
     assert.ok(urls.includes('assets/animals/cat-jupi-v10-20261124.webp'));
+    assert.ok(urls.includes('assets/characters/zhou-ning-casual-v1-20261125.webp'));
     for (let index = 0; index < count; index++) {
       ui.evaluate('window.entryImages[' + index + '].naturalWidth = 1200; window.entryImages[' + index + '].onload()');
       await new Promise(resolve => setImmediate(resolve));
@@ -1706,6 +1706,28 @@ test('点击新游戏或继续游戏后立即进入流程，并在后台预载�
   resumed.evaluate('startContinueGame()');
   assert.equal(resumed.evaluate('dialogMode'), 'load');
   await finishImages(resumed);
+});
+
+test('NPC背景和立绘在开局预载，并在打开人物时提升为高优先级', () => {
+  const ui = app(memory(), false, false, false);
+  ui.evaluate('Image = class { constructor() { this.complete = false; this.naturalWidth = 0; this.fetchPriority = \"auto\"; window.sceneImages = (window.sceneImages || []).concat(this); } set src(value) { this.url = value; } }');
+  ui.evaluate('startNewGame()');
+  const assets = ui.evaluate('window.sceneImages');
+  const background = assets.find(image => image.url === 'assets/scenes/campus-afternoon-v1-20261125.webp');
+  const portrait = assets.find(image => image.url === 'assets/characters/zhou-ning-casual-v1-20261125.webp');
+  assert.ok(background);
+  assert.ok(portrait);
+  assert.equal(background.fetchPriority, 'low');
+  assert.equal(portrait.fetchPriority, 'low');
+
+  ui.evaluate('state = CampusGame.npcCast.meet(CampusGame.createGame(), \"zhouNing\"); showCharacter(\"zhouNing\")');
+  assert.equal(ui.evaluate('dialogMode'), 'relationship');
+  assert.equal(background.fetchPriority, 'high');
+  assert.equal(portrait.fetchPriority, 'high');
+  const scene = ui.element('#dialogBody').innerHTML;
+  assert.ok(scene.includes('assets/scenes/campus-afternoon-v1-20261125.webp'));
+  assert.ok(scene.includes('assets/characters/zhou-ning-casual-v1-20261125.webp'));
+  assert.ok(scene.includes('fetchpriority=\"high\" decoding=\"async\"'));
 });
 
 test('猫咪图集尚未载入时显示等待提示并停用互动，载入后恢复互动', async () => {
