@@ -5,13 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>北交人生 · 校园地图</title>
   <meta name="theme-color" content="#142b25">
+  <link rel="icon" href="assets/branding/favicon-20261126.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/branding/app-icon-20261126.png">
+  <link rel="apple-touch-icon" href="assets/branding/apple-touch-icon-20261126.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="北交人生">
   <meta name="format-detection" content="telephone=no">
   <link rel="preload" as="image" href="assets/campus-map-20261124.webp" fetchpriority="high">
   <link rel="preload" as="image" href="assets/start-screen-campus.webp">
-  <link rel="stylesheet" href="styles.css?v=20261126-guest">
+  <link rel="stylesheet" href="styles.css?v=20261126-guest-feedback">
 </head>
 <body>
   <section class="start-screen" id="startScreen" aria-label="北交人生启动页">
@@ -319,8 +322,10 @@
             <button class="utility-button" id="motionButton" type="button" aria-pressed="false">动画效果:开</button>
             <button class="utility-button" id="hotspotButton" type="button" aria-pressed="false">热点提示:开</button>
             <button class="utility-button" id="resetAvatarButton" type="button">恢复默认头像</button>
+            <button class="utility-button" id="feedbackButton" type="button">反馈与建议</button>
             <button class="utility-button" id="helpButton" type="button">玩法说明</button>
             <button class="utility-button" id="restartButton" type="button">重新开始</button>
+            <button class="utility-button" id="exitGameButton" type="button">退出游戏</button>
           </div>
           <p class="app-panel-note" id="versionNote">版本信息</p>
           <div id="debugPanel" hidden><p id="debugSummary"></p><button type="button" class="utility-button" id="exportLogButton">导出复现日志</button></div>
@@ -432,6 +437,22 @@
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </main>
+  <dialog class="term-dialog feedback-dialog" id="feedbackDialog" aria-labelledby="feedbackTitle">
+    <p class="dialog-kicker">北交人生 · 一点反馈</p>
+    <h2 id="feedbackTitle" tabindex="-1">如果你愿意，想听听你的感受</h2>
+    <p id="feedbackIntro">已经走过两个学期了。方便的话，想请你留一两句：哪一段让你觉得有意思，哪里让你卡住、觉得不平衡或不太顺手？不写也完全没关系。</p>
+    <form id="feedbackForm">
+      <label for="feedbackSuggestion">想说的话 <small>选填</small></label>
+      <textarea id="feedbackSuggestion" maxlength="1000" rows="4" placeholder="可以只写一句，也可以多说一点。"></textarea>
+      <label class="feedback-optout"><input type="checkbox" id="feedbackOptOut"> 以后不再自动提醒</label>
+      <p class="dialog-note feedback-note">设置里仍然可以随时反馈。</p>
+      <p id="feedbackDialogStatus" role="status"></p>
+      <div class="dialog-buttons">
+        <button type="button" class="secondary" id="feedbackSkip">这次先跳过</button>
+        <button type="submit" id="feedbackSubmit">留下建议</button>
+      </div>
+    </form>
+  </dialog>
   <div class="coach-layer" id="coachLayer" hidden aria-live="polite">
     <div class="coach-spotlight" id="coachSpotlight" aria-hidden="true"></div>
     <div class="coach-bubble" id="coachBubble">
@@ -470,7 +491,7 @@
   <script defer src="npc-game.js?v=20261118-lin-animals"></script>
   <script defer src="character-scene.js?v=20261126-guest"></script>
   <script defer src="state-validation.js?v=20261120-agent-memory"></script>
-  <script defer src="game.js?v=20261120-economy"></script>
+  <script defer src="game.js?v=20261126-guest-feedback"></script>
   <script defer src="save.js?v=20261125-playthrough"></script>
   <script defer src="audio.js?v=20261118-lin-animals"></script>
   <script defer src="sms.js?v=20261106-p3"></script>
@@ -481,7 +502,7 @@
   <script defer src="developer-tools.js?v=20261120-dev3"></script>
   <script defer src="developer-panel.js?v=20261126-guest"></script>
   <script defer src="npc-account.js?v=20261126-guest"></script>
-  <script defer src="playthrough.js?v=20261125-playthrough"></script>
-  <script defer src="app.js?v=20261126-guest"></script>
+  <script defer src="playthrough.js?v=20261126-guest-feedback"></script>
+  <script defer src="app.js?v=20261126-guest-feedback"></script>
 </body>
 </html>

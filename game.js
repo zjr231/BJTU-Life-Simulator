@@ -1627,10 +1627,11 @@
     const validator = typeof module !== 'undefined' && module.exports ? require('./state-validation.js') : root.CampusStateValidation;
     return validator.validate(state, api, random);
   }
-  function replay({ nickname, seed, commands, legacyEconomy = false, economyStartTerm = legacyEconomy ? 2 : 1, relationshipsInitialized = false }) {
+  function replay({ nickname, seed, commands, legacyEconomy = false, economyStartTerm = legacyEconomy ? 2 : 1, relationshipsInitialized = false, onStep }) {
     let state = createGame({ nickname, seed, legacyEconomy: legacyEconomy || economyStartTerm > 1 });
     if (relationshipsInitialized) state.relationships = relationships.create();
     for (const [index, command] of commands.entries()) {
+      const before = state;
       const args = { commandId: command.commandId || 'replay:' + index, expectedRevision: state.revision, eventInstanceId: command.eventInstanceId, investment: command.investment, extra: command.extra, positionId: command.positionId, economyStartTerm, relationshipVersion: command.relationshipVersion || 0, companionId: command.companionId, characterVersion: command.characterVersion || 0, proposalRevision: command.proposalRevision, agentProposalRevision: command.agentProposalRevision, zhouCameo: command.zhouCameo, npcCastVersion: command.npcCastVersion || 0, npcId: command.npcId, npcSupportVersion: command.npcSupportVersion || 0 };
       const handlers = { executeAction: () => executeAction(state, command.id, args), purchaseGrowth: () => purchaseGrowth(state, command.id, args), completeBasketball: () => completeBasketball(state, command.hits, args), submitEventChoice: () => submitEventChoice(state, command.id, args), selectCourses: () => selectCourses(state, command.id, args), chooseBudget: () => chooseBudget(state, command.id, args), beginExam: () => beginExam(state, args), updateExamAnswers: () => updateExamAnswers(state, command.id, args), submitExam: () => submitExam(state, command.id, args), cheatExam: () => cheatExam(state, args), endTerm: () => endTerm(state, args), continueGame: () => continueGame(state, args), chooseEnding: () => chooseEnding(state, command.id, args), chatWithNpc: () => chatWithNpc(state, { identityId: command.identityId, quality: command.quality }, args), setTargetPosition: () => setTargetPosition(state, command.id, args), settleInternship: () => settleInternship(state, args) };
       handlers.recordNpcDialogue = () => api.recordNpcDialogue(state, command.data, args);
@@ -1643,8 +1644,12 @@
       handlers.resolveZhouNingProposal = () => resolveZhouNingProposal(state, command.id, args);
       if (!own(handlers, command.operation)) return { ok: false, reason: '第 ' + (index + 1) + ' 步操作未知', state };
       const result = handlers[command.operation]();
-      if (!result.ok) return { ...result, reason: '第 ' + (index + 1) + ' 步：' + result.reason };
+      if (!result.ok) {
+        if (onStep) onStep({ index, command, before, result, ok: false, state: before });
+        return { ...result, reason: '第 ' + (index + 1) + ' 步：' + result.reason };
+      }
       state = result.state;
+      if (onStep) onStep({ index, command, before, result, ok: true, state });
     }
     return { ok: true, state };
   }

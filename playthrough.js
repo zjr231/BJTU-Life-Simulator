@@ -53,6 +53,10 @@
     }
     function feedbackStatus(runId) { return read('feedback:' + runId); }
     function setFeedback(runId, value) { write('feedback:' + runId, value); onFeedback(runId, value); }
+    function feedbackPrompted(runId) { return read('prompted:' + runId) === '1'; }
+    function markFeedbackPrompted(runId) { write('prompted:' + runId, '1'); }
+    function feedbackOptOut() { return read('optout') === '1'; }
+    function setFeedbackOptOut(value) { write('optout', value ? '1' : '0'); }
     function legacyId(state) {
       const key = 'legacy:' + JSON.stringify([state.rng.seed, state.nickname]);
       let id = read(key);
@@ -110,15 +114,18 @@
     }
     function endingKey(state) { return JSON.stringify([state.revision, state.result.direction, state.history.at(-1)?.commandId]); }
     let currentEnding = '';
-    function capture(runId, state, kind, slot, savedAt = Date.now(), feedback) {
+    function capture(runId, state, kind, slot, savedAt = Date.now(), feedback, feedbackSource = 'ending') {
       if (kind === 'ending' && !feedback) {
         const marker = endingKey(state);
         if (currentEnding === runId + marker || read('ending:' + runId) === marker) return;
         currentEnding = runId + marker;
       }
-      return enqueue({ runId, kind, slot, savedAt, state, ...(feedback ? { feedback } : {}) });
+      return enqueue({ runId, kind, slot, savedAt, state, ...(feedback ? { feedback, feedbackSource } : {}) });
     }
-    return { newId, legacyId, capture, flush, feedbackStatus, skip: id => setFeedback(id, 'skipped') };
+    return {
+      newId, legacyId, capture, flush, feedbackStatus, skip: id => setFeedback(id, 'skipped'),
+      feedbackPrompted, markFeedbackPrompted, feedbackOptOut, setFeedbackOptOut
+    };
   }
 
   const api = { newId, createClient, openQueue };

@@ -204,6 +204,14 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .play-feedback textarea { box-sizing: border-box; width: 100%; padding: 8px; margin-top: 6px; resize: vertical; font: inherit; }
 .play-feedback .dialog-buttons { margin: 6px 0 12px; }
 .play-feedback p:empty { display: none; }
+.feedback-dialog { width: min(520px, calc(100vw - 32px)); }
+.feedback-dialog textarea { box-sizing: border-box; width: 100%; padding: 10px; margin-top: 6px; resize: vertical; font: inherit; }
+.feedback-dialog label { display: block; font-weight: 600; }
+.feedback-dialog label small { font-weight: normal; }
+.feedback-optout { display: flex !important; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: #54645b; }
+.feedback-optout input { width: auto; margin: 0; }
+.feedback-note { margin: 8px 0 0; }
+.feedback-dialog p:empty { display: none; }
 .term-dialog::backdrop { background: #102c25a6; backdrop-filter: blur(4px); }
 .dialog-kicker { font-size: 11px; color: #926c30; letter-spacing: .12em; }
 .term-dialog h2 { font-family: serif; margin: 12px 0 18px; font-size: 28px; }

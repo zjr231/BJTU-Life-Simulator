@@ -137,9 +137,9 @@ wait_for_http 'Save service' 400 "${probe[@]}" "$local_api/api/playthroughs"
 "$api_release/node" - /var/lib/bjtu-npc/playthroughs.sqlite <<'JS'
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[2], {readOnly: true});
-db.prepare('SELECT s.run_id, f.suggestion FROM game_saves s JOIN game_feedback f ON s.run_id=f.run_id AND s.snapshot_id=f.snapshot_id LIMIT 0').all();
+db.prepare('SELECT s.run_id, f.suggestion FROM game_saves s JOIN game_feedback_entries f ON s.run_id=f.run_id AND s.snapshot_id=f.snapshot_id LIMIT 0').all();
 db.close();
-console.log('Production database ready: game_saves and game_feedback.');
+console.log('Production database ready: game_saves and game_feedback_entries.');
 JS
 host_port=$("$node_bin" -p "const u=new URL(process.argv[1]); u.hostname+':'+(u.port || (u.protocol==='https:'?'443':'80'))" "$origin")
 proxy=(--resolve "$host_port:127.0.0.1")

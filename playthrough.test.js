@@ -57,6 +57,7 @@ test('断网保留保存时的快照，重开后按序补传，已到达的结�
   assert.deepEqual(received.map(r => [r.kind, r.state.revision, r.slot]), [['manual',1,2], ['auto',2,2], ['ending',2,null], ['ending',2,null]]);
   assert.equal(online.feedbackStatus(run), 'sent');
   assert.equal(received[3].feedback, '希望增加活动');
+  assert.equal(received[3].feedbackSource, 'ending');
   await online.capture(run, state, 'ending', null, 500);
   await online.flush();
   assert.equal(received.length, 4);
@@ -64,6 +65,27 @@ test('断网保留保存时的快照，重开后按序补传，已到达的结�
   online.skip(other);
   assert.equal(createClient(env).feedbackStatus(other), 'skipped');
   assert.equal(await env.queue.first(), undefined);
+});
+
+test('反馈提示与全局免打扰状态可跨页面读取', () => {
+  const { storage } = browser(), client = createClient({ storage }), run = newId();
+  assert.equal(client.feedbackPrompted(run), false);
+  client.markFeedbackPrompted(run);
+  assert.equal(createClient({ storage }).feedbackPrompted(run), true);
+  assert.equal(client.feedbackOptOut(), false);
+  client.setFeedbackOptOut(true);
+  assert.equal(createClient({ storage }).feedbackOptOut(), true);
+  client.setFeedbackOptOut(false);
+  assert.equal(createClient({ storage }).feedbackOptOut(), false);
+});
+
+test('退出快照和后续反馈携带来源，不互相覆盖', async () => {
+  const env = browser(), received = [], run = newId();
+  const client = createClient({ ...env, post: async body => { received.push(JSON.parse(body)); return ok(); } });
+  await client.capture(run, {}, 'exit', null, 1);
+  await client.capture(run, {}, 'feedback', null, 2, '后续建议', 'settings');
+  await client.flush();
+  assert.deepEqual(received.map(item => [item.kind, item.feedbackSource]), [['exit', undefined], ['feedback', 'settings']]);
 });
 
 test('超限反馈退回可重填，后续合法存档仍会到达', async () => {

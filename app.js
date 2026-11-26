@@ -35,6 +35,7 @@ const ACTION_ICONS = {
   rest: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"></path></svg>'
 };
 const dialog = $('#termDialog');
+const feedbackDialog = $('#feedbackDialog');
 const basketballDialog = $('#basketballDialog');
 const animalDialog = $('#animalDialog');
 const catArchiveDialog = $('#catArchiveDialog');
@@ -42,6 +43,8 @@ const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
 try { storage = window.localStorage; } catch (_) { /* Play remains available without storage. */ }
 let runId = null;
+let feedbackContext = null;
+let feedbackBusy = false;
 let outbox;
 try { if (window.indexedDB && typeof CampusPlaythrough !== 'undefined') outbox = CampusPlaythrough.openQueue(window.indexedDB); } catch {}
 const playthroughs = typeof CampusPlaythrough === 'undefined' ? null : CampusPlaythrough.createClient({
@@ -49,7 +52,11 @@ const playthroughs = typeof CampusPlaythrough === 'undefined' ? null : CampusPla
   post: body => fetch('/api/playthroughs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     credentials: 'omit', body, signal: AbortSignal.timeout(15000) }),
   retry: (fn, ms) => setTimeout(fn, ms),
-  onFeedback: (id, status) => { if (id === runId && !developerTesting) updateFeedbackStatus(status); }
+  onFeedback: (id, status) => {
+    if (id !== runId || developerTesting) return;
+    updateFeedbackStatus(status);
+    if (status === 'error') showToast('建议未能提交，可以稍后再试。');
+  }
 });
 const normalSaves = CampusSave.createSlotService(storage);
 let saves = normalSaves;
@@ -2361,6 +2368,8 @@ function showStartMenu() {
   const start = $('#startScreen');
   const shell = $('#gameShell');
   if (dialog.open) dialog.close();
+  if (feedbackDialog?.open) feedbackDialog.close();
+  feedbackContext = null;
   dialogMode = null;
   openPanelName = null;
   closePopovers();
@@ -2456,6 +2465,7 @@ function toggleStartSettings() {
 }
 
 function startExitGame() {
+  if (state) { requestExitGame(); return; }
   const status = $('#startStatus');
   try { window.close(); } catch (_) {}
   if (status) status.textContent = '浏览器不允许自动关闭页面，请直接关闭标签页。';
@@ -2920,6 +2930,7 @@ function requestEndTerm() {
 function showSummary() {
   audio?.play('paper');
   showDialog('summary', state.summary.name + ' · 学期总结', summaryMarkup(state.summary) + '<p>' + h(saveNotice || '可以随时保存当前总结。') + '</p>', [{ id: 'next', text: state.term === 8 ? '评估毕业方向' : '进入' + game.TERM_NAMES[state.term] }]);
+  maybePromptTerm2Feedback();
   maybeQueueNpcReflection('term-end');
 }
 function courseTable() {
@@ -3168,22 +3179,145 @@ const ENDING_TEXT = {
   cardThief: '保卫处老师把消费记录打印出来，时间精确到你犹豫的那三秒。家长被请到学校，你签了退学申请。校园卡大盗的职业生涯，只有一次消费。'
 };
 const feedbackMessages = {
+  sending: '正在保存建议……',
   sent: '谢谢，你的建议已送达。', queued: '建议已保存在此设备，联网后将自动发送。',
   temporary: '建议正在等待发送，请暂时保持页面打开。', skipped: '已跳过本局反馈。',
   error: '建议未能提交，可以修改后再试。'
 };
+const FEEDBACK_INTRO = {
+  term2: '已经走过两个学期了。方便的话，想请你留一两句：哪一段让你觉得有意思，哪里让你卡住、觉得不平衡或不太顺手？不写也完全没关系。',
+  exit: '这次先到这里。如果方便，想听听你玩到现在的感受，或者哪里让你觉得不太顺手。不写也完全没关系。',
+  settings: '如果方便，想听听你对这局或这个游戏的感受。可以写具体一点，也可以只留一句。',
+  ending: '四年走完了。如果愿意，想听听这段经历里哪些地方让你记得住，哪些地方还可以更好。不写也完全没关系。'
+};
+function feedbackIntro(source) { return FEEDBACK_INTRO[source] || FEEDBACK_INTRO.settings; }
+function feedbackOptOutEnabled() {
+  try { return !!playthroughs?.feedbackOptOut(); } catch { return false; }
+}
+function setFeedbackOptOutPreference(value) {
+  try { playthroughs?.setFeedbackOptOut(!!value); } catch (_) {}
+}
+function autoFeedbackDue() {
+  return !developerTesting && !!state && !!runId && !!playthroughs
+    && !feedbackOptOutEnabled() && !playthroughs.feedbackPrompted(runId);
+}
 function updateFeedbackStatus(status) {
   const form = $('#playFeedbackForm');
-  if (!form) return;
-  form.hidden = Boolean(status && status !== 'error');
-  $('#playFeedbackStatus').textContent = feedbackMessages[status] || '';
+  if (form) {
+    form.hidden = Boolean(status && status !== 'error');
+    $('#playFeedbackStatus').textContent = feedbackMessages[status] || '';
+  }
+  const dialogStatus = $('#feedbackDialogStatus');
+  if (dialogStatus) dialogStatus.textContent = feedbackMessages[status] || '';
 }
 function playFeedbackMarkup() {
   return '<section class="play-feedback" aria-label="本局反馈"><form id="playFeedbackForm">' +
-    '<label for="playSuggestion">这局玩得怎么样？ <small>选填</small></label>' +
-    '<textarea id="playSuggestion" maxlength="1000" rows="2" placeholder="哪一段有趣，哪里可以改进？"></textarea>' +
-    '<div class="dialog-buttons"><button type="button" class="secondary" id="skipPlayFeedback">跳过</button>' +
-    '<button type="submit">提交建议</button></div></form><p id="playFeedbackStatus" role="status"></p></section>';
+    '<label for="playSuggestion">如果愿意，想听听你的感受。 <small>选填</small></label>' +
+    '<textarea id="playSuggestion" maxlength="1000" rows="2" placeholder="哪一段让你觉得有意思，哪里还可以更好？"></textarea>' +
+    '<div class="dialog-buttons"><button type="button" class="secondary" id="skipPlayFeedback">这次先跳过</button>' +
+    '<button type="submit">留下建议</button></div></form><p id="playFeedbackStatus" role="status"></p></section>';
+}
+function feedbackSnapshotKind(source) {
+  if (['finished', 'ended'].includes(state?.phase)) return 'ending';
+  return source === 'exit' ? 'exit' : 'feedback';
+}
+function submitPlayFeedback(source, suggestion) {
+  if (!playthroughs || !state || !runId) return Promise.resolve(false);
+  const kind = feedbackSnapshotKind(source);
+  return Promise.resolve(playthroughs.capture(runId, state, kind, activeSaveSlot, Date.now(), suggestion, source));
+}
+function captureExitSnapshot() {
+  if (!playthroughs || !state || !runId || developerTesting) return Promise.resolve();
+  return Promise.resolve(playthroughs.capture(runId, state, 'exit', activeSaveSlot, Date.now()));
+}
+function finishExitGame() {
+  const close = () => {
+    const start = $('#startScreen');
+    const status = $('#startStatus');
+    if (start && !start.hidden) {
+      if (status) status.textContent = '浏览器不允许自动关闭页面，请直接关闭标签页。';
+    } else {
+      showToast('浏览器不允许自动关闭页面，请直接关闭标签页。');
+    }
+    try { window.close(); } catch (_) {}
+  };
+  captureExitSnapshot().finally(close);
+}
+function openFeedbackDialog(source, options = {}) {
+  if (!feedbackDialog || !playthroughs) return false;
+  if (source !== 'settings' && (!state || !runId)) return false;
+  if (feedbackDialog.open) feedbackDialog.close();
+  feedbackContext = {
+    source,
+    afterSubmit: typeof options.afterSubmit === 'function' ? options.afterSubmit : null,
+    afterSkip: typeof options.afterSkip === 'function' ? options.afterSkip : null
+  };
+  feedbackBusy = false;
+  $('#feedbackIntro').textContent = feedbackIntro(source);
+  $('#feedbackSuggestion').value = '';
+  $('#feedbackOptOut').checked = feedbackOptOutEnabled();
+  $('#feedbackDialogStatus').textContent = '';
+  $('#feedbackSubmit').disabled = false;
+  $('#feedbackSkip').disabled = false;
+  if (['term2', 'exit', 'ending'].includes(source)) playthroughs.markFeedbackPrompted(runId);
+  feedbackDialog.showModal();
+  setTimeout(() => $('#feedbackSuggestion')?.focus({ preventScroll: true }), 0);
+  return true;
+}
+function dismissFeedbackDialog() {
+  setFeedbackOptOutPreference($('#feedbackOptOut').checked);
+  const context = feedbackContext;
+  feedbackContext = null;
+  if (feedbackDialog?.open) feedbackDialog.close();
+  return context;
+}
+function maybePromptTerm2Feedback() {
+  // 正常在第 2 学期总结触发；跨设备继续到第 3 学期之后时，在下一个总结补一次。
+  if (!state?.summary || state.phase !== 'summary' || state.term < 2 || !autoFeedbackDue()) return;
+  openFeedbackDialog('term2');
+}
+function maybePromptResultFeedback() {
+  if (!autoFeedbackDue()) return;
+  openFeedbackDialog('ending');
+}
+function requestExitGame() {
+  if (!state) { finishExitGame(); return; }
+  if (autoFeedbackDue() && openFeedbackDialog('exit', { afterSubmit: finishExitGame, afterSkip: finishExitGame })) return;
+  finishExitGame();
+}
+function submitFeedbackDialog(event) {
+  event.preventDefault();
+  if (!feedbackContext || feedbackBusy) return;
+  const context = feedbackContext;
+  const suggestion = $('#feedbackSuggestion').value.trim();
+  if (!suggestion) {
+    $('#feedbackDialogStatus').textContent = '可以写一句，也可以直接跳过。';
+    return;
+  }
+  if (suggestion.length > 1000) return;
+  feedbackBusy = true;
+  $('#feedbackSubmit').disabled = true;
+  $('#feedbackSkip').disabled = true;
+  $('#feedbackDialogStatus').textContent = feedbackMessages.sending;
+  submitPlayFeedback(context.source, suggestion).then(() => {
+    const status = runId && playthroughs ? playthroughs.feedbackStatus(runId) : '';
+    dismissFeedbackDialog();
+    feedbackBusy = false;
+    if (status && feedbackMessages[status]) showToast(feedbackMessages[status]);
+    if (context.afterSubmit) context.afterSubmit();
+  }).catch(() => {
+    feedbackBusy = false;
+    $('#feedbackSubmit').disabled = false;
+    $('#feedbackSkip').disabled = false;
+    $('#feedbackDialogStatus').textContent = feedbackMessages.error;
+  });
+}
+function skipFeedbackDialog() {
+  if (!feedbackContext) return;
+  const context = feedbackContext;
+  if (['term2', 'exit', 'ending'].includes(context.source) && runId && playthroughs) playthroughs.skip(runId);
+  dismissFeedbackDialog();
+  if (context.afterSkip) context.afterSkip();
 }
 function showResult() {
   audio?.play('fanfare');
@@ -3194,6 +3328,7 @@ function showResult() {
   if (collect) playthroughs.capture(runId, state, 'ending', activeSaveSlot);
   showDialog(terminal ? 'ended' : 'finished', state.result.title, (collect ? playFeedbackMarkup() : '') + intro, [{ id: 'resume', text: '返回地图', secondary: true }, { id: 'restart', text: '重新开始' }]);
   if (collect) updateFeedbackStatus(playthroughs.feedbackStatus(runId));
+  if (collect) maybePromptResultFeedback();
 }
 function resumePhase() {
   if (!state) { showStartMenu(); return; }
@@ -3267,7 +3402,7 @@ $('#dialogBody').addEventListener('submit', (event) => {
     if (!suggestion) { playthroughs.skip(runId); return; }
     if (form.dataset.sending || suggestion.length > 1000) return;
     form.dataset.sending = '1';
-    playthroughs.capture(runId, state, 'ending', activeSaveSlot, Date.now(), suggestion)
+    submitPlayFeedback('ending', suggestion)
       .finally(() => { delete form.dataset.sending; });
     return;
   }
@@ -3277,6 +3412,10 @@ $('#dialogBody').addEventListener('submit', (event) => {
   else if (event.target.id === 'courseForm') { event.preventDefault(); submitCourseSelection(event.target); }
   else if (event.target.id === 'examForm') { event.preventDefault(); submitExamForm(event.target); }
 });
+$('#feedbackForm')?.addEventListener('submit', submitFeedbackDialog);
+$('#feedbackSkip')?.addEventListener('click', skipFeedbackDialog);
+$('#feedbackOptOut')?.addEventListener('change', (event) => setFeedbackOptOutPreference(event.target.checked));
+feedbackDialog?.addEventListener('cancel', (event) => { event.preventDefault(); dismissFeedbackDialog(); });
 $('#dialogBody').addEventListener('input', event => { if (event.target.id === 'zhouChatInput') zhouChatDraft = event.target.value; });
 $('#dialogBody').addEventListener('change', (event) => {
   const examForm = event.target.closest('#examForm');
@@ -3850,6 +3989,8 @@ $('#startResetTips')?.addEventListener('click', () => {
   maybeShowStartCoach(true);
 });
 $('#startSettingsBack')?.addEventListener('click', () => { const panel = $('#startSettingsPanel'); if (panel) panel.hidden = true; });
+$('#feedbackButton')?.addEventListener('click', () => { closePanel(); openFeedbackDialog('settings'); });
+$('#exitGameButton')?.addEventListener('click', () => { closePanel(); requestExitGame(); });
 $('#endTermQuick')?.addEventListener('click', () => { finishCoach('semester-end'); requestEndTerm(); });
 $('#coachNext')?.addEventListener('click', () => { if (activeCoach) finishCoach(activeCoach.id); });
 $('#coachSkip')?.addEventListener('click', skipAllCoach);

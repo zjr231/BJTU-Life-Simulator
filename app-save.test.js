@@ -55,6 +55,35 @@ test('家庭预算在预算页、钱包与成长记录中展示；录取页不�
   assert.match(ui.element('#dialogBody').innerHTML, /家庭生活费到账/);
 });
 
+test('第二学期总结弹出谦逊反馈邀请，并只标记一次', () => {
+  const ui = app(undefined, false, true, false, true);
+  ui.start();
+  ui.evaluate("state.term = 2; state.phase = 'summary'; state.summary = { name: '大一下', grade: 80, passed: true, preparation: 80, moneyAfter: 1000, unusedTime: 0, notices: [], aid: 0, livingCost: 4800 }; runId = 'a'.repeat(32); showSummary()");
+  assert.equal(ui.element('#feedbackDialog').open, true);
+  assert.match(ui.element('#feedbackIntro').textContent, /走过两个学期/);
+  assert.match(ui.element('#feedbackIntro').textContent, /不写也完全没关系/);
+  assert.equal(ui.playthrough.prompted.has('a'.repeat(32)), true);
+  ui.element('#feedbackSkip').emit('click');
+  assert.equal(ui.element('#feedbackDialog').open, false);
+  ui.evaluate('showSummary()');
+  assert.equal(ui.element('#feedbackDialog').open, false);
+});
+
+test('设置入口可手动反馈，主动退出前先弹出邀请并补传退出快照', () => {
+  const ui = app(undefined, false, true, false, true);
+  ui.start();
+  ui.evaluate("openFeedbackDialog('settings')");
+  assert.equal(ui.element('#feedbackDialog').open, true);
+  assert.equal(ui.playthrough.prompted.size, 0);
+  ui.element('#feedbackSkip').emit('click');
+  assert.equal(ui.element('#feedbackDialog').open, false);
+  ui.evaluate('requestExitGame()');
+  assert.equal(ui.element('#feedbackDialog').open, true);
+  assert.equal(ui.playthrough.prompted.has('a'.repeat(32)), true);
+  ui.element('#feedbackSkip').emit('click');
+  assert.equal(ui.playthrough.feedback.some(args => args[2] === 'exit'), true);
+});
+
 test('学期总结显示预留4800与期末零扣费，旧版总结仍展示300与补助', () => {
   const ui = app();
   ui.start();
@@ -366,7 +395,7 @@ test('新学期解锁以聚光灯指向行动、养成与南门岗位', () => {
   assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /term-unlocks|本学期新解锁/);
 });
 
-function app(storage = memory(), withSms = false, autoStart = true, withAnimals = false) {
+function app(storage = memory(), withSms = false, autoStart = true, withAnimals = false, withPlaythrough = false) {
   const elements = new Map();
   function element(selector) {
     if (!elements.has(selector)) {
@@ -390,6 +419,22 @@ function app(storage = memory(), withSms = false, autoStart = true, withAnimals 
   }
   const timers = new Map();
   let sequence = 0;
+  const playthrough = {
+    prompted: new Set(), optout: false, feedback: [],
+    newId: () => 'a'.repeat(32),
+    createClient: () => ({
+      newId: () => 'a'.repeat(32),
+      legacyId: () => 'b'.repeat(32),
+      capture: (...args) => { playthrough.feedback.push(args); return Promise.resolve(); },
+      flush: () => Promise.resolve(),
+      feedbackStatus: () => '',
+      skip: () => {},
+      feedbackPrompted: id => playthrough.prompted.has(id),
+      markFeedbackPrompted: id => playthrough.prompted.add(id),
+      feedbackOptOut: () => playthrough.optout,
+      setFeedbackOptOut: value => { playthrough.optout = !!value; }
+    })
+  };
   const window = element('window');
   window.localStorage = storage;
   window.crypto = { getRandomValues(values) { values[0] = 1; return values; } };
@@ -402,6 +447,7 @@ function app(storage = memory(), withSms = false, autoStart = true, withAnimals 
     clearTimeout(id) { timers.delete(id); } };
   if (withSms) globals.CampusSms = sms;
   if (withAnimals) globals.CampusAnimals = require('./animals.js');
+  if (withPlaythrough) globals.CampusPlaythrough = playthrough;
   const context = vm.createContext(globals);
   vm.runInContext(fs.readFileSync(require.resolve('./app.js'), 'utf8'), context);
   const evaluate = expression => vm.runInContext(expression, context);
@@ -413,7 +459,7 @@ function app(storage = memory(), withSms = false, autoStart = true, withAnimals 
   function click(selector, dataset = {}) {
     element(selector).emit('click', { target: { closest: () => ({ dataset }) }, stopPropagation() {} });
   }
-  return { storage, element, evaluate, click, window,
+  return { storage, element, evaluate, click, window, playthrough,
     start(selectCourses = true) {
       element('#nicknameInput').value = '界面测试';
       evaluate('startGame()');

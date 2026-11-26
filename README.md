@@ -245,7 +245,8 @@ M4 首次主线集成的 76 项测试、冲突处理和接口对接记录见 [M4
 | character-agent.js | 固定人物长上下文：最近六轮、累计摘要、长期记忆检索、反思、核心档案与 transient thought |
 | developer-tools.js | 隔离式开发者工具：测试存档、属性修改、场景构造、强制事件与毕业路线预览 |
 | developer-panel.js | 开发者测试面板界面：标签页、表单、检查结果与测试存储适配 |
-| app.js | 唯一当前状态、界面、命令、保存协调与日志导出 |
+| playthrough.js | 对局编号、断网补传队列、第二学期反馈提示状态与反馈来源 |
+| app.js | 唯一当前状态、界面、命令、保存协调、反馈入口与日志导出 |
 | index.html / styles.css | 页面、移动布局与原地图交互 |
 | game.test.js / mvp.test.js | 原规则回归和新增集成场景 |
 | growth.test.js | 校园养成购买、休息收益、跨学期效果、旧存档及篡改拒绝回归 |
@@ -254,15 +255,21 @@ M4 首次主线集成的 76 项测试、冲突处理和接口对接记录见 [M4
 | courses.test.js | 课程目录、21 学科题库、专业隔离、算法出题、选课校验、开考、加权成绩、考试存档、旧试卷兼容与篡改拒绝回归 |
 | endings.test.js | 期末考试作弊、校园卡追查、第 8 学期捡卡与终局字段篡改拒绝回归 |
 | save.test.js | M4 并发读档、备份保护、序号、栏位隔离与存储异常回归 |
-| app-save.test.js | 真实界面协调代码的选栏、覆盖确认、自动保存、五阶段恢复与考试草稿、投入档位、作弊确认与终局回归（模拟 DOM） |
+| app-save.test.js | 真实界面协调代码的选栏、覆盖确认、自动保存、五阶段恢复与考试草稿、投入档位、作弊确认、第二学期反馈邀请与退出快照回归（模拟 DOM） |
+| playthrough.test.js | 单局编号、断网补传、退出/后续反馈来源、提示状态与全局免打扰回归 |
+| scripts/playthrough-store.test.js | 多来源反馈、自动来源去重、旧库迁移、退出快照与同源写入校验回归 |
+| scripts/playthrough-report.test.js | 按最新快照重放、步级 CSV、学期行动和反馈关联导出回归 |
 | audio.test.js | 音乐开关恢复、偏好、后台暂停和全部场景音效调度回归（模拟 Web Audio） |
 | events-integration.test.js | 新增事件链、跨学期通知、季节随机池及新经历的存档集成回归 |
 | sms.test.js | 登录验证码的校验、冷却、过期、锁定、通道注入与失败恢复回归 |
 | animals.test.js | 动物生成与位置、抚摸喂食、熟悉度累计、跨学期与存读档重放回归 |
 | character-agent.test.js | 固定人物六轮摘要、长期记忆检索、反思/核心档案、thought 与旧档兼容回归 |
 | developer-tools.test.js | 测试存档隔离、属性修改、场景/事件构造与毕业路线检查回归 |
-| scripts/npc-server.js | NPC 专用 HTTP 接口、模型调用与账号管理命令 |
+| scripts/npc-server.js | NPC 专用 HTTP 接口、模型调用、对局存档/反馈接收与账号管理命令 |
 | scripts/npc-accounts.js / scripts/npc-request.js | SQLite 账号与配额、请求校验和人物提示词 |
+| scripts/playthrough-store.js | 对局快照、多来源反馈、旧反馈迁移与 JSONL 导出 |
+| scripts/playthrough-report.js | 按最新快照重放命令，导出步级行动、学期成绩和反馈关联 CSV |
+| analysis/balance_model.py | 步级/学期回归、退出风险与平衡报告（离线 Python） |
 | scripts/deepseek-relay.js | 旧云函数的停用入口，部署后返回 410 |
 | scripts/npc-server.test.js | 登录、封禁、来源检查、请求校验、并发及额度持久化回归 |
 | scripts/check-release.js | 发布文件、大小写、脚本顺序及可选线上资源一致性检查 |
