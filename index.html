@@ -14,7 +14,7 @@
   <meta name="format-detection" content="telephone=no">
   <link rel="preload" as="image" href="assets/campus-map-20261124.webp" fetchpriority="high">
   <link rel="preload" as="image" href="assets/start-screen-campus.webp">
-  <link rel="stylesheet" href="styles.css?v=20261126-guest-feedback">
+  <link rel="stylesheet" href="styles.css?v=20261126-lin-mobile-ui">
 </head>
 <body>
   <section class="start-screen" id="startScreen" aria-label="北交人生启动页">
@@ -51,6 +51,11 @@
   </section>
   <main class="game-shell" id="gameShell" aria-label="北交人生校园地图">
     <section class="map-screen" id="mapScreen">
+      <section class="map-orientation" aria-labelledby="mapOrientationTitle">
+        <h2 id="mapOrientationTitle">请横屏查看校园地图</h2>
+        <p>把手机横过来，地图会放大，地点更容易点到。</p>
+        <button type="button" id="mapPortraitContinue">继续竖屏</button>
+      </section>
       <div class="map-layer" id="mapLayer">
         <img class="map-art" src="assets/campus-map-20261124.webp" alt="北交大主校区地点交互地图" fetchpriority="high" decoding="async">
         <div class="map-wash"></div>
@@ -118,10 +123,14 @@
             <span class="player-sub" id="playerLabel">北交人生 · 等待入学</span>
           </div>
           <div class="player-chips">
-            <span class="term-chip"><span class="term-dot"></span><span id="termLabel">大一上 · 第 1 学期</span></span>
-            <span class="season-chip" id="seasonLabel" data-season="none" title="当前季节">—</span>
-            <span class="resource-chip is-clickable" id="timeLabel" data-attr="time" role="button" tabindex="0">时间 12 / 12</span>
-            <span class="resource-chip is-clickable" id="moneyLabel" data-attr="money" role="button" tabindex="0">钱包 1000 元</span>
+            <div class="player-chip-row">
+              <span class="term-chip"><span class="term-dot"></span><span id="termLabel">大一上 · 第 1 学期</span></span>
+              <span class="season-chip" id="seasonLabel" data-season="none" title="当前季节">—</span>
+            </div>
+            <div class="player-chip-row">
+              <span class="resource-chip is-clickable" id="timeLabel" data-attr="time" role="button" tabindex="0">时间 12 / 12</span>
+              <span class="resource-chip is-clickable" id="moneyLabel" data-attr="money" role="button" tabindex="0">钱包 1000 元</span>
+            </div>
           </div>
         </div>
 
@@ -223,6 +232,7 @@
         <section class="app-panel" id="panelGrowth" data-panel-name="growth" hidden aria-labelledby="growthTitle">
           <header class="growth-header">
             <h3 id="growthTitle" tabindex="-1">校园养成 <span>· 我的大学生活</span></h3>
+            <button type="button" class="growth-compact-back" data-growth-back="1">← 返回列表</button>
             <button type="button" class="growth-close" id="growthClose" aria-label="收起校园养成">✕</button>
           </header>
           <div class="growth-layout" id="growthLayout">
@@ -286,9 +296,13 @@
           <div id="relationshipList"></div>
         </section>
 
-        <section class="app-panel" id="panelRecords" data-panel-name="records" hidden aria-label="成长记录">
+        <section class="app-panel" id="panelRecords" data-panel-name="records" data-record-view="timeline" hidden aria-label="成长记录">
           <h3 class="app-panel-title">成长记录</h3>
           <div class="record-summary" id="recordSummary"></div>
+          <nav class="record-mobile-views" aria-label="成长记录视图">
+            <button type="button" data-record-view-button="timeline" aria-pressed="true">时间线</button>
+            <button type="button" data-record-view-button="chains" aria-pressed="false">事件链进度</button>
+          </nav>
           <div class="record-chains" id="recordChains"></div>
           <div class="record-toolbar">
             <span class="record-toolbar-title">时间线</span>
@@ -503,6 +517,6 @@
   <script defer src="developer-panel.js?v=20261126-guest"></script>
   <script defer src="npc-account.js?v=20261126-guest"></script>
   <script defer src="playthrough.js?v=20261126-guest-feedback"></script>
-  <script defer src="app.js?v=20261126-guest-feedback"></script>
+  <script defer src="app.js?v=20261126-lin-mobile-ui"></script>
 </body>
 </html>
