@@ -204,10 +204,6 @@ button:focus-visible { outline: 3px solid #e6bd45; outline-offset: 4px; }
 .play-feedback textarea { box-sizing: border-box; width: 100%; padding: 8px; margin-top: 6px; resize: vertical; font: inherit; }
 .play-feedback .dialog-buttons { margin: 6px 0 12px; }
 .play-feedback p:empty { display: none; }
-.npc-account-dialog { max-width: 390px; }
-.npc-account-dialog form:not([hidden]) { display: grid; gap: 8px; }
-.npc-account-dialog input { width: 100%; padding: 10px; font: inherit; }
-#npcIssuedCode:not(:empty) { display: block; margin: 12px 0; padding: 10px; background: #eee5d4; font: bold 1rem monospace; user-select: all; overflow-wrap: anywhere; }
 .term-dialog::backdrop { background: #102c25a6; backdrop-filter: blur(4px); }
 .dialog-kicker { font-size: 11px; color: #926c30; letter-spacing: .12em; }
 .term-dialog h2 { font-family: serif; margin: 12px 0 18px; font-size: 28px; }

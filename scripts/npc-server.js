@@ -9,7 +9,7 @@ const { openPlaythroughs } = require('./playthrough-store.js');
 const playthroughPath = '/api/playthroughs';
 
 const chatPath = '/api/npc-chat';
-const accountPath = '/api/npc-account/';
+const sessionPath = '/api/npc-account/session';
 const maxBody = 24 * 1024;
 const cookieName = 'bjtu_npc_session';
 const empty = record({});
@@ -50,9 +50,9 @@ function createService({ store, playthroughs, apiKey, origin, fetchFn = fetch, t
     const token = (req.headers.cookie || '').split(';').map(part => part.trim()).find(part => part.startsWith(cookieName + '='))?.slice(cookieName.length + 1) || '';
     const url = req.url;
     if (servePage && !url.startsWith('/api/')) return servePage(req, res);
-    const action = url.startsWith(accountPath) ? url.slice(accountPath.length) : '';
-    if (url !== chatPath && url !== playthroughPath && !['session', 'register', 'login', 'logout'].includes(action)) return send(404, { error: '未知接口' });
-    if (req.method !== (action === 'session' ? 'GET' : 'POST')) return send(405, { error: '请求方式不正确' });
+    if (![chatPath, sessionPath, playthroughPath].includes(url)) return send(404, { error: '未知接口' });
+    const readSession = url === sessionPath && req.method === 'GET';
+    if (!readSession && req.method !== 'POST') return send(405, { error: '请求方式不正确' });
     if (!originUrl && !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(req.headers.host || '')) return send(403, { error: '请配置游戏站点地址' });
     const expectedOrigin = originUrl?.origin || 'http://' + req.headers.host;
     if (req.headers.origin && req.headers.origin !== expectedOrigin || req.headers['sec-fetch-site'] === 'cross-site') return send(403, { error: '请从游戏站点访问' });
@@ -66,25 +66,19 @@ function createService({ store, playthroughs, apiKey, origin, fetchFn = fetch, t
       const result = playthroughs.record(capture);
       return result.error ? reject(result) : send(200, { ok: true });
     }
-    if (action === 'session' || url === chatPath) {
+    if (readSession || url === chatPath) {
       const account = store.identify(token);
       if (account.error) return reject(account);
-      if (action === 'session') return send(200, account);
+      if (readSession) return send(200, account);
     }
     let body;
     try { body = await readJson(req); }
     catch (error) { return url === chatPath ? reject(store.invalid(token, ['类型','长度'].includes(error.message) ? error.message : 'JSON')) : send(400, { error: '无效的账号请求' }); }
-    if (action) {
-      const valid = action === 'login' ? record({ code: v => typeof v === 'string' && v.length <= 40 })(body) : empty(body);
-      if (!valid) return send(400, { error: '无效的账号请求' });
-      if (action === 'logout') {
-        store.logout(token);
-        return send(200, {}, { 'Set-Cookie': cookie('') });
-      }
-      const result = store.authenticate(action, body.code?.trim().toUpperCase(), client);
+    if (url === sessionPath) {
+      if (!empty(body)) return send(400, { error: '无效的会话请求' });
+      const result = store.guestSession(token, client);
       if (result.error) return reject(result);
-      store.logout(token);
-      return send(200, { id: result.id, ...(result.code ? { code: result.code } : {}) }, { 'Set-Cookie': cookie(result.token) });
+      return send(200, { id: result.id }, result.token ? { 'Set-Cookie': cookie(result.token) } : {});
     }
     if (!validRequest(body)) return reject(store.invalid(token, '字段'));
     if (!apiKey) return send(503, { error: '在线对话尚未配置' });

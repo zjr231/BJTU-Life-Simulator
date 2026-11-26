@@ -82,7 +82,7 @@
       const label = kind === 'summary' ? '更新对话摘要' : '触发人物反思';
       tell(label + ' · 正在请求');
       try {
-        const result = await dev.refreshMemory(before, selectedPerson, kind, { relay: game.AI_CHAT.relay, fetchFn: typeof CampusNpcAccount !== 'undefined' && CampusNpcAccount.available() ? CampusNpcAccount.request : null, signal: controller?.signal });
+        const result = await dev.refreshMemory(before, selectedPerson, kind, { relay: game.AI_CHAT.relay, fetchFn: typeof CampusNpcAccount !== 'undefined' && CampusNpcAccount.available(true) ? CampusNpcAccount.request : null, signal: controller?.signal });
         if (memoryJob !== job || adapter.state() !== source) return;
         recorder.record(label, before, result.ok ? result.state : before, result.reason || '');
         if (result.ok) { adapter.replace(result.state); render(); }

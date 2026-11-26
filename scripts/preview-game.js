@@ -30,7 +30,7 @@ function servePage(req, res) {
 const data = path.join(os.homedir(), '.bjtu-life-preview');
 const store = openAccounts(path.join(data, 'accounts.sqlite'));
 const playthroughs = openPlaythroughs(path.join(data, 'playthroughs.sqlite'));
-const server = createService({ store, playthroughs, servePage });
+const server = createService({ store, playthroughs, servePage, apiKey: process.env.DEEPSEEK_API_KEY });
 server.listen(Number(process.env.NPC_PORT || 8765), '127.0.0.1', () => {
   console.log('本机试玩 http://127.0.0.1:' + server.address().port + '/');
   console.log('试玩数据 ' + path.join(data, 'playthroughs.sqlite'));

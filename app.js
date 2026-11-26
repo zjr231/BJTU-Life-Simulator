@@ -60,7 +60,7 @@ let developerPauseStarted = 0;
 let developerAnimalOffset = 0;
 const sms = typeof CampusSms !== 'undefined' ? CampusSms : null;
 const npcAccount = typeof CampusNpcAccount !== 'undefined' ? CampusNpcAccount : null;
-function onlineNpcFetch() { return npcAccount?.available() ? npcAccount.request : null; }
+function onlineNpcFetch(interactive = false) { return npcAccount?.available(interactive) ? npcAccount.request : null; }
 const LOGIN_KEY = 'bjtu-life:login';
 const LOGIN_SKIP_KEY = 'bjtu-life:login:skipped';
 let loginSession = null;
@@ -1493,7 +1493,7 @@ async function sendZhouChat(message) {
     }
   }
   const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
-  const decision=await game.characterAgent.request({state:snapshot,npcId,text,candidates:game.npcCandidates(snapshot,npcId),relay:game.AI_CHAT.relay,fetchFn:onlineNpcFetch(),signal:controller?.signal});
+  const decision=await game.characterAgent.request({state:snapshot,npcId,text,candidates:game.npcCandidates(snapshot,npcId),relay:game.AI_CHAT.relay,fetchFn:onlineNpcFetch(true),signal:controller?.signal});
   if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence||activeNpcId!==npcId)return;zhouRequest=null;
   if(state!==snapshot||dialogMode!=='relationship'||!dialog.open){zhouChatDraft=text;return;}
   const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:'chat',text},snapshot.revision);if(!result){zhouChatDraft=text;showZhouNing({preserve:true});return;}
@@ -1505,12 +1505,13 @@ async function maybeZhouNingDirector() {
   const occasion=game.npcOpportunity(state);if(!occasion||(dialog.open&&dialogMode!=='event'))return;
   const snapshot=state,sequence=++zhouRequestSequence,controller=typeof AbortController==='function'?new AbortController():null,npcId=occasion.npcId;
   zhouRequest={controller,npcId};const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
-  const decision=await game.characterAgent.request({state:snapshot,npcId,candidates:occasion.candidates,occasion,relay:game.AI_CHAT.relay,fetchFn:onlineNpcFetch(),signal:controller?.signal});
+  const online=onlineNpcFetch();
+  const decision=await game.characterAgent.request({state:snapshot,npcId,candidates:occasion.candidates,occasion,relay:game.AI_CHAT.relay,fetchFn:online,signal:controller?.signal});
   if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence)return;zhouRequest=null;
   if(state!==snapshot||basketballSession||animalDialog?.open||(dialog.open&&dialogMode!=='event')){if(state&&dialogMode==='relationship')showZhouNing({preserve:true});return;}
   const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:occasion.kind,text:'',trigger:occasion.key},snapshot.revision);if(!result)return;
   acknowledgedResultRevision=state.revision;
-  if(state.pendingEvent)showEvent();else{zhouChatNotice=decision.source==='local'?(npcAccount?.localNotice() || '当前使用本地台词。'):'';showCharacter(npcId,{text:decision.say,place:occasion.place});}
+  if(state.pendingEvent)showEvent();else{zhouChatNotice=decision.source==='local' && online ? (npcAccount?.localNotice() || '当前使用本地台词。') : '';showCharacter(npcId,{text:decision.say,place:occasion.place});}
 }
 function showRelationshipResult(entry, mode='relationshipResult') {
   const r=entry.relationship,id=r.characterId||'zhouNing',p=game.npcCast.profile(id);activeNpcId=id;
@@ -3377,7 +3378,6 @@ $('#dialogBody').addEventListener('click', (event) => {
   }
   if (button.dataset.vnUi) {
     const command = button.dataset.vnUi;
-    if (command === 'account') { npcAccount?.open(); return; }
     if (uiLocked) return;
     if (command === 'profile') {
       zhouHistoryOpen = false;
@@ -3871,7 +3871,7 @@ dialog.addEventListener('cancel', (event) => {
   else if (dialogMode === 'relationship') cancelZhouRequest();
 });
 document.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape' || $('#npcAccountDialog')?.open || basketballDialog?.open || animalDialog?.open) return;
+  if (event.key !== 'Escape' || basketballDialog?.open || animalDialog?.open) return;
   if (openPopoverName) { closePopovers(); return; }
   if (openPanelName) { closePanel(); return; }
   if (activePlace && !dialog.open) closePlace();

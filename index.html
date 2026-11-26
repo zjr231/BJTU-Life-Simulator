@@ -11,7 +11,7 @@
   <meta name="format-detection" content="telephone=no">
   <link rel="preload" as="image" href="assets/campus-map-20261124.webp" fetchpriority="high">
   <link rel="preload" as="image" href="assets/start-screen-campus.webp">
-  <link rel="stylesheet" href="styles.css?v=20261125-playthrough">
+  <link rel="stylesheet" href="styles.css?v=20261126-guest">
 </head>
 <body>
   <section class="start-screen" id="startScreen" aria-label="北交人生启动页">
@@ -37,7 +37,6 @@
       <section class="start-settings" id="startSettingsPanel" hidden aria-label="启动设置">
         <button type="button" class="utility-button" id="startSoundButton">声音:开</button>
         <button type="button" class="utility-button" id="startMotionButton">动画效果:开</button>
-        <button type="button" class="utility-button" id="startNpcAccount">NPC 在线账号</button>
         <button type="button" class="utility-button" id="startHelpButton">玩法说明</button>
         <button type="button" class="utility-button" id="startResetTips">重置新手提示</button>
         <button type="button" class="utility-button" id="startSettingsBack">返回</button>
@@ -320,7 +319,6 @@
             <button class="utility-button" id="motionButton" type="button" aria-pressed="false">动画效果:开</button>
             <button class="utility-button" id="hotspotButton" type="button" aria-pressed="false">热点提示:开</button>
             <button class="utility-button" id="resetAvatarButton" type="button">恢复默认头像</button>
-            <button class="utility-button" id="settingsNpcAccount" type="button">NPC 在线账号</button>
             <button class="utility-button" id="helpButton" type="button">玩法说明</button>
             <button class="utility-button" id="restartButton" type="button">重新开始</button>
           </div>
@@ -460,24 +458,6 @@
     <div id="developerBody" class="dev-body" data-dev-body role="tabpanel" aria-labelledby="developerTab0" tabindex="0"></div>
     <footer><span data-dev-notice role="status" aria-live="polite">修改仅影响测试副本 · Esc 关闭</span></footer>
   </dialog>
-  <dialog class="term-dialog npc-account-dialog" id="npcAccountDialog" aria-labelledby="npcAccountTitle">
-    <h2 id="npcAccountTitle">NPC 在线账号</h2>
-    <p id="npcAccountStatus"></p>
-    <form id="npcAccountForm">
-      <label for="npcLoginCode">游戏登录码</label>
-      <input id="npcLoginCode" type="password" maxlength="40" autocomplete="current-password" required>
-      <div class="dialog-buttons">
-        <button type="submit" class="utility-button">登录</button>
-        <button type="button" class="utility-button" id="npcRegister">注册并领取登录码</button>
-      </div>
-    </form>
-    <p id="npcAccountNotice" role="status"></p>
-    <output id="npcIssuedCode" aria-label="你的游戏登录码"></output>
-    <div class="dialog-buttons">
-      <button type="button" class="utility-button" id="npcLogout" hidden>退出在线账号</button>
-      <button type="button" class="utility-button" id="npcAccountClose">返回游戏</button>
-    </div>
-  </dialog>
   <audio id="catHissAudio" src="assets/animals/cat-hiss.wav" preload="auto" hidden></audio>
   <script defer src="config.js?v=20261125-npc-api"></script>
   <script defer src="courses.js?v=20261106-p3"></script>
@@ -488,7 +468,7 @@
   <script defer src="character-agent.js?v=20261125-npc-api"></script>
   <script defer src="npc-director.js?v=20261106-p3"></script>
   <script defer src="npc-game.js?v=20261118-lin-animals"></script>
-  <script defer src="character-scene.js?v=20261125-npc-api"></script>
+  <script defer src="character-scene.js?v=20261126-guest"></script>
   <script defer src="state-validation.js?v=20261120-agent-memory"></script>
   <script defer src="game.js?v=20261120-economy"></script>
   <script defer src="save.js?v=20261125-playthrough"></script>
@@ -499,9 +479,9 @@
   <script defer src="vendor/planck.min.js?v=20261106-p3"></script>
   <script defer src="basketball.js?v=20261117-dev1"></script>
   <script defer src="developer-tools.js?v=20261120-dev3"></script>
-  <script defer src="developer-panel.js?v=20261125-npc-api"></script>
-  <script defer src="npc-account.js?v=20261125-npc-api"></script>
+  <script defer src="developer-panel.js?v=20261126-guest"></script>
+  <script defer src="npc-account.js?v=20261126-guest"></script>
   <script defer src="playthrough.js?v=20261125-playthrough"></script>
-  <script defer src="app.js?v=20261125-playthrough"></script>
+  <script defer src="app.js?v=20261126-guest"></script>
 </body>
 </html>

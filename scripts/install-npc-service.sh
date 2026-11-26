@@ -11,6 +11,9 @@ bundle=$(cd -- "$(dirname -- "$0")" && pwd)
 site=/var/www/bjtu-life
 api=/opt/bjtu-npc
 conf=/etc/nginx/sites-available/bjtu-life
+if grep -qxF '# bjtu-https-active' "$conf"; then
+  origin=${origin/#http:\/\//https:\/\/}
+fi
 [[ -f "$conf" && -L "$site/current" && -f "$bundle/site/index.html" && -f "$bundle/site/playthrough.js" && -f "$bundle/service/scripts/npc-server.js" && -f "$bundle/service/scripts/playthrough-store.js" ]]
 node_bin=$(command -v node) || { echo 'Install Node.js 24 first.' >&2; exit 1; }
 "$node_bin" -e "require('node:sqlite'); if (+process.versions.node.split('.')[0] < 24) process.exit(1)" || { echo 'Install Node.js 24 first.' >&2; exit 1; }
@@ -143,6 +146,8 @@ proxy=(--resolve "$host_port:127.0.0.1")
 systemctl reload nginx
 # Nginx can report a successful reload while old workers still serve the previous routes.
 wait_for_http 'Account route' 401 "${proxy[@]}" "$origin/api/npc-account/session"
+# Exercise guest session routing without creating an identity or spending model quota.
+wait_for_http 'Guest session route' 400 "${proxy[@]}" --header 'Content-Type: application/json' --data 'null' "$origin/api/npc-account/session"
 wait_for_http 'Save route' 400 "${proxy[@]}" "${probe[@]}" "$origin/api/playthroughs"
 ln -sfnT "$web_release" "$site/current"
 trap - ERR

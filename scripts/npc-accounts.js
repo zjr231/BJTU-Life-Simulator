@@ -8,7 +8,7 @@ const minute = 60000, day = 1440 * minute;
 const sessionAge = 30 * day;
 const hash = value => createHash('sha256').update(value).digest('hex');
 const denied = (status, error) => ({ status, error });
-const unsigned = () => denied(401, '请使用游戏登录码登录');
+const unsigned = () => denied(401, '对话会话已过期');
 const blocked = () => denied(403, '这个账号的在线对话已暂停');
 const limited = () => denied(429, '在线对话额度已用完，请稍后再试');
 
@@ -42,29 +42,21 @@ function openAccounts(file, clock = Date.now) {
     if (!row) return unsigned();
     return row.banned_until > clock() ? blocked() : { id: row.id };
   }
-  function authenticate(action, code, client) {
+  function guestSession(token, client) {
     return transaction(() => {
+      const current = identify(token);
+      if (current.status !== 401) return current;
       const now = clock(), key = hash(client);
       query('DELETE FROM auth_attempts WHERE at <= ?').run(now - day);
       query('DELETE FROM sessions WHERE expires <= ?').run(now);
-      const signup = action === 'register';
-      const hits = query('SELECT count(*) AS n FROM auth_attempts WHERE client=? AND action=? AND at>?').get(key, action, now - 10 * minute).n;
-      if (hits >= 30) return denied(429, '账号操作次数过多，请稍后再试');
-      const countAttempt = () => query('INSERT INTO auth_attempts VALUES(?,?,?)').run(key, action, now);
-      let id;
-      if (signup) {
-        countAttempt();
-        code = randomBytes(12).toString('hex').toUpperCase().match(/.{6}/g).join('-');
-        id = Number(query('INSERT INTO accounts(code_hash) VALUES(?)').run(hash(code)).lastInsertRowid);
-      } else {
-        const account = query('SELECT id,banned_until FROM accounts WHERE code_hash=?').get(hash(code));
-        if (!account) { countAttempt(); return denied(401, '游戏登录码不正确'); }
-        if (account.banned_until > now) return blocked();
-        id = account.id;
-      }
-      const token = randomBytes(32).toString('hex');
-      query('INSERT INTO sessions VALUES(?,?,?)').run(hash(token), id, now + sessionAge);
-      return { id, token, ...(signup ? { code } : {}) };
+      const hits = query("SELECT count(*) AS n FROM auth_attempts WHERE client=? AND action='register' AND at>?").get(key, now - 10 * minute).n;
+      if (hits >= 30) return denied(429, '新建对话身份过于频繁，请稍后再试');
+      query("INSERT INTO auth_attempts VALUES(?,'register',?)").run(key, now);
+      // Keep the original account schema and IDs so existing sessions, bans and usage remain valid.
+      const id = Number(query('INSERT INTO accounts(code_hash) VALUES(lower(hex(randomblob(32))))').run().lastInsertRowid);
+      const fresh = randomBytes(32).toString('hex');
+      query('INSERT INTO sessions VALUES(?,?,?)').run(hash(fresh), id, now + sessionAge);
+      return { id, token: fresh };
     });
   }
   function moderate(id, ban) {
@@ -100,8 +92,7 @@ function openAccounts(file, clock = Date.now) {
       return account;
     });
   }
-  return { authenticate, identify, invalid, reserve,
-    logout: token => query('DELETE FROM sessions WHERE token=?').run(hash(token || '')),
+  return { guestSession, identify, invalid, reserve,
     moderate: (id, ban) => transaction(() => moderate(id, ban)),
     accounts: () => query('SELECT id,banned_until FROM accounts ORDER BY id').all(),
     records: id => query('SELECT account,at,reason FROM audit WHERE account=? ORDER BY rowid DESC LIMIT 100').all(id),
