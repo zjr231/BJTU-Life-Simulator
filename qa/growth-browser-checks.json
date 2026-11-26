@@ -1,0 +1,36 @@
+{
+  "passed": true,
+  "checks": [
+    "真实入学、预算和选课流程",
+    "侧栏展开与三个节点",
+    "购买扣费且不即时发奖",
+    "实际休息收益与两次心情配额",
+    "三次休息解锁作息",
+    "三栏位保存与刷新恢复",
+    "手机竖屏与横屏滚动",
+    "Esc收起与焦点返回",
+    "无运行异常"
+  ],
+  "mobile": {
+    "viewport": 390,
+    "left": 0,
+    "right": 390,
+    "top": 140,
+    "bottom": 844,
+    "scrollable": true,
+    "noHorizontalOverflow": true,
+    "closeTarget": {
+      "width": 44,
+      "height": 44
+    }
+  },
+  "landscape": {
+    "left": 0,
+    "right": 430,
+    "top": 98,
+    "bottom": 390,
+    "visibleHeight": 292,
+    "scrollable": true
+  },
+  "errors": []
+}

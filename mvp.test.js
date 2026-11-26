@@ -7,23 +7,31 @@ const save = require('./save.js');
 function resolve(state, mode = 'accept') {
   while (state.pendingEvent) {
     const id = state.pendingEvent.id;
-    const choice = id.endsWith('Offer') ? mode : id.endsWith('Review') ? 'complete' : 'later';
+    const choice = id.endsWith('Offer') ? mode
+      : id === 'internshipMilestone' ? 'settle'
+      : id.endsWith('Review') ? 'complete' : 'later';
     const result = game.submitEventChoice(state, choice);
     assert.equal(result.ok, true, id + ': ' + result.reason);
     state = result.state;
   }
   return state;
 }
-function act(state, id) {
+function act(state, id, investment, positionId) {
   state = resolve(state);
-  const result = game.executeAction(state, id);
+  const result = game.executeAction(state, id, { investment, positionId });
   assert.equal(result.ok, true, 'term ' + state.term + ' ' + id + ': ' + result.reason);
   const next = resolve(result.state);
   assert.equal(game.validateState(next).ok, true, JSON.stringify(game.validateState(next)));
   return next;
 }
 function nextTerm(state) {
-  const settled = game.endTerm(resolve(state));
+  state = resolve(state);
+  let settled;
+  if (state.selectedCourses?.length) {
+    const exam = game.beginExam(state);
+    assert.equal(exam.ok, true, exam.reason);
+    settled = game.submitExam(exam.state, exam.state.exam.questions.map(question => question.answer));
+  } else settled = game.endTerm(state);
   assert.equal(settled.ok, true);
   assert.equal(game.validateState(settled.state).ok, true);
   const next = resolve(game.continueGame(settled.state).state);
@@ -32,29 +40,47 @@ function nextTerm(state) {
 }
 function route(kind) {
   let state = game.createGame({ nickname: '路线测试', seed: 'routes' });
+  const perform = (id, investment, positionId) => {
+    state = resolve(state);
+    if (game.isSick(state)) state = act(state, 'treatment');
+    const preview = game.previewActionInvestment(state, id, investment);
+    const cost = preview?.effect || game.getAction(state, id);
+    const needFitness = cost.fitnessCost || 0;
+    // 行动同时消耗精力与体能；不够时先用锻炼/休息补足，避免路线脚本因体能不足中断。
+    // 保持体能不低于 25，避免生病锁死；虚弱挡位会放大精力成本，因此同时补足精力。
+    while (state.time > cost.time && (state.energy < cost.energy || state.fitness < 30 || state.fitness < needFitness)) {
+      if (state.fitness < 30 && state.energy >= 10 && game.availability(state, 'exercise').ok) state = act(state, 'exercise');
+      else if (game.availability(state, 'rest', 1).ok) state = act(state, 'rest', 1);
+      else if (state.fitness < 30 && game.availability(state, 'walk', 1).ok) state = act(state, 'walk', 1);
+      else break;
+    }
+    state = act(state, id, investment, positionId);
+  };
   for (let term = 1; term <= 8; term++) {
-    const studies = kind === 'failed' ? 0 : kind === 'ordinary' || kind === 'employment' ? 2 : 4;
-    for (let i = 0; i < studies; i++) state = act(state, 'study');
-    if (['deep', 'both', 'turn'].includes(kind)) {
-      if (term === 2) { state = act(state, 'applyProject'); state = act(state, 'projectWork'); }
-      if (term === 3) state = act(state, 'projectWork');
-    }
+    state = resolve(state);
+    if (game.isSick(state)) state = act(state, 'treatment');
+    if (kind === 'both') state = game.selectCourses(state, game.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map(course => course.id)).state;
+    if (kind !== 'failed' && state.money >= 50) perform('gym');
+    // 体能恢复会占用额外时间，重投入路线相应下调本学期学习进度目标。
+    const target = kind === 'both' ? 45 : kind === 'failed' ? 0 : kind === 'turn' ? 45 : ['ordinary', 'employment'].includes(kind) ? 45 : 60;
+    // 事件链投入先做，避免学习消耗完时间后无法完成。
+    if (term === 3 && ['deep', 'both', 'turn'].includes(kind)) { perform('projectWork', 15); perform('projectWork', 15); }
     if (['employment', 'both', 'turn'].includes(kind)) {
-      if (term === 5) { state = act(state, 'applyInternship'); state = act(state, 'internshipWork'); }
-      if (term === 6) state = act(state, 'internshipWork');
+      if (term === 5) { perform('applyInternship', undefined, 'qiandu_testdev'); perform('internshipWork', 15); }
+      if (term === 6) perform('internshipWork', 15);
     }
-    if (kind === 'deep' && [5, 6].includes(term)) {
-      state = act(state, 'furtherStudy');
-      if (term === 5) state = act(state, 'furtherStudy');
-    }
-    if (kind === 'employment' && [7, 8].includes(term)) {
-      state = act(state, 'jobPreparation');
-      if (term === 7) state = act(state, 'jobPreparation');
-    }
-    if (['both', 'turn'].includes(kind) && [7, 8].includes(term)) {
-      state = act(state, 'rest');
-      const schedule = kind === 'turn' ? ['jobPreparation', 'jobPreparation'] : term === 7 ? ['furtherStudy', 'furtherStudy', 'jobPreparation'] : ['furtherStudy', 'jobPreparation', 'jobPreparation'];
-      for (const id of schedule) state = act(state, id);
+    while (state.preparation < target && (state.counts.study || 0) < 4) perform('study', 15);
+    if (['deep', 'both', 'turn'].includes(kind) && term === 2) perform('applyProject');
+    if (term >= 5) {
+      const goals = kind === 'both' ? ['furtherStudy', 'jobPreparation'] : kind === 'deep' ? ['furtherStudy'] : ['employment', 'turn'].includes(kind) ? ['jobPreparation'] : [];
+      for (const id of goals.sort((a, b) => state[a] - state[b])) {
+        const needFitness = () => game.getAction(state, id).fitnessCost || 0;
+        // 体能不足时先恢复再行动，因此需要额外留出 1 点时间。
+        while (state[id] < 60 && (state.counts[id] || 0) < 2 && state.time >= (state.energy < 8 || state.fitness < needFitness() ? 2 : 1)) {
+          const investment = kind === 'both' && state[id] < 45 && state.time >= (state.energy < 20 || state.fitness < needFitness() ? 3 : 2) ? 20 : 8;
+          perform(id, investment);
+        }
+      }
     }
     state = nextTerm(state);
   }
@@ -121,7 +147,9 @@ test('统一学习进度：课程、自学和补习都增加 preparation；资�
   for (const [id, amount] of [['study', 20], ['selfStudy', 20], ['tutoring', 25]]) {
     const state = game.createGame({ seed: 'learning' });
     const before = structuredClone(state);
-    assert.equal(game.executeAction(state, id).state.preparation, amount);
+    const result = game.executeAction(state, id);
+    assert.ok(result.state.preparation > 0);
+    assert.equal(result.entry.investment.amount, game.getActionInvestment(state, id).default);
     assert.deepEqual(state, before);
   }
   const state = game.createGame();
@@ -164,8 +192,8 @@ test('社团投入完成当学期收尾并记录经历；项目成果在之后�
   assert.equal(game.executeAction(state, 'clubWork').ok, false);
   // 项目：第二学期完成两次投入，成果确认到下一学期才出现
   state = nextTerm(roundtrip(state));
-  state = act(state, 'study');
-  state = act(state, 'study');
+  state = { ...state, fitness: 60 };
+  while (state.preparation < 40) state = act(state, 'study');
   state = act(state, 'applyProject');
   state = act(state, 'projectWork');
   state = act(state, 'projectWork');
@@ -227,6 +255,22 @@ test('同一局深造与就业均可达，毕业时可以自主选择，条件�
   assert.equal(game.evaluateEndings(missing).options.find((item) => item.id === 'furtherStudy').available, false);
 });
 
+test('未毕业可选择延毕，三无毕业生作为毕业分支可保存恢复', () => {
+  const failed = route('failed');
+  assert.equal(failed.endingOptions.options.find((item) => item.id === 'notQualified').available, true);
+  assert.equal(failed.endingOptions.options.find((item) => item.id === 'delayed').available, true);
+  const delayed = roundtrip(game.chooseEnding(failed, 'delayed').state);
+  assert.equal(delayed.phase, 'finished');
+  assert.equal(delayed.result.kind, 'graduation');
+  assert.equal(delayed.result.direction, 'delayed');
+
+  const ordinary = route('ordinary');
+  assert.equal(ordinary.endingOptions.options.find((item) => item.id === 'blankResume').available, true);
+  const blank = roundtrip(game.chooseEnding(ordinary, 'blankResume').state);
+  assert.equal(blank.phase, 'finished');
+  assert.equal(blank.result.direction, 'blankResume');
+});
+
 test('保存覆盖行动后、待选事件、总结、方向选择与最终结果阶段', () => {
   const initial = game.createGame();
   roundtrip(game.executeAction(initial, 'study').state);
@@ -273,7 +317,7 @@ test('固定随机机会、预览不消耗随机数，中途读档后随机序�
     const continuous = nextTerm(resolve(first));
     const loaded = nextTerm(resumed);
     assert.deepEqual(game.executeAction(continuous, 'selfStudy'), game.executeAction(loaded, 'selfStudy'));
-    assert.equal(first.rng.calls, 3);
+    assert.equal(first.rng.calls, 4);
   }
   assert.equal(opportunities.size, 2);
 });
@@ -364,7 +408,7 @@ test('两标签页冲突拒绝覆盖，主动读取后可保存；临时档不�
   storage.setItem(save.KEYS.temporary, raw);
   const fresh = save.createSaveService(storage);
   assert.equal(fresh.inspect().temporary, true);
-  assert.equal(fresh.load().state.preparation, 20);
+  assert.deepEqual(fresh.load().state, game.executeAction(loaded.state, 'study').state);
 });
 
 test('成果确认可以免费延期或放弃；最后学期仍有免费放弃路径', () => {

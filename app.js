@@ -4,15 +4,50 @@ const game = CampusGame;
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const h = escapeHtml;
+const mathText = (value) => {
+  const matrix = (first, second) => '<span class="math-matrix" role="math"><span class="matrix-bracket">[</span><span class="matrix-grid">'
+    + first.split(',').concat(second.split(',')).map((cell) => '<span>' + cell.trim() + '</span>').join('')
+    + '</span><span class="matrix-bracket">]</span></span>';
+  return escapeHtml(value)
+    .replace(/\[\[([^\[\]]+)\],\[([^\[\]]+)\]\]/g, (_, first, second) => matrix(first, second))
+    .replace(/∫\[([^,\]]+),([^\]]+)\]/g, '∫<span class="math-limits"><sup>$2</sup><sub>$1</sub></span>')
+    .replace(/\^(\([^)]*\)|[A-Za-z0-9+\-−]+)/g, '<sup>$1</sup>');
+};
 const hotspots = [...document.querySelectorAll('.map-hotspot')];
 const audio = typeof CampusAudio !== 'undefined' ? CampusAudio : null;
+const basketballGame = typeof CampusBasketball !== 'undefined' ? CampusBasketball : null;
+const seasonal = typeof CampusSeason !== 'undefined' ? CampusSeason : null;
 const PLACE_SOUNDS = { think: 'study', library: 'study', yifu: 'study', dorm: 'relax', ginkgo: 'relax', track: 'sport', activity: 'opportunity', gate: 'opportunity', hospital: 'info', auditorium: 'info', hotel: 'info' };
-const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', work: 'paper', rest: 'relax', chat: 'relax', walk: 'relax', exercise: 'sport' };
+const ACTION_SOUNDS = { study: 'study', tutoring: 'study', selfStudy: 'study', furtherStudy: 'study', projectWork: 'study', showPortfolio: 'success', scholarship: 'success', contestPrize: 'success', researchAssistant: 'paper', creativeIncome: 'success', hobbyPractice: 'relax', campusShowcase: 'fanfare', decorateDorm: 'success', applyProject: 'opportunity', applyClub: 'opportunity', clubWork: 'opportunity', applyInternship: 'opportunity', internshipWork: 'paper', jobPreparation: 'paper', jobTrip: 'paper', work: 'paper', rest: 'relax', chat: 'relax', dinnerTreat: 'relax', walk: 'relax', graduationTrip: 'fanfare', exercise: 'sport', gym: 'sport', teamSport: 'sport', soloSport: 'sport', basketball: 'sport', treatment: 'success' };
+const ACTION_CATEGORIES = {
+  study: ['study', 'tutoring', 'selfStudy', 'furtherStudy', 'projectWork', 'showPortfolio', 'scholarship'],
+  work: ['work', 'jobPreparation', 'jobTrip', 'applyProject', 'applyInternship', 'internshipWork', 'contestPrize', 'researchAssistant', 'creativeIncome'],
+  social: ['chat', 'applyClub', 'clubWork', 'campusShowcase', 'decorateDorm', 'hobbyPractice', 'alumniVolunteer', 'show', 'dinnerTreat', 'graduationTrip'],
+  sport: ['exercise', 'gym', 'teamSport', 'basketball', 'soloSport'],
+  rest: ['rest', 'walk', 'checkup', 'sickVisit', 'treatment']
+};
+const ACTION_CATEGORY_INDEX = Object.fromEntries(Object.entries(ACTION_CATEGORIES).flatMap(([category, ids]) => ids.map((id) => [id, category])));
+const ACTION_ICONS = {
+  study: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M4 5.5v15M8 7h8M8 11h6"></path></svg>',
+  work: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5h8v2M3 12h18M10 12v2h4v-2"></path></svg>',
+  social: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c0-3 2.5-5 6-5s6 2 6 5M16 5a3 3 0 0 1 0 6M18 15c2 .6 3 2.3 3 5"></path></svg>',
+  sport: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M5 6c3 2 4 5 4 6s-1 4-4 6M19 6c-3 2-4 5-4 6s1 4 4 6M3 12h18"></path></svg>',
+  rest: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"></path></svg>'
+};
 const dialog = $('#termDialog');
+const basketballDialog = $('#basketballDialog');
+const animalDialog = $('#animalDialog');
+const catArchiveDialog = $('#catArchiveDialog');
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 let storage = null;
 try { storage = window.localStorage; } catch (_) { /* Play remains available without storage. */ }
-const saves = CampusSave.createSlotService(storage);
+const normalSaves = CampusSave.createSlotService(storage);
+let saves = normalSaves;
+let developerPanel = null;
+let developerTesting = false;
+let developerPaused = false;
+let developerPauseStarted = 0;
+let developerAnimalOffset = 0;
 const sms = typeof CampusSms !== 'undefined' ? CampusSms : null;
 const LOGIN_KEY = 'bjtu-life:login';
 const LOGIN_SKIP_KEY = 'bjtu-life:login:skipped';
@@ -25,25 +60,63 @@ let activeSaveSlot = null;
 let saveTarget = null;
 let state = null;
 let activePlace = null;
+let gateSection = null;
+const openActionCards = new Set();
+let budgetDraft = null;
+let budgetDraftTerm = null;
 let lastHotspot = null;
 let dialogMode = null;
+let terminalChoice = null;
 let uiLocked = false;
 let unlockTimer;
 let toastTimer;
 let placeEnterTimer;
-// 校园偶遇 NPC：纯逻辑在 npc.js，渲染与点击对话在这里；属于观感层，不进入存档格式。
-const npc = typeof CampusNpc !== 'undefined' ? CampusNpc : null;
-let npcSystem = null;
-let npcTimer = null;
-let npcTalking = null;
-const npcFades = new Map();
-const npcNodes = new Map();
-const npcTalkIndex = new Map();
-const npcChatLogs = new Map();
+// 季节与天气是纯观感层：由学期、剩余时间和存档种子推导，不写入游戏状态，也不消耗随机数。
+let lastSeasonClock = null;
+let seasonVisualKey = '';
+let seasonNoticeTimer = null;
+const animals = typeof CampusAnimals !== 'undefined' ? CampusAnimals : null;
+let animalSystem = null;
+let animalMarkerIds = '';
+let animalEncounter = null;
+let animalTiming = null;
+let animalFrame = null;
+let animalReactionTimer = null;
+let animalReactionDueAt = 0;
+let animalReactionCallback = null;
+let animalPortrait = null;
+let animalPose = null;
+let animalPoseFrame = null;
+let renderedMapNpcIds = '';
 let commandSequence = 0;
 let savedRevision = -1;
+let savedNpcDialogueSummaries = '';
 let savedAt = '';
 let saveNotice = '';
+const COACH_KEY = 'bjtu-life:coach:v1';
+const COACH_STEPS = ['start-new', 'map-place', 'action-confirm', 'semester-end'];
+let coachProgress = {};
+try { coachProgress = JSON.parse(storage?.getItem(COACH_KEY)) || {}; } catch (_) { coachProgress = {}; }
+let activeCoach = null;
+let termUnlockQueue = [];
+const eventDrafts = new Map();
+const actionDrafts = new Map();
+let pendingActionExtra = null;
+let acknowledgedResultRevision = -1;
+let basketballSession = null;
+let basketballCompanion = null;
+let zhouView = { screen: 'home', group: 'life', activity: 'selfStudy', amount: undefined, profileOpen: false, text: null };
+let lastVisualNovel = null;
+let npcMeetIntro = null;
+let zhouRequest = null;
+let zhouRequestSequence = 0;
+const npcSummaryJobs = new Map();
+const npcReflectionJobs = new Map();
+let activeNpcId = 'zhouNing';
+let zhouChatDraft = '';
+let zhouChatNotice = '';
+let zhouHistoryOpen = false;
+const ZHOU_GROUPS = { study: '学习与未来计划', sport: '运动与球场', life: '散步、演出与日常', campus: '社团、项目与工作' };
 const failures = [];
 const sessionId = Date.now().toString(36);
 function showToast(message) {
@@ -59,20 +132,36 @@ const ACTION_FLAVOR = {
   tutoring: '卡住的章节总算翻过去了。',
   selfStudy: '闭馆音乐响起，你才从书里抬头。',
   furtherStudy: '计划表上的下一个节点被划掉了。',
+  scholarship: '评定结果贴出来，你的名字在名单里。下一笔生活费，稍微松了一点。',
+  contestPrize: '奖金到账短信弹出来，数额不大，但足够让你在食堂多加一个菜。',
+  researchAssistant: '老师把下一批文献发给你，约好下周同一时间再对一次结果。',
+  creativeIncome: '交付文件发过去，对方很快回了尾款和一句“下次还找你”。',
   work: '到账提示响了，今天的班没白站。',
   jobPreparation: '简历又删掉一段废话，顺眼多了。',
+  jobTrip: '面试结束，你在园区门口坐了一会儿。回程的车票已经买好。',
+  dinnerTreat: '结账时心疼了一下，但桌上那几个人还在笑，这顿饭不算白请。',
+  graduationTrip: '车门关上，窗外的校园慢慢退远。你们约好，以后还要再回来一次。',
   rest: '你醒来时，宿舍的天已经擦黑。',
   chat: '熄灯前的卧谈结束，笑声还没散。',
   exercise: '你在跑道边撑着膝盖喘气，心里却踏实。',
+  gym: '器械归位，汗水把衣服贴在背上，整个人轻了一截。',
+  teamSport: '球场上的热闹散了，你还站在原地喘气，嘴角没压住。',
+  basketball: '球从指尖离手，篮网翻了一下。你捡起球，听见自己还在喘。',
+  soloSport: '耳机里的歌放到最后一段，你放慢速度，慢慢走回去。',
   walk: '一圈走下来，步子轻了些。',
   applyProject: '申请递出去了，接下来等回复。',
   projectWork: '改完最后一版方案，会议室的灯熄了。',
+  showPortfolio: '你把做过的尝试讲给同学听，也记下了新的建议。这份个人作品已收进简历。',
+  hobbyPractice: '这次练习有了新的进步，展演准备又往前走了一步。',
+  campusShowcase: '台下的掌声落下，你把这次校园小展演收进简历。',
+  decorateDorm: '收纳摆好了，合影也拍好了，这张照片收进了你和室友的宿舍纪念。',
   applyClub: '报名表交了出去，招新群里已经热闹起来。',
   clubWork: '海报贴完，签到表也理好了。',
   applyInternship: '材料交了上去，接下来是等。',
   internshipWork: '打卡下班，通勤路上天还没黑透。',
   checkup: '体检单打印出来，各项指标正常。你把单子折好，塞进口袋。',
   sickVisit: '药片就着温水吞下去。校医说，三天内别熬夜。',
+  treatment: '校医把药递过来，叮嘱你这两天别再逞强。',
   alumniVolunteer: '散场时，一位老校友塞给你一瓶水：辛苦了，小校友。',
   show: '谢幕的时候，你跟着人群鼓掌，掌心拍得发红。'
 };
@@ -93,6 +182,8 @@ const EVENT_CHOICE_FLAVOR = {
   'clubReview:abandon': '你把群置顶取消了。任务转给下一届，他们发来一句谢谢。',
   'internshipOffer:accept': '你回了邮件。下周一的闹钟，比平时早了一个半小时。',
   'internshipOffer:later': '谢绝邮件在草稿箱躺了一晚，第二天早上你点了发送。',
+  'internshipMilestone:settle': '证明开好了，章盖得很正。你把它夹进简历的最后一页。',
+  'internshipMilestone:continue': '你把证明的事往后放了放。工位还是那张，活儿照干，日薪照拿。',
   'internshipReview:complete': '证明开好了，章盖得很正。你把它夹进简历的最后一页。',
   'internshipReview:later': '手续下个学期再办。先回学校上课。',
   'internshipReview:abandon': '没办证明。通勤路上的晚霞，你自己记得。',
@@ -174,7 +265,7 @@ const EVENT_CHOICE_FLAVOR = {
   'rollCall:later': '你低头翻书。讲台上传来一个名字，不是你的。',
   'jobFair:browse': '展位图拍下来，二维码扫了七八个。有些岗位的名字，你第一次听说。',
   'jobFair:later': '你摆摆手。离毕业还早，海报上的字以后再认。',
-  'medicalInsurance:register': '参保回执折好放进钱包。从此看病买药，能报一点是一点。',
+  'medicalInsurance:register': '参保资料核对完成，基础参保费用由家里另行承担。',
   'medicalInsurance:later': '想着身体还行，先把这事放一放。',
   'labNight:join': '凌晨两点的实验室，咖啡和键盘声都很响。师兄说：谢谢你，数据跑完了。',
   'labNight:later': '你拉上外套。逸夫楼的灯在身后，亮成一片。',
@@ -183,69 +274,849 @@ const EVENT_CHOICE_FLAVOR = {
   'memorial129:watch': '谢幕时全场起立。身边有人小声说：这台晚会排了三个月。',
   'memorial129:later': '你拍了张节目单。横幅上的字被风吹得猎猎响。'
 };
-// NPC 2D 小人：同一套基础身型（头、袖、上衣、下摆、腿）加各职位配件，班车单独绘制。
-function npcBody(options) {
-  const skin = options.skin || '#f2c9a0';
-  const top = options.top;
-  return '<circle cx="20" cy="12" r="7" fill="' + skin + '"/>'
-    + '<rect x="9" y="21" width="3" height="11" rx="1.5" fill="' + top + '"/>'
-    + '<rect x="28" y="21" width="3" height="11" rx="1.5" fill="' + top + '"/>'
-    + '<rect x="12" y="20" width="16" height="16" rx="4" fill="' + top + '"/>'
-    + '<rect x="13" y="28" width="14" height="6" rx="2" fill="' + (options.bottom || '#3c4450') + '"/>'
-    + (options.accessory || '')
-    + '<rect x="14" y="36" width="4" height="9" rx="2" fill="' + (options.legs || '#333a45') + '"/>'
-    + '<rect x="22" y="36" width="4" height="9" rx="2" fill="' + (options.legs || '#333a45') + '"/>';
+const NPC_MAP_POSITIONS = { zhouNing: [70, 47], chenTeacher: [48, 37], linXia: [27, 66] };
+const NPC_MAP_ICON = '<svg class="npc-svg" viewBox="0 0 40 48" aria-hidden="true">'
+  + '<circle cx="20" cy="12" r="7" fill="#f2c9a0"/><path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#2b2b33"/>'
+  + '<g fill="#2e6fae"><rect x="9" y="21" width="3" height="11" rx="1.5"/><rect x="28" y="21" width="3" height="11" rx="1.5"/><rect x="12" y="20" width="16" height="16" rx="4"/></g>'
+  + '<rect x="13" y="28" width="14" height="6" rx="2" fill="#f4f4f4"/><rect x="29" y="21" width="7" height="14" rx="2.5" fill="#7c4a21"/>'
+  + '<g fill="#333a45"><rect x="14" y="36" width="4" height="9" rx="2"/><rect x="22" y="36" width="4" height="9" rx="2"/></g></svg>';
+const BUDGET_EFFECT_NAMES = { mood: '心情', social: '社交', energy: '精力', fitness: '体能' };
+function budgetEffectText(effects) {
+  return Object.entries(effects || {}).filter(([, value]) => value).map(([key, value]) => (BUDGET_EFFECT_NAMES[key] || key) + ' ' + (value > 0 ? '+' : '−') + Math.abs(value)).join('、') || '无属性变化';
 }
-const NPC_HAIR = '<path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#2b2b33"/>';
-const NPC_HAIR_GREY = '<path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#c9ccd1"/>';
-const NPC_GLASSES = '<circle cx="16" cy="12" r="2.2" fill="none" stroke="#22262b" stroke-width="1.1"/><circle cx="24" cy="12" r="2.2" fill="none" stroke="#22262b" stroke-width="1.1"/><path d="M18.2 12h3.6" stroke="#22262b" stroke-width="1.1"/>';
-const NPC_FIGURES = {
-  student: npcBody({ top: '#2e6fae', bottom: '#f4f4f4', accessory: NPC_HAIR + '<rect x="29" y="21" width="7" height="14" rx="2.5" fill="#7c4a21"/>' }),
-  senior: npcBody({ top: '#5b6b7c', bottom: '#8a97a5', accessory: NPC_HAIR + NPC_GLASSES + '<rect x="29" y="21" width="7" height="14" rx="2.5" fill="#6b4a2b"/>' }),
-  canteen: npcBody({ skin: '#f0c39a', top: '#f7f7f2', bottom: '#f7f7f2', accessory: NPC_HAIR + '<rect x="12" y="2" width="16" height="7" rx="2" fill="#f7f7f2"/><rect x="12" y="2" width="16" height="3" rx="1.5" fill="#d94f4f"/>' }),
-  lecturer: npcBody({ top: '#3f5c77', bottom: '#333a45', accessory: NPC_HAIR + '<path d="M19 21l2 6-2 1-2-1z" fill="#b03a2e"/>' }),
-  staff: npcBody({ top: '#6f7f8f', bottom: '#4c5866', accessory: NPC_HAIR + '<rect x="17" y="21" width="6" height="2" fill="#c26a2e"/><rect x="18" y="23" width="4" height="5" rx="0.8" fill="#f7f7f2"/>' }),
-  security: npcBody({ top: '#2b3440', bottom: '#2b3440', accessory: '<rect x="11" y="3" width="18" height="5" rx="2" fill="#2b3440"/><rect x="9" y="7" width="22" height="2" rx="1" fill="#1c232c"/>' }),
-  courier: npcBody({ top: '#f0a020', bottom: '#d9d9d9', accessory: '<rect x="13" y="3" width="14" height="4.5" rx="2" fill="#f0a020"/><rect x="12" y="20" width="16" height="3" rx="1" fill="#b37000"/>' }),
-  professor: npcBody({ top: '#4a4a55', bottom: '#333a45', accessory: NPC_HAIR_GREY + NPC_GLASSES + '<rect x="4" y="25" width="5" height="8" rx="1" fill="#8d5524"/>' }),
-  international: npcBody({ skin: '#8a5a3b', top: '#e84393', bottom: '#d63384', accessory: '<circle cx="14" cy="7" r="2.6" fill="#1d1d24"/><circle cx="20" cy="5.5" r="3" fill="#1d1d24"/><circle cx="26" cy="7" r="2.6" fill="#1d1d24"/>' }),
-  bus: '<rect x="3" y="9" width="34" height="27" rx="5" fill="#d94f4f"/>'
-    + '<rect x="6" y="13" width="11" height="9" rx="1.5" fill="#cfeef7"/><rect x="23" y="13" width="11" height="9" rx="1.5" fill="#cfeef7"/>'
-    + '<rect x="6" y="25" width="28" height="3.5" rx="1.5" fill="#a33333"/><rect x="6" y="31" width="28" height="2" rx="1" fill="#7d1f1f"/>'
-    + '<circle cx="12" cy="39" r="4.5" fill="#26272b"/><circle cx="12" cy="39" r="1.8" fill="#8f9296"/>'
-    + '<circle cx="28" cy="39" r="4.5" fill="#26272b"/><circle cx="28" cy="39" r="1.8" fill="#8f9296"/>'
-};
-function npcFigureSvg(figure) {
-  return '<svg class="npc-svg" viewBox="0 0 40 48" aria-hidden="true">' + (NPC_FIGURES[figure] || NPC_FIGURES.student) + '</svg>';
+function budgetTierExtras(dimension, tier) {
+  if (dimension.id !== 'housing') return '';
+  const parts = [];
+  if (tier.restMultiplier) parts.push('休息恢复 ×' + Number(tier.restMultiplier).toFixed(2));
+  if (tier.dormMood || tier.dormSocial) parts.push('宿舍事件/交流 心情' + (tier.dormMood >= 0 ? '+' : '−') + Math.abs(tier.dormMood) + '/社交' + (tier.dormSocial >= 0 ? '+' : '−') + Math.abs(tier.dormSocial));
+  else parts.push('宿舍事件/交流 无额外加成');
+  return parts.join('；');
+}
+function budgetTierButton(dimension, tier) {
+  const selected = budgetDraft[dimension.id] === tier.id;
+  return '<button type="button" class="budget-tier' + (selected ? ' is-selected' : '') + '" data-budget-dimension="' + dimension.id + '" data-budget-tier="' + tier.id + '" aria-pressed="' + selected + '"><span class="budget-tier-head"><b>' + h(tier.label) + '</b><em>' + tier.cost + ' 元</em></span><small>' + h(budgetEffectText(tier.effects)) + '</small>' + (dimension.id === 'housing' ? '<small>' + h(budgetTierExtras(dimension, tier)) + '</small>' : '') + '</button>';
+}
+// 四个维度各提供三个可选档位；legacy 档位仅供旧存档快照兼容。
+function budgetPickerMarkup() {
+  return '<div class="budget-picker">' + Object.values(game.BUDGET_DIMENSIONS).map(dimension => {
+    const selectable = dimension.tiers.filter(tier => !tier.legacy);
+    const content = '<div class="budget-tier-list">' + selectable.map(tier => budgetTierButton(dimension, tier)).join('') + '</div>';
+    return '<fieldset class="budget-dimension"><legend>' + h(dimension.label) + ' · ' + h(dimension.title) + '</legend><p>' + h(dimension.description) + '</p>' + content + '</fieldset>';
+  }).join('') + '</div>';
+}
+function budgetSummaryMarkup() {
+  const grant = game.currentGrant(state);
+  if (!grant) return '';
+  const plan = game.budgetPlan(budgetDraft);
+  if (!plan) return '<p class="action-reason">预算档位无效</p>';
+  const delta = plan.costs.total - grant.livingCost;
+  const affordable = delta <= state.money;
+  const preview = game.previewChanges(state, { recovery: plan.effects.energy, mood: plan.effects.mood, social: plan.effects.social, fitness: plan.effects.fitness });
+  const projectedFitness = state.fitness + preview.fitness;
+  return '<div class="budget-summary"><h3>本学期预算合计 ' + plan.costs.total + ' 元</h3><p>' + (delta > 0 ? '需追加 ' + delta + ' 元' : delta < 0 ? '退回 ' + (-delta) + ' 元' : '与默认预留持平') + '</p><p>即时变化：' + h(changeText(preview)) + '</p>' + (projectedFitness < 25 ? '<p class="action-warning">预计体能 ' + projectedFitness + '，低于 25 会生病。</p>' : '') + (!affordable ? '<p class="action-reason">余额不足，还差 ' + (delta - state.money) + ' 元</p>' : '') + '</div>';
+}
+function showBudget() {
+  if (!state || state.phase !== 'playing') { resumePhase(); return; }
+  const grant = game.currentGrant(state);
+  if (!grant || !grant.budget || grant.budgetChosen) { resumePhase(); return; }
+  if (budgetDraftTerm !== state.term) {
+    budgetDraft = { ...grant.budget };
+    budgetDraftTerm = state.term;
+  }
+  const plan = game.budgetPlan(budgetDraft);
+  const affordable = !!plan && plan.costs.total - grant.livingCost <= state.money;
+  const body = budgetPickerMarkup() + budgetSummaryMarkup() + budgetMarkup({ showPlan: false }) + '<p id="budgetError" class="action-reason" role="alert"></p>';
+  showDialog('budget', '学期生活预算', body, [{ id: 'budgetConfirm', text: '确认预算', disabled: !affordable }]);
+}
+function refreshBudgetSelection() {
+  const grant = game.currentGrant(state);
+  const plan = game.budgetPlan(budgetDraft);
+  const body = $('#dialogBody');
+  const summary = body?.querySelector?.('.budget-summary');
+  if (!grant || !plan) return;
+  if (summary) {
+    body.querySelectorAll('[data-budget-dimension][data-budget-tier]').forEach((button) => {
+      const selected = budgetDraft[button.dataset.budgetDimension] === button.dataset.budgetTier;
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+    summary.outerHTML = budgetSummaryMarkup();
+    const confirm = dialog.querySelector('[data-dialog-action="budgetConfirm"]');
+    if (confirm) confirm.disabled = uiLocked || plan.costs.total - grant.livingCost > state.money;
+    const error = $('#budgetError');
+    if (error) error.textContent = '';
+    return;
+  }
+  // 测试用的最小 DOM 没有子树查询能力，退回整页重绘并保留滚动位置。
+  const scrollTop = dialog.scrollTop || 0;
+  showBudget();
+  dialog.scrollTop = scrollTop;
+}
+function selectBudgetTier(dimension, tierId) {
+  const config = game.BUDGET_DIMENSIONS[dimension];
+  if (!config || !config.tiers.some(tier => tier.id === tierId && !tier.legacy)) return;
+  budgetDraft = { ...(budgetDraft || {}), [dimension]: tierId };
+  refreshBudgetSelection();
+}
+function submitBudget() {
+  if (!state || !budgetDraft) return;
+  const plan = game.budgetPlan(budgetDraft);
+  if (!plan) { showToast('预算档位无效'); return; }
+  const result = runCommand('chooseBudget', { ...budgetDraft }, state.revision);
+  if (!result) {
+    const error = $('#budgetError');
+    if (error) error.textContent = '预算未能确认，请检查余额或档位。';
+    return;
+  }
+  budgetDraft = null;
+  budgetDraftTerm = null;
+  audio?.play('success');
+  showToast('学期预算已确认');
+  resumePhase();
+}
+function budgetMarkup({ showPlan = true } = {}) {
+  const budget = game.budgetFor(state);
+  if (!budget) return '<p>本学期沿用旧版生活费结算，下一学期开始按家庭情况一次性发放学期生活费并预留日常开支。</p>';
+  const { family, grant } = budget;
+  const plan = grant.budget ? game.budgetPlan(grant.budget) : null;
+  const dimensionLines = plan && showPlan ? ['clothing', 'food', 'housing', 'transport'].map(key => '<span>' + h(game.BUDGET_DIMENSIONS[key].label) + ' · ' + h(plan.items[key].label) + ' <b>' + plan.items[key].cost + ' 元</b></span>').join('') : '';
+  const status = grant.budget && grant.budgetChosen
+    ? '<span>预算合计 <b>' + grant.livingCost + ' 元</b></span><span>' + (grant.budgetDelta > 0 ? '追加' : grant.budgetDelta < 0 ? '退回' : '与默认预留持平') + '<b>' + (grant.budgetDelta > 0 ? '−' : grant.budgetDelta < 0 ? '+' : '') + Math.abs(grant.budgetDelta) + ' 元</b></span>'
+    : '<span>默认预留 <b>' + grant.livingCost + ' 元</b></span>';
+  return '<section class="wallet-budget"><h3>本学期生活费 · ' + h(family.label) + '</h3><p>家里已一次性转入本学期生活费 <b>' + family.termAllowance + ' 元</b>。</p><div class="summary-lines"><span>上学期结余 <b>' + grant.openingMoney + ' 元</b></span><span>家庭生活费到账 <b>+' + grant.allowance + ' 元</b></span>' + (plan ? dimensionLines : '') + status + (grant.debtPaid ? '<span>校园卡赔偿 <b>−' + grant.debtPaid + ' 元</b></span>' : '') + '<span>开学可支配资金 <b>' + grant.moneyAfter + ' 元</b></span></div>' + ((state.cardDebt || 0) ? '<p class="action-warning">校园卡赔偿待还 ' + state.cardDebt + ' 元，后续收入优先偿还。</p>' : '') + '</section>';
+}
+function cashflowMarkup() {
+  const flow = game.economySummary(state);
+  const tag = game.economyTag(state);
+  const signed = value => (value > 0 ? '+' : value < 0 ? '−' : '') + Math.abs(value);
+  return '<section class="wallet-budget cashflow-panel"><h3>本学期现金流</h3><div class="summary-lines">'
+    + '<span>家庭生活费到账 <b>+' + flow.allowance + ' 元</b></span>'
+    + '<span>学期预算 <b>−' + flow.budget + ' 元</b></span>'
+    + '<span>本学期已赚 <b>+' + flow.earned + ' 元</b></span>'
+    + '<span>其他支出 <b>−' + flow.spent + ' 元</b></span>'
+    + '<span>本学期净变化 <b>' + signed(flow.net) + ' 元</b></span>'
+    + '<span>当前余额 <b>' + flow.balance + ' 元</b></span>'
+    + '</div><p class="cashflow-tag">经济状态：<b>' + h(tag.label) + '</b>' + (flow.debt ? ' · 待还 ' + flow.debt + ' 元' : '') + '</p></section>';
+}
+function walletHistory() {
+  return budgetMarkup() + cashflowMarkup() + (state.economy ? '<h3>历次学期拨款</h3><ul>' + state.economy.grants.map(grant => {
+    const plan = grant.budget ? game.budgetPlan(grant.budget) : null;
+    const detail = plan ? '（' + ['clothing', 'food', 'housing', 'transport'].map(key => game.BUDGET_DIMENSIONS[key].label + ' ' + plan.items[key].label + ' ' + plan.items[key].cost + ' 元').join('、') + '）' : '';
+    return '<li>' + h(game.TERM_NAMES[grant.term - 1]) + '：家庭转入 ' + grant.allowance + ' 元，预算 ' + grant.livingCost + ' 元' + detail + '，结转 ' + grant.openingMoney + ' 元' + (grant.debtPaid ? '，偿还 ' + grant.debtPaid + ' 元' : '') + '，开学可用 ' + grant.moneyAfter + ' 元。</li>';
+  }).join('') + '</ul>' : '');
 }
 function statsMarkup() {
   const latest = state.courses.at(-1);
+  const tier = game.fitnessTier(state.fitness);
+  const fitnessNote = tier.ill
+    ? '/ 100 · 生病 · 先去校医院'
+    : '/ 100 · ' + tier.label + '（收益 ×' + tier.reward.toFixed(2) + ' / 消耗 ×' + tier.cost.toFixed(2) + '）';
   const items = [
     ['成绩', latest ? latest.grade : '待结算', latest ? latest.name + ' · 最近成绩' : '等待首次期末', 'grade'],
-    ['社交', state.social, '/ 100 · 慢慢攒', 'social'], ['体能', state.fitness, '/ 100 · 体测条件', 'fitness'],
+    ['社交', state.social, '/ 100 · 慢慢攒', 'social'], ['体能', state.fitness, fitnessNote, tier.ill ? 'fitness is-ill' : 'fitness'],
     ['心情', state.mood, '/ 100 · 会影响事件', state.mood < 30 ? 'mood is-low' : 'mood'],
-    ['钱包', state.money, '元 · 可用资金', 'money']
+    ['钱包', state.money, '元 · 可支配余额' + ((state.cardDebt || 0) ? ' · 待还 ' + state.cardDebt + ' 元' : ''), 'money']
   ];
-  return items.map(([name, value, note, style]) => '<div class="attribute ' + style + '"><span class="attribute-name">' + h(name) + '</span><b>' + h(value) + '</b><small>' + h(note) + '</small></div>').join('');
+  return items.map(([name, value, note, style]) => '<div class="attribute ' + style + '"><span class="attribute-name">' + h(name) + '</span><b>' + h(value) + '</b><small>' + h(note) + '</small>' + (style === 'money' ? '<button type="button" class="wallet-details" data-wallet-budget="1">查看收支</button>' : '') + '</div>').join('');
 }
-function chainLabel(chain) {
-  const labels = { idle: '未申请', active: '进行中', deferred: '暂缓申请', completed: '已完成', missed: '未完成' };
-  return labels[chain.status] + (['active', 'missed'].includes(chain.status) ? ' · ' + chain.progress + '/2 次投入' : '');
+// 「手头的事」抽屉：只渲染 game.advisories(state) 的推导结果，界面层不做状态判断。
+function renderAdvisories() {
+  const list = $('#advisoryList');
+  const badge = $('#advisoryBadge');
+  if (!state || !list) return;
+  const board = game.advisories(state);
+  if (board.groups.length === 0) {
+    list.innerHTML = '<p class="app-panel-note">' + h(game.ADVISORIES.emptyNote) + '</p>';
+  } else {
+    list.innerHTML = board.groups.map((group) => '<section class="advisory-group" data-group="' + h(group.id) + '">'
+      + '<h4 class="advisory-group-title"><i class="advisory-dot"></i>' + h(group.title) + '<span class="advisory-count">' + group.items.length + '</span></h4>'
+      + group.items.map((item) => '<article class="advisory-item' + (item.urgent ? ' is-urgent' : '') + '">'
+        + '<div class="advisory-head"><span class="advisory-name">' + h(item.title) + '</span>'
+        + (item.tag ? '<span class="advisory-tag tone-' + h(item.tagTone) + '">' + h(item.tag) + '</span>' : '')
+        + '</div>'
+        + (item.detail ? '<p class="advisory-detail">' + h(item.detail) + '</p>' : '')
+        + (item.detailList.length ? '<ul class="advisory-sublist">' + item.detailList.map((row) => '<li>' + h(row) + '</li>').join('') + '</ul>' : '')
+        + '</article>').join('')
+      + '</section>').join('');
+  }
+  if (badge) {
+    badge.hidden = board.total === 0;
+    badge.textContent = String(board.total);
+    badge.classList.toggle('is-urgent', board.urgentCount > 0);
+  }
 }
+// 「简历」抽屉：只渲染 game.resume(state) 的推导结果；要件 chips 是二期岗位门槛的判定预览。
+function renderResume() {
+  const body = $('#resumeBody');
+  if (!state || !body) return;
+  const resume = game.resume(state);
+  const reqLabels = { hasInternship: '实习', hasProject: '项目', hasContest: '竞赛', hasClub: '社团' };
+  const reqs = '<div class="resume-reqs">' + Object.entries(resume.requirements).map(([key, met]) => '<span class="resume-req' + (met ? ' is-met' : '') + '">' + h(reqLabels[key]) + (met ? ' ✓' : ' ✗') + '</span>').join('') + '</div>';
+  const sections = resume.sections.map((section) => '<h4 class="resume-group-title">' + h(section.title) + '</h4>'
+    + (section.items.length ? '<ul>' + section.items.map((item) => '<li>' + h(game.TERM_NAMES[item.term - 1]) + '：' + h(EXPERIENCE_LABELS[item.type] || '校园经历')
+      + (item.company ? '<span class="resume-position">' + h(item.company) + ' · ' + h(item.title) + ' <em>T' + item.tier + '</em></span>' : '') + '</li>').join('') + '</ul>' : '<p class="resume-none">暂无</p>')).join('');
+  const others = resume.others.length
+    ? '<p class="resume-others">' + h(game.RESUME.othersNote.replace('{list}', resume.others.map((item) => EXPERIENCE_LABELS[item.type] || '校园经历').join('、')).replace('{count}', resume.others.length)) + '</p>'
+    : '';
+  body.innerHTML = reqs + sections + others;
+}
+// 像素图标统一使用全站五色板：纸 #f7f2e8 / 金 #f2d04b / 深绿 #597d58 / 绿 #4a8a5c / 墨 #162b27（+ 木色 #b99164）。
+const GROWTH_ICONS = {
+  guitar: '<path fill="#b99164" d="M12 24h18v16H12z"/><path fill="#f2d04b" d="M16 19h10v9H16z"/><path fill="#597d58" d="M25 7h7v21h-7z"/><path fill="#f7f2e8" d="M27 10h2v24h-2z"/><path fill="#162b27" d="M18 28h6v6h-6z"/><path fill="#4a8a5c" d="M23 5h11v7H23z"/>',
+  stage: '<path fill="#597d58" d="M6 8h36v4H6z"/><path fill="#4a8a5c" d="M6 12h8v23H6zm28 0h8v23h-8z"/><path fill="#f2d04b" d="M17 12h5v4h-5zm9 0h5v4h-5z"/><path fill="#f7f2e8" d="M22 20h5v6h-5z"/><path fill="#b99164" d="M17 29h15v4H17zM8 35h32v6H8z"/><path fill="#162b27" d="M22 26h5v9h-5z"/>',
+  photo: '<path fill="#b99164" d="M5 8h29v29H5z"/><path fill="#f7f2e8" d="M9 12h21v21H9z"/><path fill="#597d58" d="M12 23h6v7h-6zm10 0h5v7h-5z"/><path fill="#f2d04b" d="M13 16h4v5h-4zm9 0h4v5h-4zM34 10h8v10h-8z"/><path fill="#162b27" d="M37 20h3v15h-3z"/><path fill="#4a8a5c" d="M32 35h12v4H32z"/>',
+  tools: '<path fill="#b99164" d="M6 19h36v21H6z"/><path fill="#f2d04b" d="M6 19h36v5H6z"/><path fill="#597d58" d="M15 10h18v5H15zm-3 5h5v6h-5zm19 0h5v6h-5z"/><path fill="#f7f2e8" d="M21 26h6v8h-6z"/><path fill="#4a8a5c" d="M9 7h4v12H9zm27 1h4v11h-4z"/>',
+  laptop: '<path fill="#162b27" d="M10 12h28v20H10z"/><path fill="#f7f2e8" d="M13 15h22v14H13z"/><path fill="#4a8a5c" d="M7 34h34v4H7z"/><path fill="#f2d04b" d="M20 32h8v3h-8z"/><path fill="#597d58" d="M9 36h30v4H9z"/>',
+  camera: '<path fill="#162b27" d="M8 15h32v23H8z"/><path fill="#f7f2e8" d="M12 19h24v15H12z"/><circle cx="24" cy="26" r="6" fill="#597d58"/><circle cx="24" cy="26" r="3" fill="#f7f2e8"/><path fill="#f2d04b" d="M15 9h9v5h-9z"/><path fill="#4a8a5c" d="M31 17h5v3h-5z"/>',
+  portfolio: '<path fill="#597d58" d="M6 8h30v34H6z"/><path fill="#b99164" d="M12 6h28v33H12z"/><path fill="#f7f2e8" d="M16 10h20v25H16z"/><path fill="#4a8a5c" d="M19 14h6v7h-6z"/><path fill="#f2d04b" d="M27 14h6v7h-6z"/><path fill="#162b27" d="M19 25h14v2H19zm0 5h10v2H19z"/><path fill="#f2d04b" d="M32 33h10v9H32z"/><path fill="#f7f2e8" d="M35 35h4v4h-4z"/>',
+  bed: '<path fill="#b99164" d="M5 19h4v21H5zm34 5h4v16h-4zM9 32h30v5H9z"/><path fill="#f7f2e8" d="M9 19h11v8H9z"/><path fill="#597d58" d="M21 22h18v10H9v-5h12z"/><path fill="#4a8a5c" d="M24 22h15v4H24z"/><path fill="#b99164" d="M5 17h4v4H5zm34 5h4v4h-4z"/>',
+  books: '<path fill="#b99164" d="M6 36h36v4H6z"/><path fill="#4a8a5c" d="M8 14h7v22H8z"/><path fill="#f7f2e8" d="M9 17h5v2H9zm0 12h5v2H9z"/><path fill="#597d58" d="M17 10h7v26h-7z"/><path fill="#f7f2e8" d="M18 14h5v2h-5zm0 16h5v2h-5z"/><path fill="#b99164" d="m26 17 6-2 6 19-6 2z"/><path fill="#4a8a5c" d="M35 8h4v13h-4zM31 9h4v6h-4zm8-4h4v8h-4z"/><path fill="#b99164" d="M32 21h10v7H32z"/>',
+  alarm: '<path fill="#b99164" d="M13 8h22v4H13zM9 12h30v24H9zM13 36h22v4H13zM6 15h3v18H6zm33 0h3v18h-3zM11 39h5v4h-5zm21 0h5v4h-5z"/><path fill="#f7f2e8" d="M13 16h22v16H13zM17 12h14v24H17z"/><path fill="#162b27" d="M23 16h3v11h-3zm3 8h6v3h-6zM23 30h3v3h-3z"/><path fill="#597d58" d="M6 7h10v4H6zm26 0h10v4H32zM20 4h8v4h-8z"/>',
+  suit: '<path fill="#162b27" d="M10 12h28v6H10z"/><path fill="#4a8a5c" d="M10 16h12v20H10z"/><path fill="#4a8a5c" d="M26 16h12v20H26z"/><path fill="#f7f2e8" d="M20 14h8v22h-8z"/><path fill="#f2d04b" d="M22 16h4v10h-4z"/>',
+  shoe: '<path fill="#597d58" d="M10 16h8v12h-8z"/><path fill="#4a8a5c" d="M10 24h20v10H10z"/><path fill="#597d58" d="M28 26h10v8H28z"/><path fill="#f7f2e8" d="M12 22h10v2H12z"/><path fill="#f2d04b" d="M14 27h4v2h-4zm6 0h4v2h-4z"/><path fill="#162b27" d="M6 34h36v5H6z"/>',
+  fruit: '<path fill="#f2d04b" d="M13 17h8v8h-8z"/><path fill="#597d58" d="M20 13h8v6h-8z"/><path fill="#4a8a5c" d="M28 19h7v6h-7z"/><path fill="#b99164" d="M8 25h32v4H8z"/><path fill="#b99164" d="M10 29h28v7H10z"/><path fill="#162b27" d="M14 29h3v7h-3zm8 0h3v7h-3zm8 0h3v7h-3z"/>',
+  bowl: '<path fill="#4a8a5c" d="M13 19h8v5h-8z"/><path fill="#f2d04b" d="M25 19h8v5h-8z"/><path fill="#f7f2e8" d="M8 24h32v4H8z"/><path fill="#f7f2e8" d="M12 28h24v7H12z"/><path fill="#162b27" d="M18 35h12v4H18z"/>',
+  bike: '<path fill="#162b27" d="M4 30h10v10H4z"/><path fill="#162b27" d="M34 30h10v10H34z"/><path fill="#f7f2e8" d="M7 33h4v4H7zm30 0h4v4h-4z"/><path fill="#4a8a5c" d="M16 22h16v4H16z"/><path fill="#4a8a5c" d="M14 24h4v8h-4zm16 0h4v8h-4z"/><path fill="#162b27" d="M12 18h8v4h-8zm18-2h8v4h-8z"/>',
+  card: '<path fill="#597d58" d="M8 14h32v20H8z"/><path fill="#162b27" d="M8 18h32v4H8z"/><path fill="#f2d04b" d="M12 26h8v4h-8z"/><path fill="#f7f2e8" d="M24 26h12v2H24zm0 4h8v2h-8z"/>'
+};
+let selectedGrowthId = 'bedding';
+let selectedGrowthDimension = 'housing';
+let growthView = 'tree';
+function growthIcon(node) {
+  return '<svg viewBox="0 0 48 48" aria-hidden="true" shape-rendering="crispEdges">' + (GROWTH_ICONS[node.icon] || GROWTH_ICONS.bed) + '</svg>';
+}
+function growthNodeState(node) {
+  if (node.purchased) return { type: 'owned', label: '已拥有 ✓' };
+  if (node.available) return { type: 'ready', label: '可添置' };
+  return node.reason.startsWith('余额不足') ? { type: 'short', label: '余额不足' } : { type: 'locked', label: '条件未满足' };
+}
+function growthNodeMarkup(node) {
+  const status = growthNodeState(node);
+  return '<button type="button" class="growth-node is-' + status.type + (selectedGrowthId === node.id ? ' is-selected' : '')
+    + '" data-growth-select="' + node.id + '" aria-pressed="' + (selectedGrowthId === node.id) + '" title="' + h(node.benefit + '；' + (node.purchased ? status.label : node.reason || status.label)) + '">'
+    + '<span class="growth-node-frame">' + growthIcon(node) + '<span class="growth-node-price">' + (node.purchased ? '已拥有 ✓' : node.price + ' 元') + '</span></span>'
+    + '<span class="growth-node-name">' + h(node.title) + '</span><span class="growth-node-status">' + status.label + '</span></button>';
+}
+function growthRequirementText(item) {
+  return item.label + (item.type === 'action' ? ' ' + Math.min(item.current, item.target) + ' / ' + item.target + ' 次' : '');
+}
+function growthUnlockMarkup(node) {
+  if (!node.unlocks?.length) return '';
+  return node.unlocks.map(id => {
+    const action = game.ACTIONS[id];
+    const place = game.PLACES[action.place].title;
+    const gains = Object.fromEntries(['social', 'mood'].filter(key => action[key]).map(key => [key, action[key]]));
+    const quota = action.experience ? '本局一次' : '每学期最多 ' + action.limit + ' 次';
+    return '<p class="growth-action-note">' + h(action.title + ' · ' + place + '；基础消耗 ' + costs(action) + '，基础收获 ' + changeText(gains) + '，按体能档位结算。' + quota + '。') + '</p>'
+      + (node.purchased ? '<button type="button" class="growth-visit-button" data-growth-place="' + action.place + '"' + (state.phase !== 'playing' || uiLocked || dialog.open ? ' disabled' : '') + '>前往' + h(place) + '</button>' : '');
+  }).join('');
+}
+function renderGrowth() {
+  const toggle = $('#growthToggle');
+  if (toggle) toggle.hidden = !state;
+  if (!state) return;
+  $('#panelGrowth')?.setAttribute('data-view', growthView);
+  const board = game.growthStatus(state);
+  $('#growthCount').textContent = board.ownedCount + ' / ' + board.nodes.length;
+  if (!game.GROWTH_DIMENSIONS.some(dimension => dimension.id === selectedGrowthDimension)) selectedGrowthDimension = 'housing';
+  const dimensionNodes = board.nodes.filter(node => node.dimension === selectedGrowthDimension);
+  if (!dimensionNodes.some(node => node.id === selectedGrowthId)) selectedGrowthId = dimensionNodes[0]?.id || selectedGrowthId;
+  const selected = board.nodes.find(node => node.id === selectedGrowthId) || dimensionNodes[0] || board.nodes[0];
+  selectedGrowthId = selected.id;
+  const status = growthNodeState(selected);
+  const routine = board.nodes.find(node => node.id === 'routine');
+  const restProgress = Math.min(board.restCount, routine.requiredRests);
+  const unlockedAction = selected.unlocks?.length ? game.ACTIONS[selected.unlocks[0]] : null;
+  $('#growthOverview').innerHTML = '<div><span>可支配余额</span><b>' + state.money + '<small> 元</small></b></div><div><span>本局已拥有</span><b>' + board.ownedCount + '<small> / ' + board.nodes.length + ' 项</small></b></div>';
+  let detail = selected.requiredRests ? '累计休息 ' + Math.min(board.restCount, selected.requiredRests) + ' / ' + selected.requiredRests + ' 次' : '无需额外前置';
+  if (selected.purchased) {
+    detail = game.TERM_NAMES[selected.purchased.term - 1] + '已购入 · ' + (selected.openingEnergy
+      ? (state.term > selected.purchased.term ? '开学精力加成已生效' : '下学期开始生效')
+      : unlockedAction ? (unlockedAction.experience
+        ? (state.experiences.some(item => item.type === unlockedAction.experience) ? unlockedAction.experienceTitle + '已完成，可在简历中查看' : '已解锁' + unlockedAction.title + '，本局一次')
+        : '本学期' + unlockedAction.title + '剩余 ' + Math.max(0, unlockedAction.limit - (state.counts[selected.unlocks[0]] || 0)) + ' 次')
+      : selected.remainingUses !== null && selected.remainingUses !== undefined ? '本学期加成剩余 ' + selected.remainingUses + ' 次' : '加成持续生效');
+  }
+  const requirements = selected.requirements.length && !selected.purchased ? '<ul class="growth-requirements">' + selected.requirements.map(item => '<li class="' + (item.met ? 'is-met' : '') + '">' + (item.met ? '✓ ' : '○ ') + h(growthRequirementText(item)) + '</li>').join('') + '</ul>' : '';
+  const hasUnmetRequirement = selected.requirements.some(item => !item.met);
+  const backButton = growthView === 'detail' ? '<button type="button" class="growth-back" data-growth-back="1">← 返回节点列表</button>' : '';
+  $('#growthDetails').innerHTML = backButton + '<div class="growth-selected-icon is-' + status.type + '">' + growthIcon(selected) + '</div>'
+    + '<p class="growth-category">' + h(selected.category) + ' / 本局持续</p><h4>' + h(selected.title) + '</h4>'
+    + '<p class="growth-selection-state is-' + status.type + '">' + status.label + '</p>'
+    + '<p class="growth-description">' + h(selected.description) + '</p>'
+    + '<div class="growth-detail-block is-benefit"><span>长期收益</span><p class="growth-benefit">' + h(selected.benefit) + '</p></div>'
+    + '<div class="growth-detail-block is-status"><span>' + (selected.purchased ? '持有状态' : '解锁条件') + '</span>' + (requirements || '<p class="growth-detail">' + h(detail) + '</p>') + '</div>'
+    + (!selected.purchased && !selected.available && !hasUnmetRequirement ? '<p class="growth-reason">' + h(selected.reason) + '</p>' : '') + growthUnlockMarkup(selected);
+  $('#growthPurchase').innerHTML = '<button type="button" class="growth-buy-button" data-growth-buy="' + selected.id + '" data-revision="' + state.revision + '"'
+    + (selected.purchased || !selected.available || uiLocked || dialog.open ? ' disabled' : '') + '>'
+    + (selected.purchased ? '已拥有 · 无需重复添置' : '确认添置 <span>' + selected.price + ' 元</span>') + '</button>';
+  // 二期：顶部维度标签切换，每次只展示一个维度的卡片；习惯分支保留作息计划的累计休息里程碑。
+  const branchSubtitle = {
+    clothing: '穿戴升级 · 一次性添置',
+    food: '吃好一点 · 一次性添置',
+    housing: '寝具与兴趣角 → 室友交流 → 共同布置与合影',
+    transport: '出行装备 · 一次性添置',
+    learning: '基础工具 → 个人作品计划 · 自学与项目的积累',
+    interest: '入门器材 → 两次兴趣练习 → 校园小展演',
+    habit: '完成行动 · 解锁下一步计划'
+  };
+  const tabs = $('#growthTabs');
+  if (tabs) tabs.innerHTML = game.GROWTH_DIMENSIONS.map(dimension => {
+    const items = board.nodes.filter(node => node.dimension === dimension.id);
+    const owned = items.filter(node => node.purchased).length;
+    const active = dimension.id === selectedGrowthDimension;
+    return '<button type="button" role="tab" class="growth-tab' + (active ? ' is-active' : '') + '" data-growth-dimension="' + dimension.id + '" aria-selected="' + active + '" aria-controls="growthNodes">'
+      + h(dimension.label) + '<small>' + owned + '/' + items.length + '</small></button>';
+  }).join('');
+  const dimension = game.GROWTH_DIMENSIONS.find(item => item.id === selectedGrowthDimension) || game.GROWTH_DIMENSIONS[0];
+  const index = game.GROWTH_DIMENSIONS.indexOf(dimension);
+  const heading = '<h5><span>' + String(index + 1).padStart(2, '0') + '</span>' + h(dimension.label + ' · ' + dimension.title) + '</h5><p>' + h(branchSubtitle[dimension.id]) + '</p>';
+  if (dimension.id === 'habit') {
+    const restProgress = Math.min(board.restCount, routine.requiredRests);
+    const complete = restProgress >= routine.requiredRests;
+    $('#growthNodes').innerHTML = '<section class="growth-branch" data-dimension="' + dimension.id + '">' + heading + '<div class="growth-branch-row">'
+      + '<div class="growth-milestone' + (complete ? ' is-complete' : '') + '"><span class="growth-milestone-frame">'
+      + '<svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 32h28M13 32V18h22v14M13 22h8v-4M9 32v6m30-6v6M26 10h10l-10 7h10"/></svg>'
+      + '<b>' + restProgress + ' / ' + routine.requiredRests + '</b></span><span class="growth-node-name">累计休息</span><span class="growth-node-status">' + (complete ? '条件已达成 ✓' : '完成 3 次休息') + '</span></div>'
+      + growthNodeMarkup(routine) + '</div></section>';
+  } else {
+    const nodes = board.nodes.filter(node => node.dimension === dimension.id).map(growthNodeMarkup).join('');
+    const progress = dimensionNodes.filter(node => node.unlocks?.length && node.requirements.length).map(node => '<div class="growth-branch-progress" aria-label="' + h(node.title + '前置进度') + '">' + node.requirements.map(item => '<span class="' + (item.met ? 'is-met' : '') + '">' + (item.met ? '✓ ' : '○ ') + h(growthRequirementText(item)) + '</span>').join('') + '</div>').join('');
+    $('#growthNodes').innerHTML = '<section class="growth-branch" data-dimension="' + dimension.id + '">' + heading + '<div class="growth-branch-row">' + nodes + '</div>' + progress + '</section>';
+  }
+}
+// 头像与昵称：点头像弹出资料卡（放大 + 更换/恢复），点昵称弹出修改框，效仿主流 App。
+const AVATAR_KEY = 'bjt-life-avatar';
+const MOTION_KEY = 'bjt-life-motion';
+const HOTSPOT_KEY = 'bjt-life-hotspots';
+function setAvatarImage(dataUrl) {
+  ['#playerAvatar', '#avatarPopoverImage'].forEach((selector) => {
+    const avatar = $(selector);
+    if (!avatar || !avatar.style) return;
+    if (dataUrl) {
+      avatar.style.backgroundImage = 'url("' + dataUrl + '")';
+      avatar.classList.add('has-image');
+    } else {
+      avatar.style.backgroundImage = '';
+      avatar.classList.remove('has-image');
+    }
+  });
+}
+function loadAvatar() {
+  try {
+    const saved = window.localStorage && window.localStorage.getItem(AVATAR_KEY);
+    if (saved) setAvatarImage(saved);
+  } catch (_) {}
+}
+function resetAvatar() {
+  setAvatarImage(null);
+  try { window.localStorage.removeItem(AVATAR_KEY); } catch (_) {}
+  showToast('已恢复默认头像');
+}
+function saveAvatarFile(file) {
+  try {
+    if (!file || !/^image\//.test(file.type)) { showToast('请选择图片文件'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const image = new Image();
+        image.onload = () => {
+          try {
+            const size = 160;
+            const canvas = document.createElement('canvas');
+            canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            const side = Math.min(image.width, image.height);
+            const sx = (image.width - side) / 2;
+            const sy = (image.height - side) / 2;
+            ctx.drawImage(image, sx, sy, side, side, 0, 0, size, size);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.86);
+            setAvatarImage(dataUrl);
+            try { window.localStorage.setItem(AVATAR_KEY, dataUrl); } catch (_) {}
+            showToast('头像已更新');
+          } catch (_) { showToast('图片处理失败，换一张试试'); }
+        };
+        image.onerror = () => showToast('图片读取失败');
+        image.src = String(reader.result);
+      } catch (_) {}
+    };
+    reader.onerror = () => showToast('图片读取失败');
+    reader.readAsDataURL(file);
+  } catch (_) {}
+}
+function pickAvatar() {
+  const input = $('#avatarInput');
+  if (input && typeof input.click === 'function') input.click();
+}
+// 资料卡 / 昵称框：定位在锚点下方，点空白或 Esc 收起。
+let openPopoverName = null;
+function positionPopover(popover, anchor) {
+  try {
+    if (!popover || !popover.style || !anchor || typeof anchor.getBoundingClientRect !== 'function') return;
+    const rect = anchor.getBoundingClientRect();
+    const viewport = Number.isFinite(window.innerWidth) ? window.innerWidth : 360;
+    const width = Math.min(280, viewport - 24);
+    const left = Math.max(12, Math.min(rect.left, viewport - width - 12));
+    popover.style.width = width + 'px';
+    popover.style.left = Math.round(left) + 'px';
+    popover.style.top = Math.round(rect.bottom + 10) + 'px';
+  } catch (_) {}
+}
+function showPopover(name) {
+  const avatarPopover = $('#avatarPopover');
+  const namePopover = $('#namePopover');
+  const attrPopover = $('#attrPopover');
+  if (attrPopover) attrPopover.hidden = true;
+  if (avatarPopover) avatarPopover.hidden = name !== 'avatar';
+  if (namePopover) namePopover.hidden = name !== 'name';
+  openPopoverName = name;
+  const avatarButton = $('#playerAvatar');
+  if (avatarButton) avatarButton.classList.toggle('is-open', name === 'avatar');
+  if (name === 'avatar' && avatarPopover) {
+    const title = $('#popoverName');
+    if (title) title.textContent = state ? state.nickname : '等待入学';
+    const major = $('#popoverMajor');
+    if (major && state) major.textContent = (state.background.college ? state.background.college + ' · ' : '') + state.background.major;
+    positionPopover(avatarPopover, avatarButton);
+  }
+  if (name === 'name' && namePopover) {
+    const input = $('#nameInput');
+    if (input) {
+      input.value = state ? state.nickname : '';
+      try { input.focus(); input.select(); } catch (_) {}
+    }
+    const error = $('#nameError');
+    if (error) error.textContent = '';
+    positionPopover(namePopover, $('#playerName'));
+  }
+}
+function closePopovers() {
+  openPopoverName = null;
+  const avatarPopover = $('#avatarPopover');
+  if (avatarPopover) avatarPopover.hidden = true;
+  const namePopover = $('#namePopover');
+  if (namePopover) namePopover.hidden = true;
+  const attrPopover = $('#attrPopover');
+  if (attrPopover) attrPopover.hidden = true;
+  const avatarButton = $('#playerAvatar');
+  if (avatarButton) avatarButton.classList.remove('is-open');
+}
+function submitNickname() {
+  if (!state) { showToast('入学后才能修改昵称'); return; }
+  const input = $('#nameInput');
+  const checked = game.validateNickname(input ? input.value : '');
+  const error = $('#nameError');
+  if (!checked.ok) {
+    if (error) error.textContent = checked.reason;
+    return;
+  }
+  state.nickname = checked.value;
+  closePopovers();
+  renderState();
+  showToast('昵称已更新');
+}
+// 设置里的高频偏好：动画效果、热点提示，记在本机浏览器。
+let motionOn = true;
+let hotspotsOn = true;
+function applyMotion() {
+  if (document.body && document.body.classList) document.body.classList.toggle('reduce-motion', !motionOn);
+  const button = $('#motionButton');
+  if (button) {
+    button.textContent = '动画效果:' + (motionOn ? '开' : '关');
+    button.setAttribute('aria-pressed', motionOn ? 'true' : 'false');
+  }
+  updateStartMotionButton();
+}
+function applyHotspots() {
+  if (document.body && document.body.classList) document.body.classList.toggle('hide-hotspot-rings', !hotspotsOn);
+  const button = $('#hotspotButton');
+  if (button) {
+    button.textContent = '热点提示:' + (hotspotsOn ? '开' : '关');
+    button.setAttribute('aria-pressed', hotspotsOn ? 'true' : 'false');
+  }
+}
+function loadPreferences() {
+  try {
+    const motion = window.localStorage.getItem(MOTION_KEY);
+    if (motion === '0') motionOn = false;
+    const hotspots = window.localStorage.getItem(HOTSPOT_KEY);
+    if (hotspots === '0') hotspotsOn = false;
+  } catch (_) {}
+  applyMotion();
+  applyHotspots();
+}
+// 属性说明：点顶部状态条 / 时间 / 钱包，查看怎么获得、有什么用。
+const ATTR_INFO = {
+  time: {
+    title: '时间',
+    how: '每学期固定 12 点，进入下一学期时重置为 12 点；本学期未用完的时间不结转。',
+    why: '地图上的行动与部分事件会消耗时间；时间为 0 时无法继续行动，只能结束学期并参加期末考试。'
+  },
+  energy: {
+    title: '精力',
+    how: '每学期开始时为 80 点；休息恢复 30 点，散步恢复 10 点；学期之间不结转。',
+    why: '大多数行动需要消耗精力；精力不足时相关行动不可执行，需要先通过休息等方式恢复。'
+  },
+  mood: {
+    title: '心情',
+    how: '散步、观看演出、室友交流、喂猫、锻炼、校友接待等行动可以提升心情。',
+    why: '心情会计入学期结算与成长记录；低于 30 时会触发室友关心等负面事件。'
+  },
+  fitness: {
+    title: '体能',
+    how: '锻炼、健身房、多人运动、单人运动可以提升体能；生病和部分事件会降低体能。',
+    why: '体能按档位缩放行动的收益与消耗；低于 25 进入生病状态，只能先去校医院就诊；体测以体能 60 为达标线。'
+  },
+  social: {
+    title: '社交',
+    how: '社团投入、室友交流、比赛、志愿活动、观看演出等行动可以积累社交。',
+    why: '社交会计入学期结算与成长记录，反映本学期的校园活跃度。'
+  },
+  learning: {
+    title: '学习进度',
+    how: '课程学习、自主学习、补习、项目投入可以增加学习进度；与学长学姐、老师聊天每次额外 +2。',
+    why: '学习进度是期末总评的平时分，占总评 40%；申请校园项目要求学习进度达到 40；进入下一学期后清零。'
+  },
+  money: {
+    title: '钱包',
+    how: '初始 1000 元；校内勤工助学每次 +200，实习投入每次 +100，部分事件也有收入。',
+    why: '用于支付每学期生活费 300 元（不足由补助补足），以及补习 100 元、健身房 50 元、体检 50 元、看病 20～60 元、观演 40 元等开销和事件投入预算。'
+  }
+};
+function attrValueText(attr) {
+  if (!state) return '';
+  const values = { time: state.time + ' / 12', money: state.money + ' 元' };
+  if (values[attr]) return values[attr];
+  const map = { energy: state.energy, mood: state.mood, fitness: state.fitness, social: state.social, learning: state.preparation };
+  return map[attr] === undefined ? '' : map[attr] + ' / 100';
+}
+function attrStatusText(attr) {
+  if (!state) return '';
+  if (attr === 'fitness') {
+    const tier = game.fitnessTier(state.fitness);
+    if (!tier) return '';
+    if (tier.ill) return '生病：先去校医院就诊';
+    return '当前档位：' + tier.label + '（收益 ×' + tier.reward.toFixed(2) + ' / 消耗 ×' + tier.cost.toFixed(2) + '）';
+  }
+  if (attr === 'mood' && state.mood < 30) return '心情偏低，可能触发负面事件。';
+  if (attr === 'energy' && state.energy < 10) return '精力见底，先休息再安排行动。';
+  if (attr === 'time' && state.time === 0) return '时间用完了，去地图上结束这个学期吧。';
+  return '';
+}
+function showAttrPopover(attr, anchorEl) {
+  const info = ATTR_INFO[attr];
+  const popover = $('#attrPopover');
+  if (!info || !popover) return;
+  if (openPanelName) closePanel();
+  closePopovers();
+  openPopoverName = 'attr';
+  const title = $('#attrTitle');
+  if (title) title.textContent = info.title;
+  const value = $('#attrValue');
+  if (value) value.textContent = attrValueText(attr);
+  const status = $('#attrStatus');
+  if (status) { status.textContent = attrStatusText(attr); status.hidden = !status.textContent; }
+  const how = $('#attrHow');
+  if (how) how.textContent = info.how;
+  const why = $('#attrWhy');
+  if (why) why.textContent = info.why;
+  popover.hidden = false;
+  positionPopover(popover, anchorEl);
+}
+// 顶部菜单：四组一级入口，组内用页签切换；再点一级入口或点空白处收起。
+const PANEL_GROUPS = [
+  { id: 'character', panels: [{ id: 'status', label: '角色' }, { id: 'relationships', label: '关系' }] },
+  { id: 'academic', panels: [{ id: 'term', label: '学业' }, { id: 'resume', label: '简历' }] },
+  { id: 'tasks', panels: [{ id: 'goals', label: '手头的事' }, { id: 'records', label: '记录' }] },
+  { id: 'system', panels: [{ id: 'saves', label: '存档' }, { id: 'settings', label: '设置' }] }
+];
+const PANEL_GROUP_INDEX = Object.fromEntries(PANEL_GROUPS.flatMap((group) => group.panels.map((panel) => [panel.id, group])));
+let openPanelName = null;
+function setPanel(name) {
+  openPanelName = name;
+  const group = PANEL_GROUP_INDEX[name];
+  document.querySelectorAll('.app-panel').forEach((panel) => {
+    panel.hidden = panel.dataset.panelName !== name;
+  });
+  document.querySelectorAll('.app-menu-button[data-panel-group]').forEach((button) => {
+    button.setAttribute('aria-expanded', group && button.dataset.panelGroup === group.id ? 'true' : 'false');
+  });
+  const subnav = $('#panelSubnav');
+  if (subnav) {
+    subnav.hidden = !group;
+    subnav.innerHTML = group
+      ? group.panels.map((panel) => '<button type="button" class="panel-subnav-button" data-panel="' + panel.id + '" aria-current="' + (name === panel.id ? 'page' : 'false') + '">' + h(panel.label) + '</button>').join('')
+      : '';
+  }
+  $('#growthToggle')?.setAttribute('aria-expanded', name === 'growth' ? 'true' : 'false');
+  if (name === 'growth') {
+    growthView = 'tree';
+    $('#growthNotice').textContent = '';
+    renderGrowth();
+  }
+  if (name === 'records') renderRecordsPanel();
+  if (name === 'relationships') renderRelationshipsPanel();
+}
+function closePanel() {
+  const wasGrowth = openPanelName === 'growth';
+  setPanel(null);
+  if (wasGrowth) $('#growthToggle')?.focus({ preventScroll: true });
+}
+function syncBarHeight() {
+  try {
+    const bar = $('#appBar');
+    if (bar && typeof bar.getBoundingClientRect === 'function' && document.documentElement && document.documentElement.style) {
+      const rect = bar.getBoundingClientRect();
+      document.documentElement.style.setProperty('--bar-bottom', Math.round(rect.bottom + 8) + 'px');
+      document.documentElement.style.setProperty('--bar-h', Math.round(rect.height) + 'px');
+    }
+  } catch (_) {}
+}
+// 季节天气：秋→冬 / 春→夏，每季 6 点时间；换季给一次提醒，特殊天气按种子固定分配。
+function hideSeasonNotice() {
+  clearTimeout(seasonNoticeTimer);
+  const notice = $('#seasonNotice');
+  if (notice) { notice.hidden = true; notice.classList.remove('is-visible'); }
+}
+function resetSeasonTracking() {
+  lastSeasonClock = null;
+  seasonVisualKey = '';
+  hideSeasonNotice();
+}
+function clearSeasonEffects() {
+  resetSeasonTracking();
+  const overlay = $('#seasonOverlay');
+  if (overlay) overlay.hidden = true;
+  const particles = $('#weatherParticles');
+  if (particles) particles.innerHTML = '';
+  const chip = $('#seasonLabel');
+  if (chip) { chip.textContent = '—'; chip.setAttribute('data-season', 'none'); chip.setAttribute('title', ''); }
+  const mapLayer = $('#mapLayer');
+  if (mapLayer) mapLayer.setAttribute('data-season', 'none');
+}
+function seasonParticleMarkup(info) {
+  if (!seasonal) return '';
+  const plan = seasonal.particlePlan(info.season, info.weather.id);
+  const narrow = typeof window !== 'undefined' && Number.isFinite(window.innerWidth) && window.innerWidth < 720;
+  const scale = narrow ? 0.62 : 1;
+  return plan.map((item) => {
+    const count = Math.max(1, Math.round(item.count * scale));
+    let html = '';
+    for (let index = 0; index < count; index += 1) {
+      const seed = seasonal.hash(info.season + ':' + info.weather.id + ':' + item.type + ':' + index);
+      const x = seed % 100;
+      const delay = -(((seed >>> 7) % 140) / 10);
+      const duration = item.type === 'rain' ? 0.55 + ((seed >>> 13) % 40) / 100
+        : item.type === 'wind' ? 1.2 + ((seed >>> 13) % 80) / 100
+          : item.type === 'catkin' ? 12 + ((seed >>> 13) % 100) / 10
+            : item.type === 'mote' ? 8 + ((seed >>> 13) % 70) / 10
+              : item.type === 'cloud' ? 35 + ((seed >>> 13) % 50)
+                : item.type === 'fog' ? 22 + ((seed >>> 13) % 100) / 10
+                  : 7 + ((seed >>> 13) % 90) / 10;
+      const size = item.type === 'dust' ? 3 + ((seed >>> 3) % 10)
+        : item.type === 'mote' ? 3 + ((seed >>> 3) % 4)
+          : item.type === 'rain' ? 7 + ((seed >>> 3) % 7)
+            : item.type === 'snow' ? 5 + ((seed >>> 3) % 9)
+              : item.type === 'catkin' ? 10 + ((seed >>> 3) % 12)
+                : item.type === 'cloud' ? 60 + ((seed >>> 3) % 90)
+                  : item.type === 'fog' ? 120 + ((seed >>> 3) % 140)
+                    : 9 + ((seed >>> 3) % 10);
+      const drift = ((seed >>> 17) % 140) - 70;
+      const style = '--x:' + x + '%;--delay:' + delay + 's;--dur:' + duration + 's;--size:' + size + 'px;--drift:' + drift + 'px;';
+      html += '<span class="weather-particle is-' + item.type + '" style="' + style + '"></span>';
+    }
+    return html;
+  }).join('');
+}
+function showSeasonNotice(info) {
+  const node = $('#seasonNotice');
+  if (!node || !seasonal) return;
+  const pair = info.pair || seasonal.pairForTerm(state.term);
+  const from = seasonal.SEASONS[pair[0]];
+  const to = seasonal.SEASONS[pair[1]];
+  node.innerHTML = '<span class="season-notice-kicker">换季提醒</span><b>' + h(from.short) + ' → ' + h(to.short) + '</b><p>' + h(to.notice) + '</p>';
+  node.hidden = false;
+  node.classList.add('is-visible');
+  clearTimeout(seasonNoticeTimer);
+  seasonNoticeTimer = setTimeout(() => {
+    node.classList.remove('is-visible');
+    seasonNoticeTimer = setTimeout(() => { node.hidden = true; }, 380);
+  }, 4200);
+}
+function renderSeasonEffects() {
+  const overlay = $('#seasonOverlay');
+  const chip = $('#seasonLabel');
+  const mapLayer = $('#mapLayer');
+  if (!state || !seasonal) {
+    if (overlay) overlay.hidden = true;
+    const particles = $('#weatherParticles');
+    if (particles) particles.innerHTML = '';
+    if (chip) { chip.textContent = '—'; chip.setAttribute('data-season', 'none'); chip.setAttribute('title', ''); }
+    if (mapLayer) mapLayer.setAttribute('data-season', 'none');
+    resetSeasonTracking();
+    return;
+  }
+  const info = seasonal.weatherFor(state.rng.seed, state.term, state.time);
+  if (chip) {
+    chip.textContent = info.seasonInfo.short + ' · ' + info.weather.label;
+    chip.setAttribute('data-season', info.season);
+    chip.setAttribute('title', info.seasonInfo.name + ' · ' + info.weather.label + (info.special ? '（季节专属天气）' : ''));
+  }
+  if (mapLayer) mapLayer.setAttribute('data-season', info.season);
+  if (lastSeasonClock && lastSeasonClock.term !== state.term) hideSeasonNotice();
+  // 同一学期里时间从 6 点以上走到 6 点以下，就是换季节点。
+  if (lastSeasonClock && lastSeasonClock.term === state.term && lastSeasonClock.time > 6 && state.time <= 6) showSeasonNotice(info);
+  lastSeasonClock = { term: state.term, time: state.time };
+  if (!overlay) return;
+  overlay.hidden = false;
+  const key = info.season + ':' + info.weather.id;
+  if (key === seasonVisualKey) return;
+  seasonVisualKey = key;
+  overlay.setAttribute('data-season', info.season);
+  overlay.setAttribute('data-weather', info.weather.id);
+  overlay.setAttribute('data-tone', info.weather.tone);
+  const particles = $('#weatherParticles');
+  if (particles) particles.innerHTML = seasonParticleMarkup(info);
+}
+function endTermButtonLabel() {
+  if (!state) return '结束学期';
+  if (state.phase === 'playing' && state.time <= 0) return '现在参加期末考试';
+  return ({ eventPending: '处理当前事件', examPending: '继续期末考试', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果', ended: '查看本局结局' })[state.phase]
+    || ((state.selectedCourses || []).length ? '结束学期并考试' : '结束学期');
+}
+
+function semesterNextStep() {
+  if (!state) return '';
+  if (state.phase === 'eventPending') return '先处理当前校园事件';
+  if (state.phase === 'examPending') return '继续完成期末考试';
+  if (state.phase === 'summary') return '查看学期总结';
+  if (state.phase === 'endingChoice') return '选择毕业方向';
+  if (state.phase === 'finished' || state.phase === 'ended') return '查看本局结果';
+  if (state.time <= 0) return '时间已用完，准备期末考试';
+  const board = game.advisories(state);
+  const items = board.groups.filter((group) => group.id !== 'settled').flatMap((group) => group.items);
+  const urgent = items.find((entry) => entry.urgent);
+  if (urgent) return urgent.title;
+  const duty = board.groups.find((group) => group.id === 'duties')?.items[0];
+  if (duty) return duty.title;
+  const window = board.groups.find((group) => group.id === 'windows')?.items[0];
+  if (window) return window.title;
+  return '自由安排';
+}
+
+function termUnlockSteps(term = state?.term) {
+  if (!state || !Number.isInteger(term) || term <= 1) return [];
+  const steps = new Map();
+  const add = (selector, key, text, hint) => {
+    const existing = steps.get(selector);
+    if (existing) {
+      existing.parts.push(text);
+      if (!existing.hint) existing.hint = hint;
+    } else {
+      steps.set(selector, { id: 'term-unlock:' + term + ':' + key, selector, parts: [text], hint });
+    }
+  };
+  const actionsByPlace = new Map();
+  for (const action of Object.values(game.ACTIONS)) {
+    if (action.minTerm !== term || action.requiresGrowth) continue;
+    if (action.autumnOnly && term % 2 === 0) continue;
+    actionsByPlace.set(action.place, [...(actionsByPlace.get(action.place) || []), action.title]);
+  }
+  for (const [place, titles] of actionsByPlace) {
+    add('.hotspot-' + place, 'action:' + place, '本学期新解锁行动：' + titles.join('、') + '。', '点击「' + (game.PLACES[place]?.title || place) + '」查看。');
+  }
+  const growth = Object.values(game.GROWTH_NODES).filter(node => node.prereq?.minTerm === term).map(node => node.title);
+  if (growth.length) add('#growthToggle', 'growth', '本学期新解锁养成单品：' + growth.join('、') + '。', '点击「校园养成」查看。');
+  const positions = Object.values(game.POSITIONS).filter(item => item.window?.[0] === term).length;
+  if (positions) add('.hotspot-gate', 'positions', '南门岗位库新增 ' + positions + ' 个实习岗位。', '点击「南门」查看。');
+  return [...steps.values()].map(step => ({ id: step.id, selector: step.selector, text: step.parts.join('') + step.hint }));
+}
+
+function updateSemesterDock() {
+  const dock = $('#semesterDock');
+  if (!dock) return;
+  dock.hidden = !state;
+  if (!state) return;
+  $('#semesterDockTerm').textContent = game.TERM_NAMES[state.term - 1] + ' · 时间 ' + state.time + ' / 12';
+  const urgent = state.phase === 'playing' && state.time <= 0;
+  const urgentBadge = $('#semesterDockUrgent');
+  if (urgentBadge) urgentBadge.hidden = !urgent;
+  $('#semesterDockNext').textContent = urgent ? '时间已用完，现在必须参加期末考试' : semesterNextStep();
+  $('#endTermQuick').textContent = endTermButtonLabel();
+  dock.classList.toggle('is-urgent', urgent);
+  dock.setAttribute('data-urgent', urgent ? 'true' : 'false');
+}
+
 function renderState() {
   if (!state) return;
-  $('#playerLabel').textContent = state.nickname + ' · ' + state.background.major;
-  $('#termLabel').textContent = game.TERM_NAMES[state.term - 1] + (state.phase === 'finished' ? ' · 已结束' : ' · ' + game.getTermStage(state));
+  $('#playerLabel').textContent = (state.background.college ? state.background.college + ' · ' : '') + state.background.major;
+  const avatarLetter = String(state.nickname || '北').trim().slice(0, 1) || '北';
+  ['#playerAvatar', '#avatarPopoverImage'].forEach((selector) => {
+    const avatar = $(selector);
+    if (avatar) avatar.textContent = avatarLetter;
+  });
+  const playerName = $('#playerName');
+  if (playerName) playerName.textContent = state.nickname;
+  const setVital = (barId, valueId, value, max) => {
+    const bar = $('#' + barId);
+    if (bar && bar.style) bar.style.height = Math.max(0, Math.min(100, Math.round(value / max * 100))) + '%';
+    const label = $('#' + valueId);
+    if (label) label.textContent = String(value);
+  };
+  setVital('barEnergy', 'valueEnergy', state.energy, 100);
+  setVital('barMood', 'valueMood', state.mood, 100);
+  setVital('barFitness', 'valueFitness', state.fitness, 100);
+  setVital('barSocial', 'valueSocial', state.social, 100);
+  setVital('barPreparation', 'valuePreparation', state.preparation, 100);
+  $('#termLabel').textContent = game.TERM_NAMES[state.term - 1] + (['finished', 'ended'].includes(state.phase) ? ' · 已结束' : ' · ' + game.getTermStage(state));
   $('#timeLabel').textContent = '时间 ' + state.time + ' / 12';
-  $('#energyLabel').textContent = '精力 ' + state.energy + ' / 100';
+  renderSeasonEffects();
+  const energyLabel = $('#energyLabel');
+  if (energyLabel) energyLabel.textContent = '精力 ' + state.energy + ' / 100';
+  const moneyLabel = $('#moneyLabel');
+  if (moneyLabel) moneyLabel.textContent = '钱包 ' + state.money + ' 元';
   $('#mapStats').innerHTML = statsMarkup();
-  $('#preparationValue').textContent = state.preparation + ' / 100';
-  $('#preparationMeter').value = state.preparation;
+  const profileBrief = $('#profileBrief');
+  if (profileBrief) {
+    const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
+    profileBrief.innerHTML = '<div>当前学期 <b>' + h(game.TERM_NAMES[state.term - 1]) + '</b> · 当前阶段 <b>' + h(game.getTermStage(state)) + '</b></div>' +
+      (background ? '<div>背景加成 ' + h(background.bonus) + '</div>' : '') +
+      '<div>已通过学期 <b>' + state.courses.filter((item) => item.passed).length + ' / 8</b></div>';
+  }
+  const profileCardName = $('#profileCardName');
+  if (profileCardName) profileCardName.textContent = state.nickname;
+  const profileCardMajor = $('#profileCardMajor');
+  if (profileCardMajor) profileCardMajor.textContent = state.background.college + ' · ' + state.background.major;
+  const profileAvatar = $('#profileAvatar');
+  if (profileAvatar) profileAvatar.textContent = String(state.nickname || '北').trim().slice(0, 1) || '北';
+  const popoverName = $('#popoverName');
+  if (popoverName) popoverName.textContent = state.nickname;
+  const popoverMajor = $('#popoverMajor');
+  if (popoverMajor) popoverMajor.textContent = (state.background.college ? state.background.college + ' · ' : '') + state.background.major;
+  const fitnessWarning = $('#fitnessWarning');
+  if (fitnessWarning) {
+    fitnessWarning.hidden = !game.isSick(state);
+    fitnessWarning.textContent = game.isSick(state) ? '身体已经撑不住：先去校医院就诊，否则无法安排其他行动。' : '';
+  }
+  const preparationValue = $('#preparationValue');
+  if (preparationValue) preparationValue.textContent = state.preparation + ' / 100';
+  const preparationMeter = $('#preparationMeter');
+  if (preparationMeter) preparationMeter.value = state.preparation;
   $('#placeStats').innerHTML = '<div class="place-resources"><span>时间 <b>' + state.time + ' / 12</b></span><span>精力 <b>' + state.energy + ' / 100</b></span><span>学习进度 <b>' + state.preparation + ' / 100</b></span></div><div class="place-attributes">' + statsMarkup() + '</div>';
-  $('#directionBrief').innerHTML = '<div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div><div>深造准备 <b>' + state.furtherStudy + '/100</b> · 求职准备 <b>' + state.jobPreparation + '/100</b></div>' + Object.entries(state.chains).map(([id, chain]) => '<div>' + game.CHAIN_NAMES[id] + ' <b>' + chainLabel(chain) + '</b></div>').join('');
-  $('#endTermButton').textContent = ({ eventPending: '处理当前事件', summary: '查看学期总结', endingChoice: '选择毕业方向', finished: '查看毕业结果' })[state.phase] || '结束学期';
-  $('#sessionNote').textContent = savedAt ? '栏位 ' + activeSaveSlot + ' · ' + (savedRevision === state.revision ? '当前进度已保存 · ' : '当前有未保存进度 · ') + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。';
-  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc'].includes(dialogMode);
+  const selectedIds = state.selectedCourses || [];
+  const selectedNames = selectedIds.map((id) => game.courseById(id)?.name || id).join('、') || '未选课';
+  $('#termBrief').innerHTML = '<div>本学期课程 <b>' + h(selectedNames) + '</b>' + (state.phase === 'examPending' ? ' · 考试待提交' : '') + '</div><div>平均成绩 <b>' + (state.courses.length ? game.averageGrade(state).toFixed(1) : '待结算') + '</b> · 达标 <b>' + state.courses.filter((item) => item.passed).length + '/8 学期</b></div>';
+  renderAdvisories();
+  renderResume();
+  renderGrowth();
+  $('#endTermButton').textContent = endTermButtonLabel();
+  updateSemesterDock();
+  renderSaveStatus();
+  renderRecordsPanel();
+  renderRelationshipsPanel();
+  renderNpcLayer();
+  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(dialogMode);
+  syncBarHeight();
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
 }
@@ -253,36 +1124,623 @@ function changeText(changes) {
   const names = { time: '时间', energy: '精力', money: '钱包', preparation: '学习进度', social: '社交', fitness: '体能', mood: '心情', furtherStudy: '深造准备', jobPreparation: '求职准备' };
   return Object.entries(changes || {}).filter(([, value]) => value !== 0).map(([key, value]) => names[key] + ' ' + (value > 0 ? '+' : '−') + Math.abs(value) + (key === 'money' ? ' 元' : '')).join(' · ') || '没什么明显变化';
 }
-function gains(effect) {
-  const changes = game.previewChanges(state, effect);
-  const positives = Object.fromEntries(Object.entries(changes).filter(([, value]) => value > 0));
-  if (effect.kind === 'apply') return '申请后选择是否加入';
-  const chainEffect = { accept: '事件链开启', defer: '暂缓申请', postpone: '投入保留，延后一学期', complete: '经历完成', abandon: '投入记录保留，放弃完成经历' }[effect.chainEffect];
-  return [Object.keys(positives).length ? changeText(positives) : '', effect.kind === 'work' ? '事件链投入 +1' : '', chainEffect || ''].filter(Boolean).join(' · ') || '保留资源，继续安排';
+function debtFeedback(entry) {
+  return (entry.cardDebtPaid ? ' 已偿还校园卡赔偿 ' + entry.cardDebtPaid + ' 元。' : '') + (entry.cardDebtAdded ? ' 校园卡赔偿待还 ' + entry.cardDebtAdded + ' 元，后续收入优先偿还。' : '');
+}
+// 实习段结算反馈：让玩家明确知道这笔段收入来自哪家公司哪个岗位。
+function positionFeedback(entry) {
+  if (!entry.positionReward) return '';
+  return ' ' + entry.positionReward.title + ' 段收入 +' + entry.positionReward.income + ' 元，求职准备 +' + entry.positionReward.jobPreparation + '。';
+}
+function extraFeedback(entry) {
+  const extra = entry.extra ? (entry.extra.skipped ? ' 本次基础收获已达到上限，未购买额外项目，也未扣费。' : ' 额外消费：' + entry.extra.title + ' −' + entry.extra.price + ' 元，额外收获 ' + changeText(entry.extra.bonuses) + '。') : '';
+  return extra + (entry.growthBonuses ? (entry.action === 'selfStudy' ? ' 基础工具额外收获：' : ' 校园养成额外恢复：') + changeText(entry.growthBonuses) + '（已计入本次收获）。' : '');
+}
+function supportText(entry) {
+  if (!entry.support?.companion) return '';
+  const names = { preparation: '学习', social: '社交', fitness: '体能', mood: '心情', furtherStudy: '深造', jobPreparation: '求职' };
+  const metrics = Object.entries(entry.support.metrics);
+  const player = metrics.map(([key, value]) => names[key] + ' +' + value.playerInitial).join('、');
+  const npc = metrics.filter(([, value]) => value.npcBonus > 0).map(([key, value]) => names[key] + ' +' + value.npcBonus).join('、');
+  return (player ? '玩家初始收获：' + player + '。' : '') + (npc ? game.npcCast.profile(typeof entry.support.companion==='string'?entry.support.companion:'zhouNing').name + '辅助：' + npc + '。' : '本次没有额外数值加成。');
 }
 function costs(effect) {
-  return [(effect.time ? '时间 −' + effect.time : ''), (effect.energy ? '精力 −' + effect.energy : ''), (effect.money ? '钱包 −' + effect.money + ' 元' : ''), (effect.mood < 0 ? '心情 −' + Math.min(state.mood, Math.abs(effect.mood)) : '')].filter(Boolean).join(' · ') || '不消耗资源';
+  return [(effect.time ? '时间 −' + effect.time : ''), (effect.energy ? '精力 −' + effect.energy : ''), (effect.money ? '钱包 −' + effect.money + ' 元' : ''), (effect.mood < 0 ? '心情 −' + Math.min(state.mood, Math.abs(effect.mood)) : ''), (effect.fitnessCost ? '体能 −' + effect.fitnessCost + '（消耗）' : '')].filter(Boolean).join(' · ') || '不消耗资源';
+}
+const GATE_SECTIONS = {
+  partTime: {
+    title: '兼职赚钱',
+    description: '校内勤工助学，按投入档位结算固定报酬。',
+    actions: ['work']
+  },
+  internship: {
+    title: '实习求职',
+    description: '先选岗位申请，再积累实习投入，达标后办理证明。',
+    actions: ['applyInternship', 'internshipWork', 'jobPreparation', 'jobTrip']
+  }
+};
+const GATE_ICONS = {
+  partTime: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M3 10h18"></path><path d="M16 14h2"></path></svg>',
+  internship: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5h8v2"></path><path d="M3 12h18"></path></svg>'
+};
+function gateInternshipStatus() {
+  const chain = state.chains.internship || {};
+  const progress = game.internshipProgress(state);
+  const pendingOffer = state.pendingEvent?.id === 'internshipOffer'
+    || (state.eventQueue || []).some((item) => item.id === 'internshipOffer');
+  if (chain.status === 'missed') return { label: '未完成', tone: 'is-missed', detail: '本段实习没有办成证明' };
+  if (chain.status === 'completed') return { label: '已完成', tone: 'is-done', detail: '可在下学期再次申请下一段' };
+  if (chain.status === 'active') {
+    return { label: '进行中', tone: 'is-active',
+      detail: progress ? '累计投入 时间 ' + progress.workTime + ' / ' + progress.reqTime + ' · 精力 ' + progress.workEnergy + ' / ' + progress.reqEnergy : '已接受岗位邀请' };
+  }
+  if (chain.status === 'deferred') return { label: '已延期', tone: 'is-locked', detail: '第 ' + (chain.nextEligibleTerm || state.term + 1) + ' 学期可再申请' };
+  if (pendingOffer) return { label: '等待回复', tone: 'is-active', detail: '岗位已投递，等通知' };
+  if (state.term < game.ACTIONS.applyInternship.minTerm) return { label: '第 ' + game.ACTIONS.applyInternship.minTerm + ' 学期起开放', tone: 'is-locked', detail: '先把本学期安排好' };
+  if (chain.positionId) return { label: '已申请', tone: 'is-active', detail: '等岗位回复' };
+  return { label: '未开始', tone: 'is-locked', detail: '选一个够得着的岗位' };
+}
+function gateEntryMarkup(id) {
+  const section = GATE_SECTIONS[id];
+  const used = state.counts.work || 0;
+  const summary = id === 'partTime'
+    ? { label: used >= game.ACTIONS.work.limit ? '本学期已满' : '本学期 ' + used + ' / ' + game.ACTIONS.work.limit + ' 次',
+        tone: used >= game.ACTIONS.work.limit ? 'is-locked' : 'is-active', detail: '固定报酬 100 / 200 / 300 元' }
+    : gateInternshipStatus();
+  return '<button type="button" class="gate-entry" data-gate-section="' + id + '">'
+    + '<span class="gate-entry-icon" aria-hidden="true">' + GATE_ICONS[id] + '</span>'
+    + '<span class="gate-entry-body"><span class="gate-entry-title">' + h(section.title) + '</span>'
+    + '<span class="gate-entry-desc">' + h(section.description) + '</span>'
+    + '<span class="gate-entry-meta ' + summary.tone + '">' + h(summary.label) + '</span>'
+    + (summary.detail ? '<span class="gate-entry-detail">' + h(summary.detail) + '</span>' : '')
+    + '</span><span class="gate-entry-arrow" aria-hidden="true">→</span></button>';
+}
+function gateHubMarkup() {
+  return gateEntryMarkup('partTime') + gateEntryMarkup('internship');
+}
+function gateSectionPanelMarkup(section, stepsMarkup) {
+  return '<div class="gate-section-panel"><div class="gate-section-copy"><h3>' + h(section.title) + '</h3><p>' + h(section.description) + '</p></div>'
+    + (stepsMarkup || '') + '</div>';
+}
+function updateBackButton() {
+  const button = $('#backButton');
+  if (!button) return;
+  button.innerHTML = '<span aria-hidden="true">←</span> ' + (activePlace === 'gate' && gateSection ? '返回南门' : '返回地图');
+}
+function internshipSteps() {
+  const chain = state.chains.internship || {};
+  const progress = game.internshipProgress(state);
+  const hasExperience = state.experiences.some((item) => item.type === 'internship');
+  const pendingOffer = state.pendingEvent?.id === 'internshipOffer'
+    || (state.eventQueue || []).some((item) => item.id === 'internshipOffer');
+  const applied = !!chain.positionId || chain.status === 'active' || chain.status === 'completed'
+    || chain.status === 'missed' || chain.status === 'deferred' || pendingOffer;
+  const settled = chain.status === 'completed' && hasExperience;
+  const steps = [];
+  if (chain.status === 'missed') steps.push({ state: 'is-missed', label: '未通过', detail: '' });
+  else if (chain.status === 'deferred') steps.push({ state: 'is-done', label: '已延期', detail: '第 ' + (chain.nextEligibleTerm || state.term + 1) + ' 学期可再申请' });
+  else if (pendingOffer) steps.push({ state: 'is-done', label: '等待回复', detail: '岗位已投递' });
+  else if (applied) steps.push({ state: 'is-done', label: '已申请', detail: '' });
+  else if (state.term < game.ACTIONS.applyInternship.minTerm) steps.push({ state: 'is-locked', label: '第 ' + game.ACTIONS.applyInternship.minTerm + ' 学期开放', detail: '' });
+  else steps.push({ state: 'is-current', label: '待申请', detail: '先选岗位再投递' });
+  if (chain.status === 'active') {
+    if (progress?.met) steps.push({ state: 'is-done', label: '已达标', detail: '时间 ' + progress.workTime + ' / ' + progress.reqTime + ' · 精力 ' + progress.workEnergy + ' / ' + progress.reqEnergy });
+    else steps.push({ state: 'is-current', label: '进行中', detail: progress ? '时间 ' + progress.workTime + ' / ' + progress.reqTime + ' · 精力 ' + progress.workEnergy + ' / ' + progress.reqEnergy : '' });
+  } else if (settled) steps.push({ state: 'is-done', label: '已完成', detail: '' });
+  else steps.push({ state: 'is-locked', label: '申请后开放', detail: '' });
+  if (settled) steps.push({ state: 'is-done', label: '已办理', detail: '' });
+  else if (chain.status === 'active' && progress?.met) steps.push({ state: 'is-current', label: '可办理', detail: '点卡片内按钮' });
+  else steps.push({ state: 'is-locked', label: '达标后开放', detail: '' });
+  return steps;
+}
+function internshipStepsMarkup() {
+  const labels = ['申请岗位', '实习投入', '办理证明'];
+  return '<ol class="chain-steps" aria-label="实习事件链">' + internshipSteps().map((step, index) =>
+    '<li class="chain-step ' + step.state + '"><span class="chain-dot" aria-hidden="true">' + (step.state === 'is-done' ? '✓' : index + 1) + '</span>'
+    + '<b>' + labels[index] + '</b><small>' + h(step.label) + '</small>'
+    + (step.detail ? '<em>' + h(step.detail) + '</em>' : '') + '</li>').join('') + '</ol>';
+}
+function actionCategory(id) {
+  return ACTION_CATEGORY_INDEX[id] || 'work';
+}
+function bindActionAccordions() {
+  $('#actionList')?.querySelectorAll('details.action-accordion').forEach((details) => {
+    details.addEventListener('toggle', () => {
+      const id = details.dataset.actionId;
+      if (details.open) openActionCards.add(id);
+      else openActionCards.delete(id);
+    });
+  });
+}
+function actionAccordionMarkup(id) {
+  const action = game.getAction(state, id);
+  const profile = game.getActionInvestment(state, id);
+  const amount = actionDraft(id);
+  const preview = profile && game.previewActionInvestment(state, id, amount);
+  const check = game.availability(state, id, amount);
+  // 实习投入卡显示当前岗位，让岗位库的选择在实习期间持续可见。
+  const currentPosition = id === 'internshipWork' && game.POSITIONS[state.chains.internship.positionId] ? game.POSITIONS[state.chains.internship.positionId] : null;
+  const positionLine = currentPosition ? '<p class="action-position">当前岗位：' + h(game.COMPANIES[currentPosition.company].name) + ' · ' + h(currentPosition.title) + ' <em>T' + currentPosition.tier + '</em> · 办证明时结算段收入 ' + currentPosition.rewards.income + ' 元 · 求职准备 ' + currentPosition.rewards.jobPreparation + '</p>' : '';
+  // 三期：累计投入进度 + 达标后的「办理实习证明」（达标后仍可继续投入赚日薪）。
+  const internship = id === 'internshipWork' ? game.internshipProgress(state) : null;
+  const progressLine = internship
+    ? '<p class="action-position' + (internship.met ? ' is-met' : '') + '">累计投入：时间 ' + internship.workTime + ' / ' + internship.reqTime + ' · 精力 ' + internship.workEnergy + ' / ' + internship.reqEnergy + (internship.met ? ' · 门槛已达标，可办证明' : '') + '</p>'
+      + (internship.met ? '<button type="button" class="settle-internship" data-settle-internship="1" data-revision="' + state.revision + '"' + (uiLocked ? ' disabled' : '') + '>办理实习证明</button>' : '')
+    : '';
+  const usedThisRun = action.oncePerRun && state.history.some(entry => entry.command?.operation === 'executeAction' && entry.command.id === id);
+  const count = action.experience ? '本局 ' + (state.experiences.some(item => item.type === action.experience) ? 1 : 0) + ' / 1 次' : action.oncePerRun ? '本局 ' + (usedThisRun ? 1 : 0) + ' / 1 次' : action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排';
+  const effect = preview?.ok ? preview.effect : game.fitnessAdjustedEffect(state, action, id);
+  const costText = costs(effect);
+  const incomeText = !profile && effect.income ? '<p class="action-income">收入 +' + effect.income + ' 元</p>' : '';
+  return '<details class="action-card action-accordion" data-action-id="' + id + '"' + (openActionCards.has(id) ? ' open' : '') + '>'
+    + '<summary class="action-accordion-head">'
+    + '<span class="action-accordion-icon" aria-hidden="true">' + ACTION_ICONS[actionCategory(id)] + '</span>'
+    + '<span class="action-accordion-copy"><b>' + h(action.title) + '</b><small>' + h(count) + '</small></span>'
+    + '<span class="action-accordion-state ' + (check.ok ? 'is-ready' : 'is-locked') + '">' + (check.ok ? '可安排' : '暂不可安排') + '</span>'
+    + '<span class="action-accordion-arrow" aria-hidden="true">›</span>'
+    + '</summary>'
+    + '<div class="action-accordion-body">'
+    + positionLine + progressLine
+    + '<p>' + h(profile ? profile.description : action.description) + '</p>'
+    + (action.backgroundBonus ? '<p class="background-bonus">背景特点：' + h(action.backgroundBonus) + '</p>' : '')
+    + (profile ? investmentControls({ id }, profile, { amount }, 'action') : '')
+    + '<div class="action-cost" id="investment-cost-action-' + id + '">' + h(costText) + '</div>'
+    + incomeText
+    + (action.hint ? '<p class="action-hint">' + h(action.hint) + '</p>' : '')
+    + '<button type="button" id="action-choice-' + id + '" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>' + (action.minigame ? '开始' : '确认') + h(action.title) + '</button>'
+    + '<div class="action-reason" id="investment-reason-action-' + id + '">' + (check.ok ? '' : h(check.reason)) + '</div>'
+    + '</div></details>';
 }
 function renderActions() {
-  const actions = Object.keys(game.ACTIONS).filter((id) => game.ACTIONS[id].place === activePlace);
-  $('#actionList').innerHTML = actions.length ? actions.map((id) => {
-    const action = game.getAction(state, id);
-    const check = game.availability(state, id);
-    return '<article class="action-card"><div class="action-card-top"><h3>' + h(action.title) + '</h3><span class="action-count">' + (action.limit ? '本学期 ' + (state.counts[id] || 0) + ' / ' + action.limit + ' 次' : action.chain ? '事件链行动' : '按剩余时间安排') + '</span></div><p>' + h(action.description) + '</p>' + (action.backgroundBonus ? '<p class="background-bonus">背景加成：' + h(action.backgroundBonus) + '</p>' : '') + '<div class="action-cost">' + h(costs(action)) + '</div><div class="action-gain">' + h(gains(action)) + '</div><button type="button" data-action="' + id + '" data-revision="' + state.revision + '" ' + (!check.ok || uiLocked ? 'disabled' : '') + '>执行' + h(action.title) + '</button>' + (!check.ok ? '<div class="action-reason">' + h(check.reason) + '</div>' : '') + '</article>';
-  }).join('') : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
+  updateBackButton();
+  if (activePlace === 'gate' && !gateSection) {
+    $('#actionList').innerHTML = gateHubMarkup();
+    return;
+  }
+  let actions = Object.keys(game.ACTIONS).filter((id) => game.ACTIONS[id].place === activePlace);
+  let prefix = '';
+  if (activePlace === 'gate' && GATE_SECTIONS[gateSection]) {
+    const section = GATE_SECTIONS[gateSection];
+    actions = section.actions.filter((id) => game.ACTIONS[id]?.place === 'gate');
+    prefix = gateSectionPanelMarkup(section, gateSection === 'internship' ? internshipStepsMarkup() : '');
+  }
+  const body = actions.length
+    ? actions.map(actionAccordionMarkup).join('')
+    : '<div class="unavailable-card"><h3>这里暂时没有可做的事</h3><p>去别的地方逛逛吧。</p></div>';
+  $('#actionList').innerHTML = prefix + body;
+  bindActionAccordions();
+  for(const id of game.npcCast.known(state).filter(id => !game.npcCast.introductionPending(state, id))){const p=game.npcCast.profile(id);$('#actionList').innerHTML+='<article class="action-card relationship-library-card"><h3>联系'+h(p.name)+'</h3><p>聊聊近况，或者商量一个共同安排。</p><button type="button" data-character-open="'+id+'">联系'+h(p.name)+'</button></article>';}
+}
+function renderRelationshipsPanel() {
+  const list = $('#relationshipList'); if (!list || !state) return;
+  const cast = game.npcCast, ids = cast.known(state);
+  list.innerHTML = '<p class="relationship-quota">本学期共同活动 ' + cast.totalInteractions(state) + ' / 4（全人物共享；老师最多指导两次）</p>' + ids.map(id => {
+    const pending = cast.introductionPending(state, id);
+    if (pending) return '<div class="relationship-empty"><b>' + h(pending.alias) + '</b><p>在地图上可以去打个招呼。</p></div>';
+    const p=cast.profile(id), person=cast.get(state,id), a=cast.abilities(state,id);
+    return '<article class="relationship-card"><div class="relationship-card-head"><span class="relationship-avatar"><img src="'+p.portrait+'" alt="'+h(p.name)+'"></span><div><b>'+h(p.name)+'</b><small>'+h(p.gender+' · '+p.identity)+'</small></div><span class="relationship-stage">'+h(game.relationshipRules.stage(person.familiarity).label)+'</span></div><label class="relationship-progress-label">相识度 <b>'+person.familiarity+' / 100</b></label><progress class="relationship-progress" max="100" value="'+person.familiarity+'"></progress><p>'+h(cast.dialogue(state,id))+'</p><p class="relationship-abilities">学业 '+a.academic+' · 社交 '+a.social+' · 运动 '+a.sport+'</p>'+(game.npcStoryAvailability(state,id).ok?'<p class="relationship-new">有一段新的共同经历可以参与</p>':'')+'<button type="button" class="utility-button" data-character-open="'+id+'">查看人物与互动</button></article>';
+  }).join('') + Object.keys(cast.PROFILES).filter(id=>!ids.includes(id)).map(id=>'<div class="relationship-empty"><b>'+h(id==='linXia'?'操场边的同学':cast.profile(id).name)+' · 尚未相识</b><p>'+h(({zhouNing:'第一次在图书馆自主学习时相识。',chenTeacher:'准备小组项目或参与竞赛时，有机会认识指导教师。',linXia:'完成操场运动后，有机会遇到这位同学。'})[id])+'</p></div>').join('');
+}
+function vnChoice(label, command, extra = {}, note = '', disabled = false) {
+  return { label, note, disabled: disabled || ((uiLocked || zhouRequest) && ['deepTalk', 'presentation', 'confirmActivity', 'acceptProposal', 'declineProposal', 'prompt'].includes(command)), attributes: { 'data-vn-ui': command, 'data-revision': state.revision, ...extra } };
+}
+function showVisualNovel(mode, title, speech, choices, options = {}) {
+  const id=options.npcId || activeNpcId, cast=game.npcCast, p=cast.profile(id), person=cast.get(state,id), status=cast.status(state,id);
+  const place=options.place || (zhouView.screen==='activity'?game.ACTIONS[zhouView.activity]?.place:activePlace) || status.lastPlace || p.place;
+  const oldConversation=$('#vnConversation');
+  const oldScroll=oldConversation?.dataset?.npcId===id?{top:oldConversation.scrollTop,key:oldConversation.dataset.lastKey}:null;
+  const body=CampusCharacterScene.render({profile:p,met:!!person,familiarity:person?.familiarity||0,stage:person?game.relationshipRules.stage(person.familiarity).label:'初次见面',location:(game.PLACES[place]?.title||'校园里')+' · 与'+p.name,
+    abilities:cast.abilities(state,id),status:status.moodLabel+' · '+status.energyLabel,profileOpen:zhouView.profileOpen,goal:person?.story||person?.presentation?'继续自己的校园安排，也关心你的近况。':p.goal,
+    memories:person?person.memories.map(key=>cast.MEMORIES[key]).filter(Boolean):[],speech:game.characterAgent.dialogueText(speech),choices,canClose:options.canClose??mode!=='event',choiceTitle:options.choiceTitle,
+    chat:mode==='relationship',busy:!!zhouRequest||uiLocked,draft:zhouChatDraft,historyOpen:zhouHistoryOpen,messages:game.characterAgent.conversation(state,id),pendingText:zhouRequest?.npcId===id?zhouRequest.text:'',waiting:zhouRequest?.npcId===id,
+    detail:options.detail||('时间 '+state.time+' · 精力 '+state.energy+' · 钱包 '+state.money+' 元。全人物共同活动 '+cast.totalInteractions(state)+'/4。')});
+  lastVisualNovel={mode,title,speech,choices,options:{...options,npcId:id}};
+  showDialog(mode,title,body,options.footerButtons||[]);dialog.classList.add('is-vn');
+  const conversation=$('#vnConversation');
+  if(mode==='relationship'&&conversation&&typeof conversation.scrollHeight==='number')conversation.scrollTop=oldScroll&&oldScroll.key===conversation.dataset.lastKey?oldScroll.top:conversation.scrollHeight;
+}
+function showCharacter(id, options={}) {
+  if(!state||!game.npcCast.get(state,id))return;
+  if (game.npcCast.introductionPending(state, id)) {
+    if (uiLocked || dialog.open || state.phase !== 'playing') return;
+    const profile = game.npcCast.profile(id);
+    const scene = game.npcCast.meetingScene(id, game.npcCast.get(state, id).introductionPending);
+    closePanel();
+    npcMeetIntro = { snapshot: state, place: profile.place, profile, scene, step: 'reunion' };
+    showNpcMeetIntro();
+    return;
+  }
+  if(activeNpcId!==id){cancelZhouRequest();activeNpcId=id;zhouChatDraft='';zhouChatNotice='';zhouHistoryOpen=false;zhouView={screen:'home',profileOpen:false};}
+  showZhouNing(options);
+}
+function showZhouNing(options={}) {
+  const id=activeNpcId, cast=game.npcCast, p=cast.profile(id);
+  if(!state||!cast.get(state,id)||cast.introductionPending(state,id))return;
+  closePanel();
+  if(!options.preserve){zhouHistoryOpen=false;zhouView={screen:'home',group:'life',activity:'selfStudy',amount:undefined,profileOpen:false,text:null};}
+  if (options.place) zhouView.place = options.place;
+  if(options.text)zhouView.text=options.text;
+  const saved=game.characterAgent.read(state,id);
+  let speech=zhouView.text||saved.messages.filter(item=>item.role==='assistant').at(-1)?.content||cast.dialogue(state,id), choices, detail,choiceTitle='你想怎么回应？';
+  if(zhouView.screen==='groups'){
+    speech=p.role==='teacher'?'带着你已经做过的部分来，我们选一个具体问题讨论。':'今天想做点什么？你可以按自己的安排选。';
+    choices=Object.entries(ZHOU_GROUPS).filter(([group])=>p.activities.some(a=>game.relationshipRules.ACTIVITIES[a].group===group)).map(([key,label])=>vnChoice(id==='chenTeacher'?(key==='campus'?'项目指导':'学业与发展方向'):label,'group',{'data-vn-group':key}));choices.push(vnChoice('先聊点别的','home'));
+  }else if(zhouView.screen==='activities'){
+    choices=p.activities.filter(a=>game.relationshipRules.ACTIVITIES[a].group===zhouView.group).map(a=>{const c=game.npcAvailability(state,id,a);return vnChoice(cast.activityLabel(id,a),'activity',{'data-vn-activity':a},c.ok?game.PLACES[game.ACTIONS[a].place]?.title:c.reason,!c.ok);});choices.push(vnChoice('换一种安排','groups'));
+  }else if(zhouView.screen==='activity'){
+    const a=zhouView.activity, action=game.getAction(state,a), investment=game.getActionInvestment(state,a), amount=zhouView.amount??investment?.default,c=game.npcAvailability(state,id,a,amount),preview=investment&&game.previewActionInvestment(state,a,amount);
+    speech=c.ok?cast.activityReply(id,a):c.reason;choiceTitle=cast.activityLabel(id,a);detail=costs(preview?.effect||game.fitnessAdjustedEffect(state,action,a))+'。只结算一次原活动成本。';
+    choices=investment?investment.tiers.map(t=>({...vnChoice(t.label,'tier',{'data-vn-amount':t.amount},costs(game.previewActionInvestment(state,a,t.amount).effect)),selected:t.amount===amount})):[];
+    choices.push(vnChoice(action.minigame?'一起去球场，开始投篮':'就这样安排，一起出发','confirmActivity',{},c.reason,!c.ok),vnChoice('再看看别的活动','backActivities'));
+  }else if(zhouView.screen==='story'){
+    speech=p.raceStory?.opening || '把你选择的方案和证据摆在一起，我们做一次复盘。你想重点检查论证，还是先练习把想法说出来？';
+    const c=game.npcStoryAvailability(state,id);detail=c.ok?costs(game.npcStoryCost(state,id))+'。准备方式会影响这次收获。':c.reason;
+    choices=[vnChoice(p.raceStory?.prepare || '认真复盘依据与验证办法','storyChoice',{'data-story-choice':'prepare'},'',!c.ok),vnChoice(id==='chenTeacher'?'先练习表达，建立信心':'先聊聊赛前的担心','storyChoice',{'data-story-choice':'encourage'},'',!c.ok),vnChoice('改天再安排','home')];
+  }else if(saved.proposal){
+    const a=saved.proposal.id,story=a===p.storyId,evt=a==='joinEvent',c=story?game.npcStoryAvailability(state,id):evt?game.npcEventAvailability(state,id):game.npcAvailability(state,id,a);
+    const action=!story&&!evt?game.getAction(state,a):null,inv=action&&game.getActionInvestment(state,a),preview=inv&&game.previewActionInvestment(state,a,inv.default);
+    detail=!c.ok?c.reason:evt?'先加入当前事件，选择事件方案后才结算。':story?'先听听这件事，再选择参与方式。':costs(preview?.effect||game.fitnessAdjustedEffect(state,action,a));
+    choices=[vnChoice(story?'好，说说这件事吧':evt?'一起参与眼前的事':'好，'+cast.activityLabel(id,a),'acceptProposal',{'data-proposal-revision':saved.proposal.createdRevision},detail,!c.ok),vnChoice('今天先不了，改天吧','declineProposal',{'data-proposal-revision':saved.proposal.createdRevision}),vnChoice('我想再问问','prompt',{'data-vn-prompt':'你为什么想约我做这件事？'})];
+  }else{
+    choices=[vnChoice('你最近过得怎么样？','prompt',{'data-vn-prompt':'你最近过得怎么样，有没有什么想做的事？'}),vnChoice('一起安排活动','groups'),vnChoice('人物与共同经历','profile')];
+    if(id!=='linXia'&&game.npcStoryAvailability(state,id).ok)choices.push(vnChoice(id==='zhouNing'?'陪你练习课程展示':'一起复盘一次方案','story'));
+    detail='可以自由聊天，也可以回应对方的邀请。聊天不扣资源；共同活动需你确认后开始。';
+  }
+  if(state.phase!=='playing')detail='请先完成当前事件、考试或学期流程。现在仍可以聊天。 '+(detail||'');
+  if(zhouRequest)detail=p.name+'正在回复，稍等一下……';else if(zhouChatNotice)detail=zhouChatNotice+' '+(detail||'');
+  const place = zhouView.screen === 'activity' ? options.place : zhouView.place;
+  showVisualNovel('relationship',p.name+' · 校园日常',speech,choices,{npcId:id,detail,choiceTitle,place,footerButtons:[{id:'resume',text:'继续安排',secondary:true}]});
+}
+function cancelZhouRequest() {
+  zhouRequestSequence++;
+  zhouRequest?.controller?.abort();
+  zhouRequest = null;
+}
+function resetNpcSummaryJobs() {
+  const jobs = [...npcSummaryJobs.values(), ...npcReflectionJobs.values()];
+  npcSummaryJobs.clear();
+  npcReflectionJobs.clear();
+  for (const job of jobs) job.controller?.abort();
+}
+
+function refreshNpcSummary(npcId) {
+  if (!state || !game.AI_CHAT.relay || typeof fetch !== 'function') return null;
+  const existing = npcSummaryJobs.get(npcId);
+  if (existing?.promise) return existing.promise;
+  if (existing?.attemptedAt === state.revision) return null;
+  const plan = game.characterAgent.summaryPlan(state, npcId);
+  if (!plan) return null;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), Math.min(game.AI_CHAT.timeoutMs || 15000, 6000)) : null;
+  const job = { controller, attemptedAt: state.revision, promise: null };
+  npcSummaryJobs.set(npcId, job);
+  job.promise = game.characterAgent.requestSummary({ plan, relay: game.AI_CHAT.relay, fetchFn: fetch, signal: controller?.signal })
+    .then(text => {
+      if (!text || npcSummaryJobs.get(npcId) !== job || !state) return;
+      // 摘要是存档附加信息。保留游戏状态对象，避免打断正在等待的对话请求。
+      state.npcDialogueSummaries = { ...state.npcDialogueSummaries, [npcId]: { text, throughRevision: plan.throughRevision } };
+      renderSaveStatus();
+    })
+    .finally(() => {
+      if (timer !== null) clearTimeout(timer);
+      job.promise = null;
+    });
+  return job.promise;
+}
+
+function refreshNpcReflection(npcId, trigger = 'term-end') {
+  if (!state || !game.AI_CHAT.relay || typeof fetch !== 'function' || game.AI_CHAT.agentMemory === false) return null;
+  if (!game.npcCast.get(state, npcId)) return null;
+  const existing = npcReflectionJobs.get(npcId);
+  if (existing?.promise) return existing.promise;
+  if (existing?.attemptedAt === state.revision) return null;
+  const plan = game.characterAgent.reflectionPlan(state, npcId);
+  if (!plan) return null;
+  // 人物记忆是存档附加信息，更新它时保留游戏状态对象。
+  state.npcAgentMemory = game.characterAgent.markAttempt(state, npcId, plan).npcAgentMemory;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), Math.min(game.AI_CHAT.timeoutMs || 15000, 8000)) : null;
+  const job = { controller, attemptedAt: state.revision, promise: null };
+  npcReflectionJobs.set(npcId, job);
+  job.promise = game.characterAgent.requestReflection({ plan, relay: game.AI_CHAT.relay, fetchFn: fetch, signal: controller?.signal })
+    .then(result => {
+      // 读档、重开和切换测试副本时会清空任务表。
+      if (!result || npcReflectionJobs.get(npcId) !== job || !state) return;
+      state.npcAgentMemory = game.characterAgent.applyReflection(state, npcId, result, plan, trigger).npcAgentMemory;
+      renderSaveStatus();
+    })
+    .finally(() => {
+      if (timer !== null) clearTimeout(timer);
+      job.promise = null;
+    });
+  return job.promise;
+}
+function maybeQueueNpcReflection(trigger = 'term-end') {
+  if (!state || !game.AI_CHAT.relay || typeof fetch !== 'function' || game.AI_CHAT.agentMemory === false) return;
+  for (const npcId of Object.keys(game.npcCast.PROFILES)) refreshNpcReflection(npcId, trigger);
+}
+
+function answerZhouProposal(answer, proposalRevision) {
+  if(!state||uiLocked||zhouRequest)return;
+  const id=activeNpcId,p=game.npcCast.profile(id),proposal=game.characterAgent.read(state,id).proposal;
+  if(!proposal||proposal.createdRevision!==Number(proposalRevision)){showToast('邀请已经更新，请重新查看');return;}
+  if(answer==='accept'&&proposal.id==='basketball'){startBasketball({companionId:id,agentProposalRevision:proposal.createdRevision});return;}
+  if(answer==='accept'&&proposal.id===p.storyId){
+    if(id==='zhouNing'){const r=runCommand('runNpcStory',{npcId:id,choice:'start'},state.revision);if(r)showEvent();}
+    else{zhouView.screen='story';zhouView.text=null;showZhouNing({preserve:true});}return;
+  }
+  const result=runCommand('resolveNpcProposal',{npcId:id,answer},state.revision,undefined,undefined,{proposalRevision:proposal.createdRevision});if(!result)return;
+  acknowledgedResultRevision=state.revision;zhouView.text=null;
+  if(state.pendingEvent)showEvent();else if(result.entry.relationship)showRelationshipResult(result.entry);else showZhouNing({preserve:true});
+}
+async function sendZhouChat(message) {
+  if(!state||dialogMode!=='relationship'||zhouRequest||uiLocked)return;
+  const text=String(message??$('#zhouChatInput')?.value??'').trim();if(!text||text.length>240)return;
+  const npcId=activeNpcId,proposal=game.characterAgent.read(state,npcId).proposal,answer=proposal&&game.characterAgent.consent(text);
+  if(answer){zhouChatDraft='';answerZhouProposal(answer,proposal.createdRevision);return;}
+  const place = zhouView.place || activePlace;
+  const snapshot=state,sequence=++zhouRequestSequence,controller=typeof AbortController==='function'?new AbortController():null;
+  zhouRequest={controller,npcId,text};zhouChatDraft='';zhouChatNotice='';zhouView.screen='home';zhouView.text=null;showZhouNing({preserve:true});
+  const summary = refreshNpcSummary(npcId);
+  if (summary) {
+    await summary;
+    if (sequence !== zhouRequestSequence || activeNpcId !== npcId) return;
+    if (state !== snapshot || dialogMode !== 'relationship' || !dialog.open) {
+      zhouRequest = null;
+      zhouChatDraft = text;
+      return;
+    }
+  }
+  const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
+  const decision=await game.characterAgent.request({state:snapshot,npcId,text,place,candidates:game.npcCandidates(snapshot,npcId),relay:game.AI_CHAT.relay,fetchFn:typeof fetch==='function'?fetch:null,signal:controller?.signal});
+  if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence||activeNpcId!==npcId)return;zhouRequest=null;
+  if(state!==snapshot||dialogMode!=='relationship'||!dialog.open){zhouChatDraft=text;return;}
+  const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:'chat',text},snapshot.revision);if(!result){zhouChatDraft=text;showZhouNing({preserve:true});return;}
+  refreshNpcSummary(npcId);
+  acknowledgedResultRevision=state.revision;zhouChatNotice=decision.source==='local'?'在线对话暂时没连上，先继续本地对话。':result.entry.dialogue.gained?'你们多了解了彼此一点 · 相识度 +'+result.entry.dialogue.gained+'。':'';showZhouNing({preserve:true});
+}
+function showNpcMeetIntro() {
+  const { profile, scene, step, returned, place } = npcMeetIntro;
+  showDialog('npcMeetIntro', '操场边', CampusCharacterScene.renderMeeting({
+    scene, step, profile, returned, background: PLACE_ART[place]
+  }));
+  dialog.classList.add('is-vn');
+  $(step === 'item' ? '.npc-meet-pick' : '#npcMeetHeading').focus({ preventScroll: true });
+}
+function advanceNpcMeetIntro({ meetStep, meetOption }) {
+  const intro = npcMeetIntro;
+  if (!intro || state !== intro.snapshot || dialogMode !== 'npcMeetIntro' || !dialog.open || uiLocked || meetStep !== intro.step) return;
+  const { profile, scene, step } = intro;
+  if (step !== 'reunion' && game.npcOpportunity(state)?.key !== intro.trigger) return;
+  if (meetOption === 'later') {
+    npcMeetIntro = null;
+    dialog.close();
+    return;
+  }
+  if (step === 'reunion') {
+    if (meetOption !== 'greet') return;
+    const result = runCommand('recordNpcDialogue', {
+      npcId: profile.id, kind: 'introduce', text: '', say: scene.reunion.line, intent: 'none',
+      source: 'local', sceneId: scene.id
+    }, state.revision);
+    if (!result) return;
+    npcMeetIntro = null;
+    acknowledgedResultRevision = state.revision;
+    zhouChatNotice = '';
+    showCharacter(profile.id, { place: intro.place });
+    return;
+  }
+  if (step === 'item') {
+    if (meetOption !== 'inspect') return;
+    intro.step = 'return';
+    showNpcMeetIntro();
+    return;
+  }
+  if (step === 'return') {
+    const option = scene.returnOptions.find(item => item.id === meetOption);
+    if (!option) return;
+    intro.returned = option;
+    intro.step = 'farewell';
+    showNpcMeetIntro();
+    return;
+  }
+  const option = scene.introOptions.find(item => item.id === meetOption);
+  if (!option) return;
+  const result = runCommand('recordNpcDialogue', {
+    npcId: profile.id, kind: 'meet', text: '', say: intro.returned.say, intent: 'none', source: 'local',
+    trigger: intro.trigger, sceneId: scene.id, sceneChoices: [intro.returned.id, option.id]
+  }, state.revision);
+  if (!result) return;
+  npcMeetIntro = null;
+  acknowledgedResultRevision = state.revision;
+  dialog.close();
+  closePlace();
+}
+async function maybeZhouNingDirector() {
+  if(developerPaused||!state||zhouRequest||uiLocked||basketballSession||animalDialog?.open||needsCourseSelection())return;
+  const occasion=game.npcOpportunity(state);if(!occasion||(dialog.open&&dialogMode!=='event'))return;
+  const profile = game.npcCast.profile(occasion.npcId);
+  if (occasion.kind === 'meet' && occasion.place === 'track' && profile?.meetScene) {
+    if (state.pendingEvent || dialog.open) return;
+    npcMeetIntro = { snapshot: state, trigger: occasion.key, place: occasion.place, profile, scene: profile.meetScene, step: 'item' };
+    showNpcMeetIntro();
+    return;
+  }
+  const snapshot=state,sequence=++zhouRequestSequence,controller=typeof AbortController==='function'?new AbortController():null,npcId=occasion.npcId;
+  zhouRequest={controller,npcId};const timer=controller?setTimeout(()=>controller.abort(),game.AI_CHAT.timeoutMs||15000):null;
+  const decision=await game.characterAgent.request({state:snapshot,npcId,candidates:occasion.candidates,occasion,relay:game.AI_CHAT.relay,fetchFn:typeof fetch==='function'?fetch:null,signal:controller?.signal});
+  if(timer!==null)clearTimeout(timer);if(sequence!==zhouRequestSequence)return;zhouRequest=null;
+  if(state!==snapshot||basketballSession||animalDialog?.open||(dialog.open&&dialogMode!=='event')){if(state&&dialogMode==='relationship')showZhouNing({preserve:true});return;}
+  const result=runCommand('recordNpcDialogue',{...decision,npcId,kind:occasion.kind,text:'',trigger:occasion.key},snapshot.revision);if(!result)return;
+  acknowledgedResultRevision=state.revision;
+  if(state.pendingEvent)showEvent();else{zhouChatNotice=decision.source==='local'?'在线对话暂时没连上，先继续本地对话。':'';showCharacter(npcId,{text:decision.say,place:occasion.place});}
+}
+function showRelationshipResult(entry, mode='relationshipResult') {
+  const r=entry.relationship,id=r.characterId||'zhouNing',p=game.npcCast.profile(id);activeNpcId=id;
+  const lines={good:'有你陪着练过一遍，我没那么紧张了。谢谢你，我会继续准备的。',steady:'重新把顺序理出来以后，表达也清楚多了。我回去再练几遍。',limited:'至少知道自己该补什么了，谢谢你陪我开口试这一遍。',encouraged:'讲错一句也能接着讲，谢谢你没有催我。'};
+  const speech=r.kind==='meet'?p.intro:r.kind==='activity'?game.npcCast.afterActivity(id,r.activityId):r.kind==='presentation'?lines[r.level]:r.description;
+  showVisualNovel(mode,entry.outcome||entry.title||'与'+p.name+'的近况',speech,[vnChoice(state.pendingEvent?'继续处理事件':'查看人物关系','continue')],{npcId:id,place:game.ACTIONS[entry.action]?.place||p.place,detail:(entry.action==='basketball'?'命中 '+entry.hits+' 球 · '+entry.score+' 分。':'')+(r.kind==='meet'?'你与'+p.name+'建立了联系。':'')+(r.assessment?.formula==='player'?'本次表现由你的学业、社交和心情决定。':'')+'相识度 +'+r.gained+' · 当前 '+r.familiarity+'/100。'+changeText(entry.changes)+'。'+supportText(entry),footerButtons:[{id:'relationshipContinue',text:state.pendingEvent?'继续处理事件':'查看人物关系'}]});
+}
+function renderBasketballHud(info) {
+  const time = Math.max(0, Math.ceil((info.timeLeft || 0) / 1000));
+  const timeNode = $('#basketballTime');
+  const scoreNode = $('#basketballScore');
+  const hitsNode = $('#basketballHits');
+  if (timeNode) timeNode.textContent = String(time);
+  if (scoreNode) scoreNode.textContent = String(info.score || 0);
+  if (hitsNode) hitsNode.textContent = String(info.hits || 0);
+}
+function closeBasketballDialog() {
+  if ($('#basketballCompanionNotice')) $('#basketballCompanionNotice').hidden = true;
+  if (basketballDialog && basketballDialog.open) {
+    try { basketballDialog.close(); } catch (_) { basketballDialog.removeAttribute('open'); }
+  }
+}
+function cancelBasketball() {
+  basketballSession?.destroy();
+  basketballSession = null;
+  basketballCompanion = null;
+  closeBasketballDialog();
+}
+function startBasketball(options = {}) {
+  const companion = options.companionId && game.npcCast.get(state,options.companionId) ? options.companionId : null;
+  if (!state || state.phase !== 'playing' || basketballSession || (!companion && (activePlace !== 'track' || dialog.open))) return;
+  const check = companion ? game.npcAvailability(state, companion, 'basketball') : game.availability(state, 'basketball');
+  if (!check.ok) { showToast(check.reason); return; }
+  if (!basketballGame) { showToast('当前浏览器不支持投篮小游戏'); return; }
+  try {
+    basketballSession = basketballGame.createSession({
+      canvas: $('#basketballCanvas'),
+      durationMs: game.BASKETBALL.durationMs,
+      maxHits: game.BASKETBALL.maxHits,
+      pointsPerHit: game.BASKETBALL.pointsPerHit,
+      onTick: renderBasketballHud,
+      onScore: () => audio?.play('success'),
+      onFinish: finishBasketball
+    });
+    basketballCompanion = companion ? { companionId: companion, characterVersion: 2, npcCastVersion:1, revision: state.revision, ...(options.agentProposalRevision !== undefined ? { agentProposalRevision: options.agentProposalRevision } : {}) } : null;
+    if ($('#basketballCompanionNotice')) $('#basketballCompanionNotice').hidden = !companion;
+    if (companion) { $('#basketballCompanionNotice').textContent=game.npcCast.profile(companion).name+'与你一起打球。完成后结算一次共同活动。'; dialog.close(); }
+    if (basketballDialog && !basketballDialog.open) basketballDialog.showModal();
+    basketballSession.start();
+    renderBasketballHud({ hits: 0, score: 0, timeLeft: game.BASKETBALL.durationMs });
+    $('#basketballCanvas')?.focus();
+    audio?.play('sport');
+  } catch (error) {
+    basketballSession?.destroy();
+    basketballSession = null;
+    basketballCompanion = null;
+    closeBasketballDialog();
+    showToast(error?.message || '投篮小游戏启动失败');
+  }
+}
+function finishBasketball(result) {
+  if (!basketballSession) return;
+  const session = basketballSession;
+  basketballSession = null;
+  session.destroy();
+  closeBasketballDialog();
+  const companion = basketballCompanion;
+  basketballCompanion = null;
+  const commandResult = runCommand('completeBasketball', result.hits, companion?.revision ?? state.revision, undefined, undefined, companion || {});
+  if (!commandResult) return;
+  audio?.play('success');
+  $('#actionFeedback').textContent = '本局命中 ' + result.hits + ' 球，得分 ' + result.score + '。' + changeText(commandResult.changes);
+  showBasketballResult(commandResult.entry);
+}
+function showBasketballResult(entry) {
+  if(entry.relationship){showRelationshipResult(entry,'basketballResult');return;}
+  const tier = entry.tierLabel || game.BASKETBALL.rewards.find((item) => item.id === entry.tier)?.label || '投篮结算';
+  showDialog('basketballResult', '球场结算', '<div class="basketball-result"><p class="basketball-result-score"><b>' + entry.score + '</b> 分</p><p>命中 <b>' + entry.hits + '</b> 球 · ' + h(tier) + '</p><div class="basketball-result-change">' + h(changeText(entry.changes)) + '</div></div>', [{ id: 'basketballContinue', text: '继续安排' }]);
+}
+// 地点插画：按建筑名取 assets/places 下对应的矢量图；锚点与地图热点坐标一致。
+const PLACE_ART = {
+  activity: 'assets/places/activity.svg',
+  think: 'assets/places/think.svg',
+  library: 'assets/places/library.svg',
+  hospital: 'assets/places/hospital.svg',
+  gate: 'assets/places/gate.svg',
+  track: 'assets/places/track.svg',
+  auditorium: 'assets/places/auditorium.svg',
+  ginkgo: 'assets/places/ginkgo.svg',
+  yifu: 'assets/places/yifu.svg',
+  dorm: 'assets/places/dorm.svg',
+  hotel: 'assets/places/hotel.svg'
+};
+// 用点击的建筑位置作为整屏展开的圆心；拿不到位置时退回屏幕中心。
+function placeRevealOrigin(hotspot) {
+  try {
+    if (hotspot && typeof hotspot.getBoundingClientRect === 'function' && typeof window !== 'undefined' &&
+        Number.isFinite(window.innerWidth) && window.innerWidth > 0 && Number.isFinite(window.innerHeight) && window.innerHeight > 0) {
+      const rect = hotspot.getBoundingClientRect();
+      if (rect && Number.isFinite(rect.left) && Number.isFinite(rect.top) && rect.width > 0) {
+        return {
+          x: (rect.left + rect.width / 2) / window.innerWidth * 100,
+          y: (rect.top + rect.height / 2) / window.innerHeight * 100
+        };
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+function showPlaceArt(key, hotspot) {
+  const src = PLACE_ART[key];
+  if (!src) return;
+  const placeImage = $('#placeArtImage');
+  if (placeImage) placeImage.setAttribute('src', src);
+  const placeScreen = $('#placeScreen');
+  const origin = placeRevealOrigin(hotspot);
+  if (placeScreen && placeScreen.style && typeof placeScreen.style.setProperty === 'function') {
+    if (origin) {
+      placeScreen.style.setProperty('--ox', origin.x.toFixed(2) + '%');
+      placeScreen.style.setProperty('--oy', origin.y.toFixed(2) + '%');
+    } else {
+      placeScreen.style.removeProperty('--ox');
+      placeScreen.style.removeProperty('--oy');
+    }
+  }
+}
+// 锁定页面滚动时补偿滚动条宽度，避免布局横向跳动（地图"甩一下"的来源）。
+function lockBodyScroll() {
+  try {
+    if (typeof document !== 'undefined' && document.body && document.body.style) {
+      const root = document.documentElement;
+      const gap = (root && Number.isFinite(root.clientWidth) && Number.isFinite(window?.innerWidth))
+        ? Math.max(0, window.innerWidth - root.clientWidth) : 0;
+      if (gap > 0) document.body.style.paddingRight = gap + 'px';
+      lockBodyScroll();
+    }
+  } catch (_) {}
+}
+function unlockBodyScroll() {
+  try {
+    if (typeof document !== 'undefined' && document.body && document.body.style) {
+      unlockBodyScroll();
+      document.body.style.paddingRight = '';
+    }
+  } catch (_) {}
 }
 function openPlace(key, hotspot) {
-  if (!state) return;
+  if (!state || basketballSession) return;
+  closePanel();
+  closePopovers();
   if (state.phase !== 'playing') { resumePhase(); return; }
   if (!Object.hasOwn(game.PLACES, key)) return;
   audio?.play(PLACE_SOUNDS[key]);
   activePlace = key;
+  gateSection = null;
+  openActionCards.clear();
   lastHotspot = hotspot;
-  $('#placeTitle').textContent = game.PLACES[key].title;
-  $('#placeKicker').textContent = '主校区 · ' + game.PLACES[key].kicker;
-  $('#placeDescription').textContent = game.PLACES[key].description;
-  $('#actionFeedback').textContent = '逛逛不花资源。收益接近上限时，显示实际增加的数值。';
+  finishCoach('map-place');
+  if (activeCoach?.id.startsWith('term-unlock:')) finishCoach(activeCoach.id);
+  const place = game.placeFor(state, key);
+  $('#placeTitle').textContent = place.title;
+  $('#placeKicker').textContent = '主校区 · ' + place.kicker;
+  $('#placeDescription').textContent = place.description;
+  $('#actionFeedback').textContent = '';
   hotspots.forEach((item) => item.classList.toggle('is-active', item.dataset.place === key));
+  // 以点击的建筑为圆心，把整屏背景展开成该建筑的插画。
+  showPlaceArt(key, hotspot);
   // 过场动画：地图聚焦压暗离场，场所屏入场时内容错落升起；入场标记随后清理，避免每次行动重绘都重播动画。
   $('#mapScreen').classList.add('is-leaving');
   const placeScreen = $('#placeScreen');
@@ -293,9 +1751,10 @@ function openPlace(key, hotspot) {
   placeScreen.setAttribute('aria-hidden', 'false');
   placeScreen.inert = false;
   $('#mapScreen').inert = true;
-  document.body.style.overflow = 'hidden';
+  lockBodyScroll();
   renderState();
   $('#backButton').focus();
+  setTimeout(maybeShowActionCoach, 360);
 }
 function closePlace() {
   const placeScreen = $('#placeScreen');
@@ -307,164 +1766,459 @@ function closePlace() {
   placeScreen.inert = true;
   $('#mapScreen').inert = false;
   hotspots.forEach((item) => item.classList.remove('is-active'));
-  document.body.style.overflow = '';
+  unlockBodyScroll();
   activePlace = null;
   if (!dialog.open) lastHotspot?.focus();
-}
-function resetNpcSystem() {
-  if (!npc) return;
-  npcSystem = npc.createSystem({ random: () => Math.random() });
-  npcFades.clear();
-  npcTalkIndex.clear();
-  npcChatLogs.clear();
-  npcTalking = null;
-  for (const node of npcNodes.values()) node.remove();
-  npcNodes.clear();
-  const layer = $('#npcLayer');
-  if (layer) layer.innerHTML = '';
-}
-function npcDisplayList() {
-  const entries = [];
-  if (npcSystem && state) for (const npc of npcSystem.active()) entries.push({ npc, fading: false });
-  const now = Date.now();
-  for (const [id, entry] of npcFades) {
-    if (now - entry.since >= 700) npcFades.delete(id);
-    else entries.push({ npc: entry.npc, fading: true });
-  }
-  return entries;
+  if (!dialog.open) setTimeout(maybeShowEndTermCoach, 220);
 }
 function renderNpcLayer() {
   const layer = $('#npcLayer');
   if (!layer) return;
-  if (typeof document.createElement !== 'function') {
-    // 没有节点构造能力的环境（自动化测试）：输出等价的文本标记。
-    layer.innerHTML = npcDisplayList().map((entry) => '<button class="npc-figure' + (entry.fading ? ' is-fading' : '') + '" data-npc-id="' + entry.npc.id + '">' + npcFigureSvg(entry.npc.figure) + '<span class="npc-label">' + h(entry.npc.label) + '</span></button>').join('');
+  const ids = state ? game.npcCast.known(state) : [];
+  const pending = new Map(ids.map(id => [id, game.npcCast.introductionPending(state, id)]));
+  const key = ids.map(id => id + (pending.get(id) ? ':pending' : '')).join(',');
+  if (key === renderedMapNpcIds) return;
+  renderedMapNpcIds = key;
+  layer.innerHTML = ids.map((id) => {
+    const alias = pending.get(id)?.alias;
+    const name = alias || game.npcCast.profile(id).name;
+    const [x, y] = NPC_MAP_POSITIONS[id];
+    return '<button type="button" class="npc-figure" data-npc-id="' + id + '" style="left:' + x + '%;top:' + y + '%" aria-label="和' + h(name) + '搭话">'
+      + NPC_MAP_ICON + '<span class="npc-label">' + h(name) + (alias ? '' : ' · 已认识') + '</span></button>';
+  }).join('');
+}
+
+function animalClock() {
+  return (developerPaused ? developerPauseStarted : Date.now()) - developerAnimalOffset;
+}
+
+function resetAnimalSystem() {
+  if (!animals) return;
+  closeAnimalEncounter();
+  animalSystem = animals.createSystem(animalClock(), Math.random, { keepCatsOnMap: true });
+  renderAnimalLayer(null, false);
+}
+
+function openDeveloperAnimal(species, catId, stateSnapshot, choice) {
+  if (!animals || !game.ANIMALS[species] || !animalDialog) return;
+  closeAnimalEncounter();
+  animalSystem?.finish(animalClock());
+  animalEncounter = { id: 'developer:' + Date.now(), species, catId, x: 50, y: 50, expiresAt: animalClock() + 22000, revision: stateSnapshot.revision };
+  animalDialog.showModal();
+  renderAnimalLayer(null, false);
+  showAnimalMenu();
+  if (!choice) return;
+  const calm = game.animalCalmWindow(state, species);
+  finishAnimalInteraction(choice === 'feed' ? 'feed' : 'pet', null,
+    choice === 'calm' ? calm.start : choice === 'startled' ? calm.end : undefined);
+}
+
+function canMeetAnimal() {
+  return !developerPaused && !basketballDialog?.open && state && state.phase === 'playing' && !game.isSick(state) && !needsCourseSelection()
+    && !activePlace && !dialog.open && !animalDialog?.open && $('#startScreen').hidden;
+}
+
+function animalName({ species, catId }) {
+  return animals.appearance(species, catId).name || game.ANIMALS[species].label;
+}
+
+const CAT_POSE_CYCLE = ['alert', 'special', 'standing', 'lying'];
+
+function applyAnimalArtwork(world) {
+  const { species, catId } = animalEncounter;
+  const appearance = animals.appearance(species, catId);
+  world.dataset.species = species;
+  world.style.setProperty('--animal-atlas', 'url("' + appearance.atlas + '")');
+  for (const pose of CAT_POSE_CYCLE.slice(1)) {
+    const art = species === 'cat' ? animals.catPosePreview(catId, pose) : null;
+    world.style.setProperty('--animal-' + pose, art ? 'url("' + art.asset + '")' : 'none');
+  }
+  if (appearance.speechAnchor) {
+    const [x, y] = appearance.speechAnchor;
+    world.style.setProperty('--animal-speech-x', x + '%');
+    world.style.setProperty('--animal-speech-y', y + '%');
+  }
+}
+
+function renderAnimalLayer(encounter, visible) {
+  const layer = $('#animalLayer');
+  if (!layer) return;
+  layer.hidden = !visible;
+  const markers = animalSystem?.residentCats ?? [];
+  const encounters = encounter ? [...markers, encounter] : markers;
+  const ids = encounters.map(marker => marker.id).join(',');
+  if (animalMarkerIds === ids) return;
+  animalMarkerIds = ids;
+  layer.innerHTML = encounters.map(marker => {
+    const { id, species, catId, x, y } = marker;
+    const name = h(animalName(marker));
+    const { atlas } = animals.appearance(species, catId);
+    return '<button type="button" class="animal-marker" data-animal-id="' + id
+      + '" style="left:' + x + '%;top:' + y + '%;--animal-atlas:url(' + atlas + ')" aria-label="遇见' + name + '">'
+      + '<span class="animal-marker-image" aria-hidden="true"></span><span class="npc-label">' + name + '</span></button>';
+  }).join('');
+}
+
+const ANIMAL_TEXT = {
+  cat: {
+    place: '校园小径',
+    petted: '小猫闭上眼，把脑袋往你的掌心蹭了蹭。',
+    startled: '小猫愣了一下，轻轻哈了一声。你赶紧把手缩了回来。',
+    fed: '小猫闻了闻你放下的零食，才凑过来吃。'
+  },
+  goose: {
+    place: '明湖岸边',
+    petted: '它轻轻抖了抖羽毛，让你的手停了一会儿。',
+    startled: '鹅的嘴一下伸了过来，你往后缩了缩手。',
+    fed: '它向前探了探，低头吃起了饲料。'
+  }
+};
+
+function animalTick() {
+  const visible = canMeetAnimal();
+  const encounter = developerPaused ? null : animalSystem?.tick(animalClock(), visible, Boolean(animalDialog?.open));
+  renderAnimalLayer(encounter, visible);
+  setTimeout(animalTick, 250);
+}
+
+function openAnimalEncounter(id) {
+  if (!canMeetAnimal() || uiLocked || !animalDialog) return;
+  const residentCat = animalSystem?.residentCats?.find(cat => cat.id === id);
+  const encounter = residentCat ?? animalSystem?.tick(animalClock(), true, false);
+  if (!encounter || String(encounter.id) !== id) return;
+  animalEncounter = { ...encounter, revision: state.revision };
+  animalDialog.showModal();
+  renderAnimalLayer(encounter, false);
+  showAnimalMenu();
+}
+
+function animalButton(action, label, { primary = false, disabled = false } = {}) {
+  return '<button type="button" data-animal-action="' + action + '"'
+    + (primary ? ' class="animal-primary"' : '') + (disabled ? ' disabled' : '') + '>' + h(label) + '</button>';
+}
+
+const ANIMAL_POSES = {
+  alert: [1, 0, 0, 0],
+  calm: [0, 1, 0, 0],
+  petted: [0, 0, 1, 0],
+  fed: [0, 0, 1, 0],
+  startled: [0, 0, 0, 1]
+};
+const GOOSE_MOTION = { approach: 820, retreat: 700 };
+
+function animalMotionEnabled() {
+  return motionOn && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+}
+
+function easeAnimalMotion(progress) {
+  const t = Math.max(0, Math.min(1, progress));
+  return t * t * (3 - 2 * t);
+}
+
+function mixAnimalPose(from, to, progress) {
+  return from.map((weight, i) => weight * (1 - progress) + to[i] * progress);
+}
+
+function gooseSettlePose(progress) {
+  const t = easeAnimalMotion(progress);
+  // 整段动作只缓动一次，让侧头的速度延续到弯颈这一步。
+  const tilt = .44;
+  return t < tilt
+    ? mixAnimalPose(ANIMAL_POSES.alert, ANIMAL_POSES.petted, t / tilt)
+    : mixAnimalPose(ANIMAL_POSES.petted, ANIMAL_POSES.calm, (t - tilt) / (1 - tilt));
+}
+
+function animalCalmProgress(timing, elapsed, running) {
+  const { start, end, approach, retreat } = timing;
+  const cycle = game.ANIMAL_CYCLE_MS;
+  const approachAt = start - approach;
+  // 熟悉度较高时，抬头动作可能跨过循环起点。
+  const sinceEnd = elapsed < approachAt && running >= cycle ? elapsed + cycle - end : elapsed - end;
+  if (sinceEnd >= 0 && sinceEnd < retreat) return 1 - sinceEnd / retreat;
+  if (elapsed >= approachAt && elapsed < start) return (elapsed - approachAt) / approach;
+  return elapsed >= start && elapsed < end ? 1 : 0;
+}
+
+function renderAnimalPose(species, weights) {
+  animalPose = { species, weights };
+  animalPortrait?.set(species, animalEncounter.catId, weights);
+}
+
+function cancelAnimalPoseTransition() {
+  if (animalPoseFrame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(animalPoseFrame);
+  animalPoseFrame = null;
+}
+
+function transitionAnimalPose(species, pose, duration) {
+  cancelAnimalPoseTransition();
+  const target = ANIMAL_POSES[pose];
+  const from = animalPose?.species === species ? animalPose.weights : target;
+  if (!animalPortrait || !animalMotionEnabled() || typeof requestAnimationFrame !== 'function'
+      || from.every((weight, i) => weight === target[i])) {
+    renderAnimalPose(species, target);
     return;
   }
-  const wanted = new Set();
-  for (const entry of npcDisplayList()) {
-    wanted.add(entry.npc.id);
-    let node = npcNodes.get(entry.npc.id);
-    if (!node) {
-      node = document.createElement('button');
-      node.type = 'button';
-      node.className = 'npc-figure';
-      node.dataset.npcId = entry.npc.id;
-      node.setAttribute('aria-label', '和' + entry.npc.label + '搭话');
-      node.innerHTML = npcFigureSvg(entry.npc.figure) + '<span class="npc-label">' + h(entry.npc.label) + '</span>';
-      layer.appendChild(node);
-      npcNodes.set(entry.npc.id, node);
-      // 离场淡出：先按不透明插入，强制一次布局后再加淡出类，让过渡动起来。
-      if (entry.fading) {
-        try { node.getBoundingClientRect(); } catch (_) {}
-        node.classList.add('is-fading');
-      }
+  const startedAt = performance.now();
+  const update = (now) => {
+    const progress = (now - startedAt) / duration;
+    renderAnimalPose(species, mixAnimalPose(from, target, easeAnimalMotion(progress)));
+    animalPoseFrame = progress < 1 ? requestAnimationFrame(update) : null;
+  };
+  animalPoseFrame = requestAnimationFrame(update);
+}
+
+function showAnimalView(mode, pose, cue = '', detail = '', buttons = '', title) {
+  const world = $('#animalWorld');
+  const target = $('#animalPetTarget');
+  const species = animalEncounter.species;
+  const name = animalName(animalEncounter);
+  applyAnimalArtwork(world);
+  world.dataset.mode = mode;
+  world.dataset.pose = pose;
+  if (species === 'goose' && mode !== 'pet') {
+    transitionAnimalPose(species, pose, pose === 'startled' ? 360 : 520);
+  }
+  $('#animalPlace').textContent = ANIMAL_TEXT[species].place;
+  $('#animalTitle').textContent = title || name;
+  $('#animalMood').textContent = state.mood;
+  $('#animalVisits').textContent = state.animalVisits?.[species] || 0;
+  $('#animalSpeech').textContent = '';
+  $('#animalCue').textContent = cue;
+  $('#animalDetail').textContent = detail;
+  $('#animalButtons').innerHTML = buttons;
+  $('#animalControls').hidden = !cue && !detail && !buttons;
+  target.hidden = mode !== 'pet';
+  target.setAttribute('aria-label', '伸手抚摸' + name);
+  (mode === 'pet' ? target : $('#animalTitle')).focus({ preventScroll: true });
+}
+
+function showAnimalMenu() {
+  if (!animalEncounter) return;
+  stopAnimalTiming();
+  const { species } = animalEncounter;
+  const profile = game.ANIMALS[species];
+  const feed = game.animalAvailability(state, species, 'feed');
+  showAnimalView('menu', 'alert', '', feed.ok ? '' : feed.reason,
+    animalButton('pet', '试着摸一下', { primary: true })
+    + animalButton('feed', '买' + profile.food + ' · ' + profile.price + ' 元', { disabled: !feed.ok })
+    + (species === 'cat' ? animalButton('cyclePose', '切换动作') : ''));
+}
+
+function cycleCatPose() {
+  const world = $('#animalWorld');
+  const next = (CAT_POSE_CYCLE.indexOf(world.dataset.pose) + 1) % CAT_POSE_CYCLE.length;
+  const pose = CAT_POSE_CYCLE[next];
+  world.dataset.pose = pose;
+  $('#animalSpeech').textContent = pose === 'special' ? animals.CATS[animalEncounter.catId].specialCue : '';
+}
+
+function showCatArchive(trigger) {
+  if (!catArchiveDialog || catArchiveDialog.open || animalEncounter?.species !== 'cat'
+    || $('#animalWorld').dataset.mode !== 'menu') return;
+  const archive = animals.catArchive(animalEncounter.catId);
+  if (!archive) return;
+  const panel = trigger.dataset.catPanel;
+  const title = $('#catArchiveTitle');
+  const content = $('#catArchiveContent');
+  catArchiveDialog.dataset.panel = panel;
+  catArchiveDialog.style.setProperty('--cat-archive-color', archive.color);
+  $('#catArchiveSeries').hidden = panel !== 'profile';
+  title.textContent = archive.name + ' · ' + (panel === 'profile' ? '猫咪档案' : '猫咪相册');
+  if (panel === 'profile') renderCatProfile(content, archive);
+  else renderCatAlbum(content, archive);
+  trigger.focus({ preventScroll: true });
+  catArchiveDialog.showModal();
+  content.scrollTop = 0;
+  title.focus({ preventScroll: true });
+}
+
+function renderCatProfile(content, archive) {
+  const fields = [['姓名', archive.name], ['性别', archive.sex],
+    ['出生日期', archive.birthYear], ['居住地', archive.residence]];
+  const facts = fields.map(([label, value]) => '<div><dt>' + label + '</dt><dd>' + h(value) + '</dd></div>').join('');
+  const notes = archive.notes.map(note => '<li>' + h(note) + '</li>').join('');
+  content.innerHTML = '<article class="cat-profile">'
+    + '<div class="cat-profile-portrait" role="img" aria-label="' + h(archive.name) + '的游戏立绘"></div>'
+    + '<dl class="cat-profile-facts">' + facts + '</dl>'
+    + '<section class="cat-profile-notes"><h3>注意事项</h3><ul>' + notes + '</ul></section>'
+    + '<section class="cat-profile-story"><h3>背景故事</h3><p>' + h(archive.story) + '</p></section>'
+    + '<footer class="cat-profile-source">资料来源 · 物理科学与工程学院校园介绍牌</footer></article>';
+  content.querySelector('.cat-profile-portrait').style.backgroundImage = 'url("' + archive.atlas + '")';
+}
+
+function renderCatAlbum(content, archive) {
+  content.innerHTML = '<figure class="cat-album"><img class="cat-album-photo">'
+    + '<figcaption class="cat-album-navigation">'
+    + '<button type="button" data-cat-photo-step="-1">上一张</button>'
+    + '<span class="cat-album-page" aria-live="polite"></span>'
+    + '<button type="button" data-cat-photo-step="1">下一张</button>'
+    + '</figcaption></figure>';
+  const photo = content.querySelector('.cat-album-photo');
+  const page = content.querySelector('.cat-album-page');
+  const { photos, name } = archive;
+  let index = 0;
+  function showPhoto() {
+    photo.alt = name + '的实拍照片 ' + (index + 1);
+    photo.src = photos[index];
+    page.textContent = (index + 1) + ' / ' + photos.length;
+  }
+  for (const button of content.querySelectorAll('[data-cat-photo-step]')) {
+    button.addEventListener('click', () => {
+      index = (index + Number(button.dataset.catPhotoStep) + photos.length) % photos.length;
+      showPhoto();
+    });
+  }
+  showPhoto();
+}
+
+function stopAnimalTiming() {
+  if (animalFrame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(animalFrame);
+  animalFrame = null;
+  animalTiming = null;
+  $('#animalWorld').dataset.tracking = 'false';
+}
+
+function closeAnimalEncounter() {
+  if (catArchiveDialog?.open) catArchiveDialog.close();
+  if (animalReactionTimer !== null) clearTimeout(animalReactionTimer);
+  animalReactionTimer = null;
+  animalReactionDueAt = 0;
+  animalReactionCallback = null;
+  stopAnimalTiming();
+  cancelAnimalPoseTransition();
+  animalPose = null;
+  animalEncounter = null;
+  if (animalDialog?.open) animalDialog.close();
+}
+
+function updateAnimalTiming() {
+  const world = $('#animalWorld');
+  if (!animalTiming || !animalEncounter || !animalDialog?.open || world.dataset.mode !== 'pet') return;
+  const { species } = animalEncounter;
+  const { startedAt, entry, start, end, animate } = animalTiming;
+  const running = Math.max(0, animalClock() - startedAt);
+  const elapsed = running % game.ANIMAL_CYCLE_MS;
+  animalTiming.elapsedMs = elapsed;
+  const calm = elapsed >= start && elapsed < end;
+  if (species === 'goose') {
+    let weights = ANIMAL_POSES[calm ? 'calm' : 'alert'];
+    if (animate) {
+      weights = gooseSettlePose(animalCalmProgress(animalTiming, elapsed, running));
+      if (entry && running < 240) weights = mixAnimalPose(entry, weights, easeAnimalMotion(running / 240));
     }
-    node.style.left = entry.npc.x + '%';
-    node.style.top = entry.npc.y + '%';
-    if (entry.fading) node.classList.add('is-fading');
-    else node.classList.remove('is-fading');
+    renderAnimalPose(species, weights);
   }
-  for (const [id, node] of npcNodes) {
-    if (wanted.has(id)) continue;
-    node.remove();
-    npcNodes.delete(id);
+  if (calm !== animalTiming.calm) {
+    animalTiming.calm = calm;
+    world.dataset.pose = calm ? 'calm' : 'alert';
   }
+  if (typeof requestAnimationFrame === 'function') animalFrame = requestAnimationFrame(updateAnimalTiming);
 }
-function npcTick() {
-  if (npcSystem && state) {
-    const events = npcSystem.tick(Date.now());
-    for (const npc of events.removed) npcFades.set(npc.id, { npc, since: Date.now() });
+
+function startAnimalTiming() {
+  if (!animalEncounter) return;
+  cancelAnimalPoseTransition();
+  const { species } = animalEncounter;
+  const { start, end } = game.animalCalmWindow(state, species);
+  const entry = animalPose?.species === species && animalPose.weights[0] !== 1 ? animalPose.weights : null;
+  const { approach, retreat: preferredRetreat } = GOOSE_MOTION;
+  const untilNextApproach = game.ANIMAL_CYCLE_MS - end + start - approach;
+  const retreat = Math.min(preferredRetreat, untilNextApproach);
+  showAnimalView('pet', 'alert');
+  animalTiming = { startedAt: animalClock(), elapsedMs: 0, calm: null, entry, start, end, approach, retreat,
+    animate: species === 'goose' && Boolean(animalPortrait) && animalMotionEnabled() };
+  updateAnimalTiming();
+}
+
+function confirmAnimalFeed() {
+  if (!animalEncounter) return;
+  const { species } = animalEncounter;
+  const profile = game.ANIMALS[species];
+  const check = game.animalAvailability(state, species, 'feed');
+  if (!check.ok) { $('#animalDetail').textContent = check.reason; return; }
+  const gain = game.previewChanges(state, { mood: profile.fedMood }).mood;
+  showAnimalView('feed', 'calm', '把食物放到它面前', '花 ' + profile.price + ' 元购买' + profile.food + '，心情 +' + gain + '。',
+    animalButton('feedYes', '确认喂食', { primary: true }) + animalButton('back', '返回'));
+}
+
+function positionAnimalHand(event) {
+  const world = $('#animalWorld');
+  if (typeof world.getBoundingClientRect !== 'function') return;
+  const bounds = world.getBoundingClientRect();
+  const target = $('#animalPetTarget').getBoundingClientRect();
+  const fromPointer = event && (event.type === 'pointermove' || event.detail > 0)
+    && Number.isFinite(event.clientX) && Number.isFinite(event.clientY);
+  const x = fromPointer ? event.clientX : target.left + target.width * .52;
+  const y = fromPointer ? event.clientY : target.top + target.height * .28;
+  const hand = $('#animalHand');
+  hand.style.setProperty('--hand-x', (x - bounds.left) + 'px');
+  hand.style.setProperty('--hand-y', (y - bounds.top) + 'px');
+  world.dataset.tracking = 'true';
+}
+
+function trackAnimalHand(event) {
+  const world = $('#animalWorld');
+  if (world.dataset.mode !== 'pet' || event.pointerType === 'touch') return;
+  if (event.target.closest('.animal-hud, .animal-controls')) world.dataset.tracking = 'false';
+  else positionAnimalHand(event);
+}
+
+function finishAnimalInteraction(choice, event, forcedElapsedMs) {
+  if (!animalEncounter || uiLocked) return;
+  const { species, revision } = animalEncounter;
+  const elapsedMs = forcedElapsedMs === undefined ? animalTiming?.elapsedMs : forcedElapsedMs;
+  const result = runCommand('interactWithAnimal', { species, choice, elapsedMs }, revision);
+  if (!result) {
+    const lastFailure = failures.at(-1);
+    if (lastFailure?.operation === 'interactWithAnimal') {
+      $('#animalDetail').textContent = lastFailure.reason;
+      $('#animalControls').hidden = false;
+    }
+    return;
   }
-  renderNpcLayer();
-  if (typeof setTimeout === 'function') npcTimer = setTimeout(npcTick, 300);
-}
-function talkToNpc(npcId) {
-  if (!npcSystem || !state || dialog.open) return;
-  const found = npcSystem.active().find((item) => item.id === npcId);
-  if (!found) return;
-  npcTalking = { id: found.id, identityId: found.identityId, label: found.label, figure: found.figure };
-  audio?.play('npc');
-  showNpcLine();
-}
-function showNpcLine() {
-  const lines = npc.linesFor(npcTalking.identityId);
-  const index = npcTalkIndex.get(npcTalking.id) || 0;
-  npcTalkIndex.set(npcTalking.id, index + 1);
-  const line = lines[index % lines.length];
-  // 配置了在线对话中转地址时，附加打字输入框：发送走云函数转 DeepSeek，失败自动回退本地台词。
-  const chatForm = game.AI_CHAT && game.AI_CHAT.relay
-    ? '<form id="npcChatForm" class="npc-chat-form"><label for="npcChatInput">' + h(npcTalking.label) + '就在眼前，想说点什么？</label><div class="npc-chat-row"><input id="npcChatInput" maxlength="200" placeholder="比如：最近校园里有什么新鲜事？" autocomplete="off"><button type="submit" class="utility-button">发送</button></div></form>'
-    : '';
-  showDialog('npc', npcTalking.label, '<div class="npc-dialog-figure">' + npcFigureSvg(npcTalking.figure) + '</div><p class="npc-dialog-line">' + h(line) + '</p><p class="dialog-note">校园里的人会随机出现，聊几句不消耗资源。</p>' + chatForm, [{ id: 'npcTalk', text: '再聊一句' }, { id: 'resume', text: '先走了', secondary: true }]);
-}
-// 在线对话的玩家背景速写，随学期推进变化，让人物回答更贴合当前处境。
-function npcPlayerContext() {
-  if (!state) return '一名新生';
-  const grades = state.courses.filter((item) => item.passed).length;
-  const stage = ({ eventPending: '正在处理校园事件', summary: '正在看学期总结', endingChoice: '正在做毕业方向选择', finished: '已经毕业' })[state.phase] || '正常校园生活';
-  return '昵称' + state.nickname + '，' + (state.background ? state.background.major : '') + '专业，' + game.TERM_NAMES[state.courses.length - 1] + '，已通过' + grades + '学期成绩，深造准备' + state.furtherStudy + '，求职准备' + state.jobPreparation + '，' + stage;
-}
-async function sendNpcChat() {
-  if (!npcTalking || dialogMode !== 'npc') return;
-  const input = $('#npcChatInput');
-  const text = String(input?.value || '').trim();
-  if (!text) { input?.focus(); return; }
-  const relay = game.AI_CHAT && game.AI_CHAT.relay;
-  if (!relay || typeof fetch !== 'function') { showNpcLine(); $('#dialogNotice').textContent = '在线对话通道没连上，先用本地台词聊吧。'; return; }
-  // 清掉已离场人物的聊天记录，控制总量；每条对话保留最近 12 条消息。
-  if (npcSystem) {
-    const activeIds = new Set(npcSystem.active().map((item) => item.id));
-    for (const id of [...npcChatLogs.keys()]) if (!activeIds.has(id)) npcChatLogs.delete(id);
+  stopAnimalTiming();
+  animalSystem.finish(animalClock(), animalEncounter.id);
+  renderAnimalLayer(null, false);
+  const { outcome } = result.entry.animal;
+  const catHissed = species === 'cat' && outcome === 'startled';
+  const name = animalName(animalEncounter);
+  const animate = animalMotionEnabled();
+  const title = species === 'cat'
+    ? (catHissed ? name + '哈气了' : outcome === 'fed' ? '已喂食' + name : '摸到' + name + '了')
+    : (outcome === 'startled' ? '它被吓了一跳' : outcome === 'fed' ? '喂食完成' : '摸到了');
+  const world = $('#animalWorld');
+  const showResult = () => {
+    animalReactionTimer = null;
+    animalReactionDueAt = 0;
+    animalReactionCallback = null;
+    if (!animalEncounter || !animalDialog.open) return;
+    world.dataset.tracking = 'false';
+    showAnimalView('result', outcome, ANIMAL_TEXT[species][outcome].replace('小猫', name), changeText(result.changes), '', title);
+  };
+  if (species === 'cat') {
+    if (catHissed) audio?.play('catHiss');
+    showResult();
+    return;
   }
-  const persona = npc.IDENTITIES.find((item) => item.id === npcTalking.identityId);
-  const history = npcChatLogs.get(npcTalking.id) || [];
-  const messages = [
-    { role: 'system', content: '你是《北交人生》校园游戏地图上的一位NPC：' + npcTalking.label + '。用中文回答，两三句以内，口语化，符合你的身份。不要用列表和表情包，不要透露你是AI。你常说的话例如：' + persona.lines.join('') },
-    { role: 'system', content: '正在和你说话的是北京交通大学的学生：' + npcPlayerContext() },
-    ...history,
-    { role: 'user', content: text }
-  ];
-  const sendButton = $('#npcChatForm button[type="submit"]');
-  const buttonText = sendButton ? sendButton.textContent : '';
-  if (input) input.disabled = true;
-  if (sendButton) { sendButton.disabled = true; sendButton.textContent = '对方正在输入…'; }
-  let controller = null;
-  let timeoutTimer = null;
-  if (typeof AbortController !== 'undefined') {
-    controller = new AbortController();
-    timeoutTimer = setTimeout(() => controller.abort(), game.AI_CHAT.timeoutMs || 15000);
-  }
-  try {
-    const response = await fetch(relay, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }), signal: controller ? controller.signal : undefined });
-    const data = await response.json();
-    const reply = typeof data?.reply === 'string' ? data.reply.trim() : '';
-    if (!response.ok || !reply) throw new Error('bad relay response');
-    history.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
-    npcChatLogs.set(npcTalking.id, history.slice(-12));
-    const line = document.querySelector('.npc-dialog-line');
-    if (line) line.textContent = reply;
-    $('#dialogNotice').textContent = '';
-    if (input) { input.value = ''; input.disabled = false; input.focus(); }
-    if (sendButton) { sendButton.disabled = false; sendButton.textContent = buttonText; }
-  } catch (_) {
-    // 中转不可达或服务异常：回退本地台词，聊天不中断；输入框随弹窗重建。
-    showNpcLine();
-    $('#dialogNotice').textContent = '在线对话通道没连上，先用本地台词聊吧。';
-  } finally {
-    if (timeoutTimer !== null) clearTimeout(timeoutTimer);
-  }
+  if (choice === 'pet') positionAnimalHand(event);
+  showAnimalView('react', outcome, '', '', '', title);
+  animalReactionCallback = showResult;
+  animalReactionDueAt = Date.now() + (animate ? 740 : 0);
+  animalReactionTimer = setTimeout(showResult, animate ? 740 : 0);
 }
+
 function showDialog(mode, title, body, buttons = []) {
+  if (dialogMode === 'npcMeetIntro' && mode !== 'npcMeetIntro') npcMeetIntro = null;
+  dialog.classList.remove('is-vn');
   dialogMode = mode;
   stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ event: '校园事件', admission: '入学', enrollment: '入学', login: '登录', endingChoice: '毕业方向', finished: '四年手账', npc: '校园偶遇' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ relationship: '人物关系网', relationshipResult: '共同经历', basketballResult: '球场结算', event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', budget: '学期预算', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', positionPicker: '南门岗位库' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
-  $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
-  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'npc'].includes(mode);
+  $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary, disabled }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked || disabled ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
+  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(mode);
   if (!dialog.open) dialog.showModal();
   (dialog.querySelector('input') || $('#dialogTitle')).focus({ preventScroll: true });
   dialog.scrollTop = 0;
@@ -473,28 +2227,44 @@ function lockUi() {
   uiLocked = true;
   clearTimeout(unlockTimer);
   if (activePlace) renderActions();
-  dialog.querySelectorAll('[data-dialog-action], [data-event-choice], [data-ending]').forEach((button) => { button.disabled = true; });
+  dialog.querySelectorAll('[data-dialog-action], [data-event-choice], [data-ending], [data-position-apply], [data-position-lock]').forEach((button) => { button.disabled = true; });
+  dialog.querySelectorAll('#examForm input, #examForm > button[type="submit"]').forEach((input) => { input.disabled = true; });
   unlockTimer = setTimeout(() => {
     uiLocked = false;
+    renderGrowth();
     if (activePlace) renderActions();
     dialog.querySelectorAll('[data-dialog-action]').forEach((button) => { button.disabled = false; });
-    dialog.querySelectorAll('[data-event-choice]').forEach((button) => { button.disabled = !game.eventAvailability(state, button.dataset.eventChoice, button.dataset.instance).ok; });
+    dialog.querySelectorAll('[data-position-lock]').forEach((button) => { button.disabled = false; });
+    dialog.querySelectorAll('[data-position-apply]').forEach((button) => { button.disabled = !game.availability(state, 'applyInternship', undefined, button.dataset.positionApply).ok; });
+    dialog.querySelectorAll('[data-event-choice]').forEach((button) => { button.disabled = !game.eventAvailability(state, button.dataset.eventChoice, button.dataset.instance, eventDraft(button.dataset.eventChoice)).ok; });
     dialog.querySelectorAll('[data-ending]').forEach((button) => { button.disabled = !state.endingOptions.options.find((item) => item.id === button.dataset.ending)?.available; });
+    dialog.querySelectorAll('#examForm input, #examForm > button[type="submit"]').forEach((input) => { input.disabled = false; });
+    if (dialogMode === 'relationship') showZhouNing({ preserve: true });
+    else if (!dialog.open || dialogMode === 'event') maybeZhouNingDirector();
   }, 300);
 }
-function runCommand(operation, id, expectedRevision, eventInstanceId) {
+function runCommand(operation, id, expectedRevision, eventInstanceId, investment, extra, positionId) {
   if (!state || uiLocked) return null;
-  const options = { commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId };
-  const result = ['executeAction', 'submitEventChoice', 'chooseEnding'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
+  const developerBefore = developerTesting ? CampusDeveloperTools.clone(state) : null;
+  const options = { ...(extra && typeof extra === 'object' ? extra : { extra }), positionId, commandId: 'ui:' + sessionId + ':' + (++commandSequence), expectedRevision: Number(expectedRevision), eventInstanceId, investment };
+  if(['executeAction','completeBasketball','submitEventChoice','resolveNpcProposal','runNpcStory'].includes(operation)){options.npcSupportVersion=1;options.npcCastVersion=1;if(options.companionId)options.characterVersion=2;}
+  if(operation==='submitEventChoice'&&state.relationships?.eventCompanion?.instanceId===state.pendingEvent?.instanceId)options.companionId=state.relationships.eventCompanion.npcId;
+  if (operation === 'submitEventChoice' && id !== game.SICK_LEAVE_ID && game.characterAgent.read(state).cameo?.instanceId === state.pendingEvent?.instanceId) options.zhouCameo = true;
+  const result = ['executeAction', 'purchaseGrowth', 'chooseBudget', 'setTargetPosition', 'completeBasketball', 'submitEventChoice', 'chooseEnding', 'interactWithAnimal', 'selectCourses', 'updateExamAnswers', 'submitExam', 'interactWithZhouNing', 'recordZhouNingDialogue', 'resolveZhouNingProposal','recordNpcDialogue','resolveNpcProposal','runNpcStory','attachNpcToEvent'].includes(operation) ? game[operation](state, id, options) : game[operation](state, options);
   if (!result.ok) {
+    developerPanel?.record(operation, developerBefore, state, result.reason);
     failures.push({ operation, id: id || null, reason: result.reason, state: game.stateBrief(state), expectedRevision: options.expectedRevision });
     audio?.play('deny');
     showToast(result.reason);
     return null;
   }
   state = result.state;
-  lockUi();
+  developerPanel?.record(result.entry?.title || operation, developerBefore, state);
+  if (operation !== 'updateExamAnswers') lockUi();
   renderState();
+  if (['settleInternship', 'submitEventChoice', 'runNpcStory', 'interactWithZhouNing', 'completeBasketball'].includes(operation)) {
+    setTimeout(() => maybeQueueNpcReflection('major'), 0);
+  }
   return result;
 }
 function saveCurrent(automatic = false, slotId = activeSaveSlot) {
@@ -508,6 +2278,7 @@ function saveCurrent(automatic = false, slotId = activeSaveSlot) {
   if (result.ok) {
     activeSaveSlot = slotId;
     savedRevision = state.revision;
+    savedNpcDialogueSummaries = npcSummarySaveStamp();
     savedAt = result.savedAt;
     saveNotice = result.warning || '已保存到栏位 ' + slotId + ' · ' + displayTime(savedAt);
     audio?.play('save');
@@ -519,6 +2290,26 @@ function saveCurrent(automatic = false, slotId = activeSaveSlot) {
     showToast((automatic ? '自动保存未完成：' : '') + result.reason);
   }
   return result;
+}
+function hasUnsavedProgress() {
+  return !!state && (state.revision !== savedRevision || npcSummarySaveStamp() !== savedNpcDialogueSummaries);
+}
+function npcSummarySaveStamp() {
+  // 开发者测试面板会深拷贝存档，按内容比较摘要与人物记忆的保存状态。
+  return JSON.stringify({
+    summaries: state?.npcDialogueSummaries || null,
+    memory: state?.npcAgentMemory || null
+  });
+}
+function renderSaveStatus() {
+  const prefix = developerTesting ? '【隔离测试】保存仅写入测试栏位 · ' : '';
+  const status = hasUnsavedProgress() ? '当前有未保存进度 · ' : '当前进度已保存 · ';
+  $('#sessionNote').textContent = prefix + (savedAt ? '栏位 ' + activeSaveSlot + ' · ' + status + displayTime(savedAt) : '尚未保存；点击保存选择栏位，之后自动保存到该栏位。');
+}
+function guardUnsavedProgress(event) {
+  if (!hasUnsavedProgress()) return;
+  event.preventDefault();
+  event.returnValue = '';
 }
 function displayTime(value) { return new Date(value).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }); }
 function saveInfo(slot) {
@@ -539,7 +2330,7 @@ function showSave() {
   if (!state) return;
   saveTarget = null;
   const info = saves.inspect();
-  showDialog('save', '选择保存栏位', '<p>选择一个栏位保存当前进度，之后的自动保存也会使用这个栏位。</p>' + slotCards(info, 'save'), [{ id: 'resume', text: '返回游戏', secondary: true }]);
+  showDialog('save', developerTesting ? '选择测试保存栏位' : '选择保存栏位', '<p>' + (developerTesting ? '隔离测试中：这些是独立测试栏位，自动保存也只写入测试存档。' : '选择一个栏位保存当前进度，之后的自动保存也会使用这个栏位。') + '</p>' + slotCards(info, 'save'), [{ id: 'resume', text: '返回游戏', secondary: true }]);
 }
 function selectSaveSlot(slotId) {
   const info = saves.inspect().slots.find(slot => slot.id === slotId);
@@ -555,20 +2346,231 @@ function finishSave(slotId) {
   resumePhase();
   showToast(result.warning || '已保存到栏位 ' + slotId);
 }
+function startMenuHasSave() {
+  const info = saves.inspect();
+  return info.slots.some((slot) => slot.ok && ((slot.primary.ok && !slot.primary.empty) || (slot.backup.ok && !slot.backup.empty)));
+}
+
+function updateStartMenu() {
+  const startContinue = $('#startContinue');
+  const note = $('#startContinueNote');
+  if (!startContinue) return;
+  const hasSave = startMenuHasSave();
+  startContinue.disabled = !hasSave;
+  if (note) note.textContent = hasSave ? '读取存档' : '暂无存档';
+  const version = $('#startVersion');
+  if (version) version.textContent = '版本 ' + (game.RULES.appVersion || '未知') + ' · 规则 v' + (game.RULES.version || '?');
+  updateStartSoundButton();
+  updateStartMotionButton();
+}
+
+function updateStartSoundButton() {
+  const button = $('#startSoundButton');
+  if (!button) return;
+  if (!audio) { button.hidden = true; return; }
+  button.hidden = false;
+  button.textContent = '声音:' + (audio.isEnabled() ? '开' : '关');
+  button.setAttribute('aria-pressed', audio.isEnabled() ? 'true' : 'false');
+}
+
+function updateStartMotionButton() {
+  const button = $('#startMotionButton');
+  if (!button) return;
+  button.textContent = '动画效果:' + (motionOn ? '开' : '关');
+  button.setAttribute('aria-pressed', motionOn ? 'true' : 'false');
+}
+
+function hideStartMenu() {
+  const start = $('#startScreen');
+  const shell = $('#gameShell');
+  if (start) start.hidden = true;
+  if (shell) shell.inert = false;
+  hideCoach();
+}
+
+function showStartMenu() {
+  const start = $('#startScreen');
+  const shell = $('#gameShell');
+  if (dialog.open) dialog.close();
+  dialogMode = null;
+  openPanelName = null;
+  closePopovers();
+  closePanel();
+  if (start) start.hidden = false;
+  if (shell) shell.inert = true;
+  const dock = $('#semesterDock');
+  if (dock && !state) dock.hidden = true;
+  const settings = $('#startSettingsPanel');
+  if (settings) settings.hidden = true;
+  const status = $('#startStatus');
+  if (status) status.textContent = '';
+  updateStartMenu();
+  maybeShowStartCoach();
+}
+
+function startNewGame() {
+  finishCoach('start-new');
+  showAdmission();
+}
+
+function startContinueGame() {
+  if (!startMenuHasSave()) return;
+  showLoad();
+}
+
+function toggleStartSettings() {
+  const panel = $('#startSettingsPanel');
+  if (!panel) return;
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) $('#startSoundButton')?.focus({ preventScroll: true });
+}
+
+function startExitGame() {
+  const status = $('#startStatus');
+  try { window.close(); } catch (_) {}
+  if (status) status.textContent = '浏览器不允许自动关闭页面，请直接关闭标签页。';
+}
+
+function coachDone(id) {
+  return !!coachProgress[id];
+}
+
+function saveCoachProgress() {
+  try { storage?.setItem(COACH_KEY, JSON.stringify(coachProgress)); } catch (_) {}
+}
+
+function hideCoach() {
+  const layer = $('#coachLayer');
+  if (activeCoach?.target) activeCoach.target.classList.remove('coach-target');
+  activeCoach = null;
+  if (layer) layer.hidden = true;
+}
+
+function finishCoach(id) {
+  if (!id || !activeCoach || activeCoach.id !== id) return;
+  const next = activeCoach.onFinish;
+  coachProgress[id] = 1;
+  saveCoachProgress();
+  hideCoach();
+  if (typeof next === 'function') setTimeout(next, 220);
+}
+
+function skipAllCoach() {
+  if (activeCoach && activeCoach.id.startsWith('term-unlock:')) coachProgress[activeCoach.id] = 1;
+  for (const step of termUnlockQueue) coachProgress[step.id] = 1;
+  termUnlockQueue = [];
+  for (const id of Object.keys(coachProgress)) if (id.startsWith('term-unlock:')) coachProgress[id] = 1;
+  for (const id of COACH_STEPS) coachProgress[id] = 1;
+  saveCoachProgress();
+  hideCoach();
+}
+
+function positionCoach() {
+  if (!activeCoach) return;
+  const layer = $('#coachLayer');
+  const target = activeCoach.target;
+  const bubble = $('#coachBubble');
+  const spotlight = $('#coachSpotlight');
+  if (!layer || !bubble || !spotlight || !target || target.isConnected === false || typeof target.getBoundingClientRect !== 'function' || typeof bubble.getBoundingClientRect !== 'function') {
+    hideCoach();
+    return;
+  }
+  const rect = target.getBoundingClientRect();
+  if (!rect.width || !rect.height) { hideCoach(); return; }
+  const pad = 6;
+  spotlight.style.left = Math.max(4, rect.left - pad) + 'px';
+  spotlight.style.top = Math.max(4, rect.top - pad) + 'px';
+  spotlight.style.width = (rect.width + pad * 2) + 'px';
+  spotlight.style.height = (rect.height + pad * 2) + 'px';
+  const bubbleRect = bubble.getBoundingClientRect();
+  const gap = 14;
+  const above = rect.top > bubbleRect.height + gap + 12;
+  const top = above ? rect.top - bubbleRect.height - gap : rect.bottom + gap;
+  const left = Math.max(12, Math.min(rect.left + rect.width / 2 - bubbleRect.width / 2, window.innerWidth - bubbleRect.width - 12));
+  bubble.style.left = left + 'px';
+  bubble.style.top = Math.max(12, Math.min(top, window.innerHeight - bubbleRect.height - 12)) + 'px';
+  bubble.classList.toggle('is-above', above);
+  bubble.classList.toggle('is-below', !above);
+}
+
+function showCoachStep(id, selector, text, onFinish) {
+  if (developerPaused || developerTesting) return false;
+  if (coachDone(id) || activeCoach || dialog.open) return;
+  const target = document.querySelector(selector);
+  if (!target) return;
+  const layer = $('#coachLayer');
+  const bubble = $('#coachBubble');
+  if (!layer || !bubble) return;
+  activeCoach = { id, target, onFinish };
+  target.classList.add('coach-target');
+  $('#coachText').textContent = text;
+  layer.hidden = false;
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(positionCoach);
+  else setTimeout(positionCoach, 0);
+}
+
+function maybeShowStartCoach(force = false) {
+  if (coachDone('start-new')) return;
+  if (!force && startMenuHasSave()) return;
+  showCoachStep('start-new', '#startNew', '第一次来？先创建角色，开始你的第一学期。');
+}
+
+function maybeShowMapCoach() {
+  if (!state || activePlace || dialog.open || activeCoach || coachDone('map-place')) return;
+  showCoachStep('map-place', '.hotspot-think', '点击一个地点，开始安排今天的行动。');
+}
+
+function maybeShowActionCoach() {
+  if (!state || !activePlace || dialog.open || activeCoach || coachDone('map-place') || coachDone('action-confirm')) return;
+  if (state.history.some((entry) => entry.command.operation === 'executeAction' || entry.command.operation === 'completeBasketball')) return;
+  const target = document.querySelector('#actionList .action-card button:not(:disabled)');
+  if (!target) return;
+  const accordion = target.closest?.('details.action-accordion');
+  if (accordion) {
+    accordion.open = true;
+    openActionCards.add(accordion.dataset.actionId);
+  }
+  showCoachStep('action-confirm', '#actionList .action-card button:not(:disabled)', '选好投入档位后，确认行动。');
+}
+
+function maybeShowEndTermCoach() {
+  if (!state || activePlace || dialog.open || activeCoach || coachDone('semester-end')) return;
+  if (!state.history.some((entry) => entry.command.operation === 'executeAction' || entry.command.operation === 'completeBasketball')) return;
+  showCoachStep('semester-end', '#endTermQuick', '本学期还可以继续安排；准备结束时，从这里参加考试。');
+}
+
+function maybeShowTermUnlockCoach() {
+  if (!state || state.phase !== 'playing' || activePlace || dialog.open || activeCoach) return;
+  if (termUnlockQueue.length) { showNextTermUnlockCoach(); return; }
+  const steps = termUnlockSteps(state.term).filter(step => !coachDone(step.id) && document.querySelector(step.selector));
+  if (!steps.length) return;
+  termUnlockQueue = steps;
+  showNextTermUnlockCoach();
+}
+
+function showNextTermUnlockCoach() {
+  if (!termUnlockQueue.length || activeCoach || dialog.open || activePlace) return;
+  while (termUnlockQueue.length) {
+    const step = termUnlockQueue.shift();
+    if (coachDone(step.id) || !document.querySelector(step.selector)) continue;
+    showCoachStep(step.id, step.selector, step.text, showNextTermUnlockCoach);
+    if (activeCoach) return;
+  }
+}
+
 function showAdmission() {
   if (!loginSession && !loginSkipped) {
     if (!sms) loginSkipped = true;
     else { showLogin(); return; }
   }
-  const info = saves.inspect();
   const accountButtons = sms
     ? [{ id: loginSession ? 'switchAccount' : 'loginPrompt', text: loginSession ? '切换账号' : '手机登录', secondary: true }]
     : [];
-  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p>' + (loginSession ? '<p class="dialog-note">已登录：<b>' + h(loginSession.phone) + '</b>' + (loginSession.nickname ? ' · ' + h(loginSession.nickname) : '') + '</p>' : '') + '<form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="2～12 个字符，汉字/字母/数字，不能全是数字" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form><h3>或选择存档继续</h3>' + slotCards(info, 'load') + '<p class="dialog-note">共有 3 个存档栏位，新局首次保存时可自主选择。旧版存档位于栏位 1。</p>', accountButtons);
+  showDialog('admission', '你好，北交', '<p>八个学期，从拖着行李箱进校门开始。学习、社团、项目、实习、生活费，每一项都得你自己拿主意。</p>' + (loginSession ? '<p class="dialog-note">已登录：<b>' + h(loginSession.phone) + '</b>' + (loginSession.nickname ? ' · ' + h(loginSession.nickname) : '') + '</p>' : '') + '<form id="admissionForm"><label for="nicknameInput">你的昵称</label><input id="nicknameInput" name="nickname" maxlength="24" placeholder="2～12 个字符，汉字/字母/数字，不能全是数字" autocomplete="off" required>' + (debug ? '<label for="seedInput">测试随机种子</label><input id="seedInput" maxlength="64" value="mvp-test">' : '') + '<p id="admissionError" class="action-reason" role="alert"></p><button type="submit">开始新生活</button></form>', accountButtons);
 }
 function showLogin() {
   stopSmsCountdown();
-  showDialog('login', '手机验证码登录', '<p>输入手机号获取验证码，登录后进入入学流程。</p><form id="loginForm"><label for="phoneInput">手机号</label><input id="phoneInput" name="phone" inputmode="numeric" maxlength="11" placeholder="11 位手机号" autocomplete="tel" required><label for="codeInput">验证码</label><div class="login-row"><input id="codeInput" name="code" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" required><button type="button" class="utility-button" id="smsSendButton">获取验证码</button></div><p id="loginError" class="action-reason" role="alert"></p><button type="submit">登录</button></form><p class="dialog-note">尚未接入短信通道，当前为演示模式：验证码会直接显示在提示中。</p>', [{ id: 'loginSkip', text: '暂不登录，直接入学', secondary: true }]);
+  showDialog('login', '手机验证码登录', '<form id="loginForm"><label for="phoneInput">手机号</label><input id="phoneInput" name="phone" inputmode="numeric" maxlength="11" placeholder="11 位手机号" autocomplete="tel" required><label for="codeInput">验证码</label><div class="login-row"><input id="codeInput" name="code" inputmode="numeric" maxlength="6" placeholder="6 位验证码" autocomplete="one-time-code" required><button type="button" class="utility-button" id="smsSendButton">获取验证码</button></div><p id="loginError" class="action-reason" role="alert"></p><button type="submit">登录</button></form>', [{ id: 'loginSkip', text: '暂不登录，直接入学', secondary: true }]);
 }
 async function requestSmsCode() {
   const phone = $('#phoneInput').value.trim();
@@ -626,54 +2628,273 @@ function startGame() {
   if (loginSession) { loginSession.nickname = checked.value; try { storage?.setItem(LOGIN_KEY, JSON.stringify(loginSession)); } catch (_) {} }
   const seed = debug ? $('#seedInput').value : (window.crypto?.getRandomValues ? String(window.crypto.getRandomValues(new Uint32Array(1))[0]) : String(Date.now()));
   try { state = game.createGame({ nickname: checked.value, seed }); } catch (error) { $('#admissionError').textContent = error.message; return; }
+  resetNpcSummaryJobs();
   savedRevision = -1;
+  savedNpcDialogueSummaries = '';
   activeSaveSlot = null;
   savedAt = '';
   saveNotice = '';
   failures.length = 0;
+  resetSeasonTracking();
   audio?.play('success');
   audio?.startBgm();
-  resetNpcSystem();
+  resetAnimalSystem();
+  hideStartMenu();
   renderState();
   showEnrollment();
 }
+function familyIntroMarkup() {
+  const family = game.budgetFor(state)?.family;
+  return family ? '<section class="wallet-budget"><h3>你的家庭环境 · ' + h(family.label) + '</h3><p>' + h(family.description) + '</p></section>' : '';
+}
 function showEnrollment() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
-  showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p><p class="dialog-note">背景只影响一项行动加成，不会锁死你的毕业路线。入学后可在「入学背景」里随时查看。</p>', [{ id: 'resume', text: '看看怎么安排' }]);
+  showDialog('enrollment', '录取通知', '<p>' + h(state.nickname) + '，欢迎你。</p><p>录取信息：<b>' + h(state.background.college) + '</b> · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p>' + familyIntroMarkup(), [{ id: 'resume', text: '看看怎么安排' }]);
 }
-function showTutorial() {
-  showDialog('tutorial', '八学期怎么安排', '<ol><li>点击地图上的地点，先看成本和收益，再决定做不做。逛逛、返回都不花钱。</li><li>学习和自学都攒同一个学习进度；期末成绩 = round(40 + 学习进度 × 0.6)，60 分达标。</li><li>每学期 12 点时间。休息能回精力，回不了时间；长期属性和经历会跟着你跨学期。</li><li>项目、社团、实习，各要一次申请加两次投入。项目的成果在之后的学期确认，社团和实习在投入完成后即可收尾。</li><li>普通毕业：平均成绩至少 60，且六学期达标。深造再加：平均 80、完成项目、深造准备 60。就业再加：完成实习、求职准备 60。</li><li>大三起开放深造与求职准备。方向可以兼顾、转换，毕业时挑一个够得着的。</li><li>点击保存从 3 个栏位中选择一个。学期结算与毕业确认后自动保存到当前栏位；首次选栏前仅保留本页进度。关闭页面后从入学页选择存档继续。</li></ol>', [{ id: 'resume', text: '开始安排' }]);
+function showTutorial(fromStart = false) {
+  const steps = '<div class="tutorial-steps">'
+    + '<article class="tutorial-step"><b>01</b><div><h3>先完成开学准备</h3><p>确认衣、食、住、行预算，再从本学期课程中选择 3 门。</p></div></article>'
+    + '<article class="tutorial-step"><b>02</b><div><h3>去地图安排行动</h3><p>点击地点查看行动。注意剩余时间和精力，确认投入后才会结算。</p></div></article>'
+    + '<article class="tutorial-step"><b>03</b><div><h3>结束学期并考试</h3><p>行动安排完或时间用完时，点击“结束学期并参加考试”。总评由平时分和 5 题考试组成。</p></div></article>'
+    + '</div>';
+  const full = '<details class="tutorial-more"><summary>查看完整规则</summary><ol>'
+    + '<li>每学期开始先确认生活预算并选择 3 门课；学期结束参加 5 题期末考试。</li>'
+    + '<li>每学期 12 点时间；行动会消耗时间、精力和体能。休息、散步和锻炼可以恢复，但时间不结转。</li>'
+    + '<li>日常行动和部分事件有固定投入档位，确认前会展示成本；完成后才揭晓实际收益。</li>'
+    + '<li>课程学习和自主学习积累学习进度，它会计入期末总评的平时分。</li>'
+    + '<li>项目、社团、实习需要先申请再投入；达标后还需要完成证明或成果确认。</li>'
+    + '<li>普通毕业要求平均成绩和达标学期；深造、就业还有额外条件，毕业时再选择方向。</li>'
+    + '<li>存档有 3 个栏位；学期结算和毕业确认会自动保存到当前栏位。</li>'
+    + '</ol></details>';
+  showDialog('tutorial', '先做这三件事', '<p class="tutorial-lead">不用一次记住所有规则，先完成第一学期的核心循环。</p>' + steps + full, [{ id: fromStart ? 'startMenu' : 'resume', text: fromStart ? '返回启动页' : '开始安排' }]);
 }
+
 function showBackground() {
   const background = game.BACKGROUNDS.find((item) => item.id === state.background.id);
-  showDialog('background', '入学背景', '<p><b>' + h(state.nickname) + '</b> · ' + h(state.background.college) + ' · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p><p>学院类别与专业方向是玩法用的简化设定，不代表学校实际培养方案。背景不会锁死你的毕业路线。</p>', [{ id: 'resume', text: '继续安排' }]);
+  showDialog('background', '入学背景', '<p><b>' + h(state.nickname) + '</b> · ' + h(state.background.college) + ' · ' + h(state.background.major) + '</p><p>' + h(background.bonus) + '</p>' + familyIntroMarkup(), [{ id: 'resume', text: '继续安排' }]);
+}
+function defaultInvestment(profile, available) {
+  if (available(profile.default)) return profile.default;
+  return profile.tiers.find(tier => available(tier.amount))?.amount ?? profile.default;
+}
+function eventDraft(choiceId, resetInvalid = false) {
+  const profile = game.getEventInvestment(state, choiceId);
+  if (!profile) return undefined;
+  const key = state.pendingEvent.instanceId + ':' + choiceId;
+  const current = eventDrafts.get(key);
+  if (!eventDrafts.has(key) || (resetInvalid && !profile.tiers.some(tier => tier.amount === current))) eventDrafts.set(key, defaultInvestment(profile, amount => game.eventAvailability(state, choiceId, state.pendingEvent.instanceId, amount).ok));
+  return eventDrafts.get(key);
+}
+function investmentTierButtons(choice, profile, amount, kind) {
+  const data = kind === 'action' ? 'data-action-investment-preset' : 'data-investment-preset';
+  return profile.tiers.map(tier => {
+    const preview = kind === 'action' ? game.previewActionInvestment(state, choice.id, tier.amount) : game.previewEventInvestment(state, choice.id, tier.amount);
+    return '<button type="button" class="investment-tier' + (tier.amount === amount ? ' is-selected' : '') + '" ' + data + '="' + choice.id + '" data-amount="' + tier.amount + '" aria-pressed="' + (tier.amount === amount) + '"><b>' + h(tier.label) + '</b><span>' + h(costs(preview.effect)) + '</span>' + (profile.fixedIncome ? '<span>固定报酬 +' + tier.income + ' 元' + ((state.cardDebt || 0) ? ' · 优先偿还校园卡赔偿' : '') + '</span>' : '') + '</button>';
+  }).join('');
+}
+function investmentControls(choice, profile, preview, kind = 'event') {
+  const id = (kind === 'action' ? 'action-' : '') + choice.id;
+  return '<fieldset class="investment-controls"><legend>' + h(profile.label) + '</legend><div class="investment-options" id="investment-options-' + id + '">' + investmentTierButtons(choice, profile, preview.amount, kind) + '</div></fieldset>';
+}
+
+function investmentUnit(resource) {
+  return { money: '元', energy: '点精力', time: '点时间' }[resource];
+}
+function actionDraft(id) {
+  const profile = game.getActionInvestment(state, id);
+  if (!profile) return undefined;
+  const key = state.term + ':' + id;
+  if (!actionDrafts.has(key)) actionDrafts.set(key, defaultInvestment(profile, amount => game.availability(state, id, amount).ok));
+  return actionDrafts.get(key);
+}
+function updateActionInvestment(id, amount, sourceId) {
+  const profile = game.getActionInvestment(state, id);
+  if (!profile || game.ACTIONS[id].place !== activePlace || dialog.open) return;
+  actionDrafts.set(state.term + ':' + id, amount);
+  const preview = game.previewActionInvestment(state, id, amount);
+  const check = game.availability(state, id, amount);
+  $('#action-choice-' + id).disabled = !check.ok || uiLocked;
+  $('#investment-reason-action-' + id).textContent = check.ok ? '' : check.reason;
+  $('#investment-cost-action-' + id).textContent = preview.ok ? costs(preview.effect) : '请设置有效的投入';
+  $('#investment-options-action-' + id).innerHTML = investmentTierButtons({ id }, profile, amount, 'action');
+
+}
+function updateInvestment(choiceId, amount, sourceId) {
+  const profile = game.getEventInvestment(state, choiceId);
+  if (!profile || dialogMode !== 'event') return;
+  eventDrafts.set(state.pendingEvent.instanceId + ':' + choiceId, amount);
+  const preview = game.previewEventInvestment(state, choiceId, amount);
+  const check = game.eventAvailability(state, choiceId, state.pendingEvent.instanceId, amount);
+  $('#event-choice-' + choiceId).disabled = !check.ok || uiLocked;
+  $('#investment-reason-' + choiceId).textContent = check.ok ? '' : check.reason;
+  $('#investment-cost-' + choiceId).textContent = preview.ok ? costs(preview.effect) : '请设置有效的投入';
+  $('#investment-options-' + choiceId).innerHTML = investmentTierButtons({ id: choiceId }, profile, amount, 'event');
+
 }
 function showEvent() {
   audio?.play('event');
   const pending = state.pendingEvent;
   const event = game.EVENTS[pending.id];
-  const choices = event.choices.map((choice) => {
-    const check = game.eventAvailability(state, choice.id);
-    return '<article class="event-choice"><h3>' + h(choice.title) + '</h3><p>' + h(choice.description) + '</p><div class="action-cost">' + h(costs(choice)) + '</div><div class="action-gain">' + h(gains(choice)) + '</div><button type="button" data-event-choice="' + choice.id + '" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '"' + (!check.ok || uiLocked ? ' disabled' : '') + '>选择：' + h(choice.title) + '</button>' + (check.ok ? '' : '<div class="action-reason">' + h(check.reason) + '</div>') + '</article>';
+  if (['zhouNingMeet', 'zhouNingPresentation'].includes(pending.id)) {
+    const choices = game.isSick(state) && pending.id !== 'zhouNingMeet'
+      ? [{ label: '先去校医院', note: '先照顾好身体，之后再安排。', attributes: { 'data-event-choice': game.SICK_LEAVE_ID, 'data-instance': pending.instanceId, 'data-revision': state.revision }, disabled: uiLocked }]
+      : event.choices.map(choice => {
+        const check = game.eventAvailability(state, choice.id, pending.instanceId);
+        return { label: choice.title, note: check.ok ? costs(game.fitnessAdjustedEffect(state, choice, null)) : check.reason, disabled: !check.ok || uiLocked, attributes: { 'data-event-choice': choice.id, 'data-instance': pending.instanceId, 'data-revision': state.revision } };
+      });
+    const speech = pending.id === 'zhouNingMeet' ? '你也选了这门课？我叫周宁。刚才那个知识点，我整理过一版笔记。你愿意和我聊聊你的解法吗？' : '题目我会做，可一想到站上讲台，脑子就空了。你能陪我练一遍吗？这次，想请你帮我迈出一步。';
+    showVisualNovel('event', event.title, speech, choices, {npcId:'zhouNing',canClose:false,place:'library',detail: event.trigger + '。相识和免费暂缓不会额外收费。' });
+    return;
+  }
+
+  const sick = game.isSick(state) && pending.id !== 'zhouNingMeet';
+  const choices = sick
+    ? '<article class="event-choice"><h3>先去校医院</h3><p>烧还没退，现在不是处理这件事的时候。</p><div class="action-cost">不消耗资源 · 事件先搁置</div><button type="button" id="event-choice-sickLeave" data-event-choice="sickLeave" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '">选择：先去校医院</button><div class="action-reason"></div></article>'
+    : event.choices.filter(choice => !choice.legacyHidden).map((choice) => {
+      const profile = game.getEventInvestment(state, choice.id);
+      const amount = eventDraft(choice.id, true);
+      const preview = profile && game.previewEventInvestment(state, choice.id, amount);
+      const check = game.eventAvailability(state, choice.id, pending.instanceId, amount);
+      return '<article class="event-choice' + (profile ? ' has-investment' : '') + '"><h3>' + h(choice.title) + '</h3><p>' + h(profile ? profile.description : choice.description) + '</p>' + (profile ? investmentControls(choice, profile, preview) : '') + '<div class="action-cost" id="investment-cost-' + choice.id + '">' + h(costs(preview?.ok ? preview.effect : game.eventChoiceEffect(state, choice.id))) + '</div>' + (choice.ending ? '<div class="action-warning">本局结束 · 这个选择没有回头路</div>' : '') + '<button type="button" id="event-choice-' + choice.id + '" data-event-choice="' + choice.id + '" data-instance="' + pending.instanceId + '" data-revision="' + state.revision + '"' + (!check.ok || uiLocked ? ' disabled' : '') + '>' + (profile ? '确认投入，' : '选择：') + h(choice.title) + '</button><div class="action-reason" id="investment-reason-' + choice.id + '">' + (check.ok ? '' : h(check.reason)) + '</div></article>';
+    }).join('');
+  const note = sick
+    ? '身体不适，先处理身体。待处理事件可以先去校医院，之后再回来处理。'
+    : h(event.trigger) + '。剩余时间 ' + state.time + ' · 精力 ' + state.energy + ' · 钱包 ' + state.money + ' 元。';
+  const bound=state.relationships?.eventCompanion, cameo=bound?.instanceId===pending.instanceId?bound:null, p=cameo&&game.npcCast.profile(cameo.npcId);
+  const helpers=game.npcCast.known(state).filter(id=>game.npcEventAvailability(state,id).ok);
+  const cameoBody=cameo?'<div class="zhou-event-cameo"><img src="'+p.portrait+'" alt="'+h(p.name)+'"><div><b>'+h(p.name)+'在你身边</b><p>'+h(cameo.say)+'</p></div></div>':helpers.length?'<div class="event-helper"><p>也可以请认识的人一起参与：</p>'+helpers.map(id=>'<button type="button" data-event-npc="'+id+'" data-instance="'+pending.instanceId+'" data-revision="'+state.revision+'">联系'+h(game.npcCast.profile(id).name)+'</button>').join('')+'</div>':'';
+  showDialog('event', event.title, '<p>' + h(event.description) + '</p>' + cameoBody + '<p class="dialog-note">' + note + '</p><div class="event-choice-list">' + choices + '</div>');
+  maybeZhouNingDirector();
+}
+const INVESTMENT_OUTCOMES = { setback: '发挥失常', limited: '收获有限', steady: '有所收获', good: '状态出色', surprise: '意外收获' };
+function showEventResult(entry) {
+  if(entry.relationship){showRelationshipResult(entry,'eventResult');return;}
+  const result = { ...entry.investment, description: entry.investment.description + (entry.relationship ? ' ' + entry.relationship.description + ' 相识度 +' + entry.relationship.gained + '，当前 ' + entry.relationship.familiarity + '/100。' : '') };
+  const profile = entry.event ? game.EVENT_INVESTMENTS[entry.event + ':' + entry.choice] || game.LEGACY_INVESTMENTS.events[entry.event + ':' + entry.choice] : game.getActionInvestment(state, entry.action) || game.LEGACY_INVESTMENTS.actions[entry.action];
+  const rawFitnessCost = entry.event
+    ? ((game.EVENTS[entry.event] && game.EVENTS[entry.event].choices.find(item => item.id === entry.choice)) || {}).fitnessCost || 0
+    : (game.ACTIONS[entry.action] || {}).fitnessCost || 0;
+  const fitnessCost = entry.fitnessCost === undefined ? rawFitnessCost : entry.fitnessCost;
+  const spent = Number.isSafeInteger(result.spent) ? result.spent : result.amount;
+  const capped = Object.keys(profile.rewards).some(key => state[key === 'recovery' ? 'energy' : key] === 100);
+  const title = entry.relationship ? entry.title : entry.event ? game.EVENTS[entry.event].title : game.ACTIONS[entry.action].title;
+  showDialog('eventResult', title + ' · 结果', '<div class="investment-result"><span class="outcome-badge outcome-' + result.outcome + '">' + (profile.fixedIncome ? '工作完成' : INVESTMENT_OUTCOMES[result.outcome]) + '</span><p class="investment-spent">本次投入 <b>' + spent + ' ' + investmentUnit(result.resource) + '</b>' + (fitnessCost ? '，另消耗 <b>' + fitnessCost + ' 点体能</b>' : '') + '</p><p class="investment-story">' + h(result.description + extraFeedback(entry) + debtFeedback(entry)) + '</p><div class="investment-actual"><span>实际变化</span><b>' + h(changeText(entry.changes)) + '</b></div>' + (entry.support?.companion ? '<p>' + h(supportText(entry)) + '</p>' : '') + (capped ? '<p>部分属性已达上限，实际增加量以当前状态为准。</p>' : '') + '</div>', [{ id: 'eventContinue', text: state.pendingEvent?.id === 'military2' ? '继续军训汇演' : state.pendingEvent ? '处理下一个事件' : '继续安排' }]);
+
+}
+function needsBudget() {
+  if (!state || state.phase !== 'playing' || (state.selectedCourses || []).length) return false;
+  const grant = game.currentGrant(state);
+  return !!(grant && grant.budget && grant.budgetChosen === false);
+}
+function needsCourseSelection() {
+  return !!state && state.phase === 'playing' && !(state.selectedCourses || []).length && !state.history.some((entry) => entry.term === state.term && entry.command.operation === 'executeAction');
+}
+function showCourseSelection() {
+  if (!state || state.phase !== 'playing') { resumePhase(); return; }
+  if (needsBudget()) { showBudget(); return; }
+  if ((state.selectedCourses || []).length) { resumePhase(); return; }
+  const options = game.coursesForTerm(state.term, state.background.id, state.background.major);
+  const cards = options.map((course) => '<label class="course-card"><input type="checkbox" name="course" value="' + h(course.id) + '"><span class="course-main"><b>' + h(course.name) + '</b><span class="course-meta">' + h(game.SUBJECTS[course.subject]) + ' · ' + course.credits + ' 学分</span><span class="course-desc">' + h(course.description) + '</span></span></label>').join('');
+  showDialog('courseSelection', '开学选课', '<form id="courseForm"><p class="course-count" id="courseCount">已选 0 / 3 门</p><div class="course-list">' + cards + '</div><p id="courseError" class="action-reason" role="alert"></p><button type="submit">确认选课</button></form>');
+}
+function submitCourseSelection(form) {
+  const ids = [...form.querySelectorAll('input[name="course"]:checked')].map((input) => input.value);
+  if (ids.length !== 3) { $('#courseError').textContent = '请选择 3 门课程'; audio?.play('deny'); return; }
+  const result = runCommand('selectCourses', ids, state.revision);
+  if (!result) return;
+  audio?.play('success');
+  const names = ids.map((id) => game.courseById(id).name).join('、');
+  if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = '选课完成：' + names; }
+  else { dialog.close(); showToast('选课完成：' + names); setTimeout(maybeShowTermUnlockCoach, 220); }
+}
+function showExam() {
+  if (!state || state.phase !== 'examPending' || !state.exam) { resumePhase(); return; }
+
+  const questions = state.exam.questions.map((question, index) => '<article class="exam-question" id="examQuestion' + index + '"><div class="exam-question-head"><span class="exam-index">第 ' + (index + 1) + ' 题</span><span class="exam-tag">' + h(question.courseName) + ' · ' + h(game.SUBJECTS[question.subject]) + '</span><span class="exam-points">20 分</span></div><p class="exam-prompt">' + mathText(question.prompt) + '</p><div class="exam-options">' + question.options.map((option, optionIndex) => '<label class="exam-option"><input type="radio" name="q' + index + '" value="' + optionIndex + '" aria-label="第 ' + (index + 1) + ' 题，' + String.fromCharCode(65 + optionIndex) + '：' + h(option) + '"' + (state.exam.answers[index] === optionIndex ? ' checked' : '') + (uiLocked ? ' disabled' : '') + '><span>' + String.fromCharCode(65 + optionIndex) + '</span>' + mathText(option) + '</label>').join('') + '</div></article>').join('');
+  showDialog('exam', game.TERM_NAMES[state.term - 1] + ' · 期末考试', '<p>平时分 <b>' + state.preparation + ' / 100</b>，占总评 40%。考试共 5 题，每题 20 分，占总评 60%。</p><div class="exam-progress"><p id="examProgress" role="status" aria-live="polite"></p><nav id="examNavigation" class="exam-navigation" aria-label="答题导航"></nav><button type="button" class="utility-button" id="examMissing" data-exam-missing="true">定位首道未答题</button></div><form id="examForm"><p id="examError" class="action-reason" role="alert"></p>' + questions + '<button type="submit"' + (uiLocked ? ' disabled' : '') + '>提交试卷</button></form><button type="button" class="danger-button" data-cheat-exam="1" data-revision="' + state.revision + '">动点歪心思……</button><p class="dialog-note">有些选择没有回头路。</p>');
+  updateExamProgress();
+}
+function confirmCheatExam() {
+  if (!state || state.phase !== 'examPending') { resumePhase(); return; }
+  showDialog('confirmCheat', '确定要作弊吗？', '<p>你准备把小抄塞进袖口。监考老师还在讲台边，考场很安静。</p><p class="dialog-note">一旦被发现，本局会立即结束，没有补考，也没有重新选择的机会。</p>', [{ id: 'cheatExam', text: '把小抄塞进袖口' }, { id: 'backToExam', text: '再想想', secondary: true }]);
+}
+function readExamAnswers(form) {
+  return state.exam.questions.map((_, index) => {
+    const checked = form.querySelector('input[name="q' + index + '"]:checked');
+    return checked ? Number(checked.value) : null;
+  });
+}
+function updateExamProgress() {
+  const answers = state.exam.questions.map((_, index) => state.exam.answers[index] ?? null);
+  const answered = answers.filter((answer) => answer !== null).length;
+  $('#examProgress').textContent = '已答 ' + answered + ' / ' + answers.length + ' 题';
+  $('#examNavigation').innerHTML = answers.map((answer, index) => {
+    const done = answer !== null;
+    return '<button type="button" data-exam-question="' + index + '" class="' + (done ? 'is-answered' : 'is-unanswered') + '" aria-label="第 ' + (index + 1) + ' 题，' + (done ? '已作答' : '未作答') + '"><b>' + (index + 1) + '</b><small>' + (done ? '已答' : '未答') + '</small></button>';
   }).join('');
-  showDialog('event', event.title, '<p>' + h(event.description) + '</p><p class="dialog-note">' + h(event.trigger) + '。先做个选择，再继续。事件进行中也可以保存。</p><div class="event-choice-list">' + choices + '</div>');
+  $('#examMissing').disabled = answered === answers.length;
+}
+function focusExamQuestion(index) {
+  if (state?.phase !== 'examPending' || dialogMode !== 'exam' || !Number.isInteger(index) || index < 0 || index >= state.exam.questions.length) return;
+  const question = $('#examQuestion' + index);
+  question.scrollIntoView({ block: 'start' });
+  (question.querySelector('input:checked') || question.querySelector('input'))?.focus({ preventScroll: true });
+}
+function submitExamForm(form) {
+  if (!state?.exam) return;
+  const answers = readExamAnswers(form);
+  const missing = answers.map((answer, index) => answer === null ? index : -1).filter((index) => index >= 0);
+  if (missing.length) {
+    $('#examError').textContent = '还有 ' + missing.length + ' 题未作答（第 ' + missing.map((index) => index + 1).join('、') + ' 题），已定位到第 ' + (missing[0] + 1) + ' 题。';
+    audio?.play('deny');
+    focusExamQuestion(missing[0]);
+    return;
+  }
+  $('#examError').textContent = '';
+  const result = runCommand('submitExam', answers, state.revision);
+  if (!result) return;
+  audio?.play('success');
+  if (activeSaveSlot !== null) saveCurrent(true);
+  showSummary();
+  showToast('考试得分 ' + state.summary.examScore + ' 分，总评 ' + state.summary.grade + ' 分');
+}
+function summaryBudgetLines(summary) {
+  if (summary.economyVersion === 2 && summary.budget?.budget) {
+    const plan = game.budgetPlan(summary.budget.budget);
+    if (plan) {
+      return ['clothing', 'food', 'housing', 'transport'].map(key => '<span>' + h(plan.items[key].label) + ' <b>' + plan.items[key].cost + ' 元</b></span>').join('')
+        + '<span>预算合计 <b>' + summary.livingCost + ' 元</b></span>'
+        + (summary.budget.budgetDelta ? '<span>预算调整 <b>' + (summary.budget.budgetDelta > 0 ? '−' : '+') + Math.abs(summary.budget.budgetDelta) + ' 元</b></span>' : '')
+        + '<span>期末额外扣费 <b>0 元</b></span>';
+    }
+  }
+  if (summary.economyVersion === 1) return '<span>生活费已到账 <b>+' + summary.budget.allowance + ' 元</b></span><span>日常开支已预留 <b>−' + summary.livingCost + ' 元</b></span><span>期末额外扣费 <b>0 元</b></span>';
+  return '<span>旧版生活费 <b>−' + summary.livingCost + ' 元</b></span><span>补助 <b>+' + summary.aid + ' 元</b></span>';
 }
 function summaryMarkup(summary) {
-  return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>学习进度 ' + summary.preparation + ' / 100。期末成绩按 40 + 学习进度 × 0.6 计算。</p><div class="summary-lines"><span>生活费 <b>−300 元</b></span><span>补助 <b>+' + summary.aid + ' 元</b></span><span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
+  if (summary.examScore === undefined) return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>学习进度 ' + summary.preparation + ' / 100。期末成绩按 40 + 学习进度 × 0.6 计算。</p><div class="summary-lines">' + summaryBudgetLines(summary) + '<span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
+  return '<div class="summary-score"><b>' + summary.grade + '</b><span>分 · ' + h(summary.rating) + ' · ' + (summary.passed ? '课程达标' : '课程未达标') + '</span></div><p>平时分 ' + summary.usualScore + ' / 100（40%）+ 期末考试 ' + summary.examScore + ' / 100（60%）。</p><p class="dialog-note">本学期课程：' + h(summary.courseNames.join('、')) + '</p><div class="summary-lines">' + summaryBudgetLines(summary) + '<span>结余 <b>' + summary.moneyAfter + ' 元</b></span><span>没用完的时间 <b>' + summary.unusedTime + ' 点，不结转</b></span></div>' + summary.notices.map((notice) => '<p>' + h(notice) + '</p>').join('');
 }
 function requestEndTerm() {
   if (!state) return;
   if (state.phase !== 'playing') { resumePhase(); return; }
+  if ((state.selectedCourses || []).length) {
+    const remaining = state.time ? '还有 ' + state.time + ' 点时间可用于学习或其他安排，剩余时间不会结转。' : '本学期时间已用完，可以开始考试。';
+    showDialog('confirmExam', '开始' + game.TERM_NAMES[state.term - 1] + '期末考试？', '<div class="summary-lines"><span>剩余时间 <b>' + state.time + ' 点</b></span><span>当前平时分 <b>' + state.preparation + ' / 100</b></span></div><p>' + remaining + '</p><p class="dialog-note">确认开考后，本学期不能再安排学习、休息等行动。提交试卷后立即结算。</p>', [{ id: 'resume', text: '继续安排', secondary: true }, { id: 'beginExam', text: '确认开考' }]);
+    return;
+  }
   const preview = game.previewSettlement(state);
   showDialog('confirm', '结束' + preview.name + '？', summaryMarkup(preview) + '<p class="dialog-note">这是只读预览。确认后本学期不能继续行动。' + (activeSaveSlot === null ? '当前尚未选择存档栏位，结算后请手动选择栏位保存。' : '将自动保存到栏位 ' + activeSaveSlot + '。') + (preview.unusedTime ? '还有 ' + preview.unusedTime + ' 点时间，可以继续安排。' : '') + '</p>', [{ id: 'resume', text: '继续本学期', secondary: true }, { id: 'settle', text: '确认结算' }]);
 }
 function showSummary() {
   audio?.play('paper');
-  showDialog('summary', state.summary.name + ' · 学期总结', summaryMarkup(state.summary) + '<p>' + h(saveNotice || '可以随时保存当前总结。') + '</p><p>' + (state.term === 8 ? '八个学期的记录齐了。接下来，看看毕业的路往哪走。' : '开学之后，时间和精力重新给足，学习进度从头攒；存款、长期状态和之前的投入都还跟着你。') + '</p>', [{ id: 'next', text: state.term === 8 ? '评估毕业方向' : '进入' + game.TERM_NAMES[state.term] }]);
+  showDialog('summary', state.summary.name + ' · 学期总结', summaryMarkup(state.summary) + '<p>' + h(saveNotice || '可以随时保存当前总结。') + '</p>', [{ id: 'next', text: state.term === 8 ? '评估毕业方向' : '进入' + game.TERM_NAMES[state.term] }]);
+  maybeQueueNpcReflection('term-end');
 }
 function courseTable() {
-  if (!state.courses.length) return '<p>还没有结算过的成绩。</p>';
-  return '<table class="course-table"><thead><tr><th>学期</th><th>学习进度</th><th>成绩</th><th>结果</th></tr></thead><tbody>' + state.courses.map((item) => '<tr><td>' + h(item.name) + '</td><td>' + item.preparation + '</td><td>' + item.grade + '</td><td>' + (item.passed ? '达标' : '未达标') + '</td></tr>').join('') + '</tbody></table>';
+  if (!state.courses.length) return '<h3>八学期成绩</h3><p>还没有结算过的成绩。</p>';
+  if (state.courses.some((item) => item.examScore !== undefined)) return '<h3>八学期成绩</h3><table class="course-table"><thead><tr><th>学期</th><th>平时</th><th>考试</th><th>总评</th><th>评级</th><th>结果</th></tr></thead><tbody>' + state.courses.map((item) => '<tr><td>' + h(item.name) + '</td><td>' + (item.usualScore ?? item.preparation) + '</td><td>' + (item.examScore ?? '—') + '</td><td>' + item.grade + '</td><td>' + h(item.rating || '—') + '</td><td>' + (item.passed ? '达标' : '未达标') + '</td></tr>').join('') + '</tbody></table>';
+  return '<h3>八学期成绩</h3><table class="course-table"><thead><tr><th>学期</th><th>学习进度</th><th>成绩</th><th>结果</th></tr></thead><tbody>' + state.courses.map((item) => '<tr><td>' + h(item.name) + '</td><td>' + item.preparation + '</td><td>' + item.grade + '</td><td>' + (item.passed ? '达标' : '未达标') + '</td></tr>').join('') + '</tbody></table>';
 }
 function requirementsMarkup(requirements) {
   return '<ul class="requirements">' + requirements.map((item) => '<li class="' + (item.met ? 'met' : '') + '">' + (item.met ? '已满足：' : '未满足：') + h(item.label) + '</li>').join('') + '</ul>';
@@ -685,48 +2906,289 @@ function showEndings() {
 const EXPERIENCE_LABELS = {
   project: '校园项目完成', club: '社团活动经历', internship: '实习经历完成', fitnessTest: '体测体验达标',
   military: '军训汇演完成', singer: '歌手大赛经历', trip: '返乡分享经历', contest: '学科竞赛经历',
-  sportsMeet: '运动会经历', transfer: '转专业经历'
+  sportsMeet: '运动会经历', transfer: '转专业经历', portfolio: '个人作品展示', showcase: '校园小展演', dormMemory: '宿舍布置合影', graduationTrip: '毕业旅行'
 };
-function growthRecord() {
-  return courseTable() + '<h3>校园经历</h3>' + (state.experiences.length ? '<ul>' + state.experiences.map((item) => '<li>' + game.TERM_NAMES[item.term - 1] + '：' + h(EXPERIENCE_LABELS[item.type] || '校园经历') + '</li>').join('') + '</ul>' : '<p>还没有拿得出手的经历。</p>') + '<h3>事件链进度</h3><ul>' + Object.entries(state.chains).map(([id, chain]) => '<li>' + game.CHAIN_NAMES[id] + '：' + chainLabel(chain) + (chain.status === 'active' ? '，预计第 ' + chain.deadline + ' 学期出结果' : '') + '</li>').join('') + '</ul><h3>毕业条件进度</h3>' + game.evaluateEndings(state).options.filter((item) => item.id !== 'notQualified').map((item) => '<h4>' + h(item.title) + '</h4>' + requirementsMarkup(item.requirements)).join('');
+// 成长记录：把操作历史按学期与事件类型归档，并单独跟踪事件链进度。
+// 分类依据游戏规则：主线事件为军训流程；随机池中的事件记为突发事件；
+// 带 chain 的事件与申请/投入行动记为事件链；其余条件事件记为基础事件。
+const RECORD_CATEGORY_LABELS = {
+  action: '日常行动', basic: '基础事件', random: '突发事件', chain: '事件链', main: '主线事件', academic: '学业节点'
+};
+const RECORD_MAIN_EVENTS = ['military1', 'military2'];
+const RECORD_CHAIN_EFFECTS = { accept: '加入事件链', defer: '暂缓申请', postpone: '成果确认延期', complete: '完成事件链', abandon: '退出事件链' };
+let recordFilter = 'all';
+let recordEntriesCache = null;
+let recordEntriesState = null;
+let recordEntriesRevision = -1;
+function recordEventCategory(eventId) {
+  const event = game.EVENTS[eventId];
+  if (!event) return 'basic';
+  if (event.chain) return 'chain';
+  if (RECORD_MAIN_EVENTS.includes(eventId)) return 'main';
+  if ((game.RANDOM_POOL || []).includes(eventId)) return 'random';
+  return 'basic';
+}
+function recordCategoryBadge(category, chainId) {
+  return category === 'chain' && chainId ? '事件链 · ' + game.CHAIN_NAMES[chainId] : RECORD_CATEGORY_LABELS[category];
+}
+function buildRecordEntries() {
+  const entries = [];
+  for (const log of state.history) {
+    const operation = log.command && log.command.operation;
+    if (!operation || operation === 'updateExamAnswers') continue;
+    if (operation === 'executeAction' || operation === 'completeBasketball' || operation === 'resolveZhouNingProposal' && log.action !== 'zhouDialogue' || operation === 'chatWithNpc' || operation === 'interactWithAnimal' || operation === 'interactWithZhouNing' || operation==='runNpcStory' || operation==='recordNpcDialogue' && log.dialogue?.kind==='meet' || operation==='resolveNpcProposal' && !!log.relationship) {
+      const action = ['executeAction', 'completeBasketball', 'resolveZhouNingProposal','resolveNpcProposal'].includes(operation) ? game.ACTIONS[log.action] : null;
+      const chainId = action && action.chain ? action.chain : null;
+      const place = action && action.place && game.PLACES[action.place] ? game.PLACES[action.place].title : '';
+      const notes = [place, supportText(log)];
+      if (log.relationship) notes.push(game.npcCast.profile(log.relationship.characterId||'zhouNing').name+' · 相识度 +' + log.relationship.gained + '（' + log.relationship.familiarity + '/100）');
+      if (log.investment) {
+        notes.push('投入 ' + log.investment.amount + ' ' + investmentUnit(log.investment.resource));
+        if (INVESTMENT_OUTCOMES[log.investment.outcome]) notes.push(INVESTMENT_OUTCOMES[log.investment.outcome]);
+      }
+      const category = chainId ? 'chain' : 'action';
+      entries.push({
+        term: log.term, revision: log.revision, category, chainId, kind: 'action',
+        title: log.title || log.identity || (action ? action.title : '') || '行动',
+        note: notes.filter(Boolean).join(' · '), changes: log.changes || null,
+        badge: recordCategoryBadge(category, chainId)
+      });
+      continue;
+    }
+    if (operation === 'submitEventChoice') {
+      const event = game.EVENTS[log.event];
+      const choice = event ? event.choices.find((item) => item.id === log.choice) : null;
+      const chainId = event && event.chain ? event.chain : null;
+      const category = recordEventCategory(log.event);
+      const notes = ['选择「' + (choice ? choice.title : (log.title || '先去校医院')) + '」', supportText(log)].filter(Boolean);
+      if (log.relationship) notes.push(game.npcCast.profile(log.relationship.characterId||'zhouNing').name+' · 相识度 +' + log.relationship.gained + '（' + log.relationship.familiarity + '/100）');
+      if (choice && choice.chainEffect && RECORD_CHAIN_EFFECTS[choice.chainEffect]) notes.push(RECORD_CHAIN_EFFECTS[choice.chainEffect]);
+      if (log.outcome) notes.push(log.outcome);
+      if (log.investment) {
+        notes.push('投入 ' + log.investment.amount + ' ' + investmentUnit(log.investment.resource));
+        if (INVESTMENT_OUTCOMES[log.investment.outcome]) notes.push(INVESTMENT_OUTCOMES[log.investment.outcome]);
+      }
+      entries.push({
+        term: log.term, revision: log.revision, category, chainId, kind: 'event',
+        title: event ? event.title : (log.title || '事件'),
+        note: notes.join(' · '), changes: log.changes || null,
+        badge: recordCategoryBadge(category, chainId)
+      });
+      continue;
+    }
+    entries.push({
+      term: log.term, revision: log.revision, category: 'academic', chainId: null, kind: 'academic',
+      title: log.title || operation,
+      note: operation === 'submitExam' && Number.isSafeInteger(log.examScore) ? '期末得分 ' + log.examScore : '',
+      changes: null, badge: RECORD_CATEGORY_LABELS.academic
+    });
+  }
+  return entries;
+}
+function recordEntries() {
+  if (recordEntriesCache && recordEntriesState === state && recordEntriesRevision === state.revision) return recordEntriesCache;
+  const entries = buildRecordEntries();
+  recordEntriesCache = entries;
+  recordEntriesState = state;
+  recordEntriesRevision = state.revision;
+  return entries;
+}
+function recordCounts(entries) {
+  const counts = { action: 0, event: 0, academic: 0 };
+  for (const entry of entries) {
+    if (entry.kind === 'action') counts.action += 1;
+    else if (entry.kind === 'academic') counts.academic += 1;
+    else counts.event += 1;
+  }
+  return counts;
+}
+function recordStatMarkup(value, label) {
+  return '<div class="record-stat"><b>' + h(value) + '</b><span>' + h(label) + '</span></div>';
+}
+function recordSummaryMarkup(entries) {
+  const counts = recordCounts(entries);
+  const passed = state.courses.filter((item) => item.passed).length;
+  return '<div class="record-stats">' + recordStatMarkup(entries.length, '条记录') + recordStatMarkup(counts.action, '次行动') + recordStatMarkup(counts.event, '个事件') + recordStatMarkup(state.experiences.length, '项经历') + '</div>' +
+    '<p class="record-summary-note">' + h(state.nickname) + ' · ' + h(game.TERM_NAMES[state.term - 1]) + ' · 已通过 <b>' + passed + ' / 8</b> 个学期 · 学业节点 <b>' + counts.academic + '</b> 条</p>';
+}
+function recordEntryMarkup(entry) {
+  const hasChanges = entry.changes && Object.values(entry.changes).some((value) => value !== 0);
+  return '<article class="record-entry is-' + entry.category + '">' +
+    '<div class="record-entry-head"><span class="record-badge is-' + entry.category + '">' + h(entry.badge) + '</span><b class="record-entry-title">' + h(entry.title) + '</b></div>' +
+    (entry.note ? '<p class="record-note">' + h(entry.note) + '</p>' : '') +
+    (hasChanges ? '<p class="record-changes">' + h(changeText(entry.changes)) + '</p>' : '') +
+    '</article>';
+}
+function recordTimelineMarkup(entries, options = {}) {
+  if (!entries.length) return '<p class="record-empty">' + h(options.empty || '还没有记录。') + '</p>';
+  let list = entries.slice();
+  let hidden = 0;
+  const limit = options.limit || 0;
+  if (limit && list.length > limit) { hidden = list.length - limit; list = list.slice(-limit); }
+  if (options.newestFirst) list.reverse();
+  const groups = new Map();
+  for (const entry of list) {
+    if (!groups.has(entry.term)) groups.set(entry.term, []);
+    groups.get(entry.term).push(entry);
+  }
+  const html = [...groups.entries()].map(([term, items]) => '<section class="record-term-group"><div class="record-term"><span>第 ' + term + ' 学期 · ' + h(game.TERM_NAMES[term - 1]) + '</span><small>' + items.length + ' 条</small></div>' + items.map(recordEntryMarkup).join('') + '</section>').join('');
+  return html + (hidden ? '<p class="record-more">另有 ' + hidden + ' 条更早记录。</p>' : '');
+}
+function recordChainStage(chain) {
+  if (chain.status === 'idle') return '未申请';
+  if (chain.status === 'deferred') return '暂缓申请';
+  if (chain.status === 'active') return chain.progress >= 2 ? '待成果确认 · 2/2 次投入' : '进行中 · 已投入 ' + chain.progress + '/2';
+  if (chain.status === 'completed') return '已完成 · 2/2 次投入';
+  return '未完成 · ' + chain.progress + '/2 次投入';
+}
+function recordChainDetail(id, chain, action) {
+  if (id === 'internship' && chain.status === 'active' && chain.positionId) {
+    const progress = game.internshipProgress(state);
+    return '累计投入：时间 ' + progress.workTime + ' / ' + progress.reqTime + ' · 精力 ' + progress.workEnergy + ' / ' + progress.reqEnergy
+      + (progress.met ? ' · 已达标，可以办理实习证明' : ' · 达标后可在南门办理实习证明');
+  }
+  if (chain.status === 'idle' || chain.status === 'deferred') {
+    const conditions = [];
+    if (action && action.minTerm) conditions.push('第 ' + action.minTerm + (action.maxTerm && action.maxTerm !== action.minTerm ? '～' + action.maxTerm : '') + ' 学期');
+    if (action && action.autumnOnly) conditions.push('仅秋季学期');
+    if (action && action.minPreparation) conditions.push('学习进度 ≥ ' + action.minPreparation);
+    if (action && action.minAverage) conditions.push('平均成绩 ≥ ' + action.minAverage);
+    const prefix = chain.status === 'deferred' ? '已选择暂缓，第 ' + chain.nextEligibleTerm + ' 学期可以再次申请' : '申请条件';
+    return (chain.status === 'deferred' ? prefix : prefix + '：' + (conditions.join(' · ') || '按学期开放'));
+  }
+  if (chain.status === 'active') {
+    if (chain.progress >= 2) return '两次投入已完成 · ' + (id === 'project' ? '下一学期' : '本学期起') + '等待成果确认事件';
+    return '第 ' + chain.deadline + ' 学期结算时检查进度，未完成会顺延（第 8 学期仍未完成则失败）';
+  }
+  if (chain.status === 'completed') return '第 ' + chain.startedTerm + ' 学期加入 · 已完成成果确认';
+  return '未完成成果确认 · 保留 ' + chain.progress + '/2 次投入记录';
+}
+function recordChainCardsMarkup(entries, detailed = false) {
+  return '<div class="record-block-title">事件链进度</div><div class="record-chain-list">' + Object.keys(game.CHAIN_NAMES).map((id) => {
+    const chain = state.chains[id];
+    const action = game.ACTIONS['apply' + id[0].toUpperCase() + id.slice(1)] || null;
+    const related = entries.filter((entry) => entry.chainId === id);
+    const last = related.at(-1);
+    const internship = id === 'internship' && chain.positionId ? game.internshipProgress(state) : null;
+    const filled = chain.status === 'completed' ? 2 : internship
+      ? Math.min(2, Math.floor(2 * Math.min(internship.reqTime ? internship.workTime / internship.reqTime : 1, internship.reqEnergy ? internship.workEnergy / internship.reqEnergy : 1)))
+      : Math.max(0, Math.min(2, chain.progress));
+    const progressLabel = internship ? '累计投入时间 ' + internship.workTime + ' / ' + internship.reqTime + '，精力 ' + internship.workEnergy + ' / ' + internship.reqEnergy : '已投入 ' + filled + ' / 2 次';
+    const segments = [0, 1].map((index) => '<span class="chain-seg' + (index < filled ? ' is-on' : '') + '"></span>').join('');
+    const trace = detailed && related.length ? '<ol class="chain-trace">' + related.slice(-8).map((entry) => '<li><span>第 ' + entry.term + ' 学期</span>' + h(entry.title) + '</li>').join('') + '</ol>' : '';
+    return '<article class="chain-card is-' + chain.status + '">' +
+      '<div class="chain-card-head"><b>' + h(game.CHAIN_NAMES[id]) + '</b><span class="chain-state">' + h(recordChainStage(chain)) + '</span></div>' +
+      '<div class="chain-progress" role="img" aria-label="' + h(progressLabel) + '">' + segments + '</div>' +
+      '<p class="chain-detail">' + h(recordChainDetail(id, chain, action)) + '</p>' +
+      '<p class="chain-last">' + (last ? '最近：第 ' + last.term + ' 学期 · ' + h(last.title) : '暂无相关记录') + '</p>' +
+      trace +
+      '</article>';
+  }).join('') + '</div>';
+}
+function renderRecordsPanel() {
+  const summary = $('#recordSummary');
+  const chains = $('#recordChains');
+  const timeline = $('#recordTimeline');
+  if (!summary && !chains && !timeline) return;
+  if (!state) {
+    if (summary) summary.innerHTML = '';
+    if (chains) chains.innerHTML = '';
+    if (timeline) timeline.innerHTML = '<p class="record-empty">暂无记录。</p>';
+    return;
+  }
+  const entries = recordEntries();
+  const filtered = recordFilter === 'all' ? entries : entries.filter((entry) => entry.category === recordFilter);
+  if (summary) summary.innerHTML = recordSummaryMarkup(entries);
+  if (chains) chains.innerHTML = recordChainCardsMarkup(entries);
+  if (timeline) timeline.innerHTML = recordTimelineMarkup(filtered, { newestFirst: true, limit: 80, empty: '这个分类还没有记录。' });
+  document.querySelectorAll('[data-record-filter]').forEach((button) => {
+    const active = (button.dataset.recordFilter || 'all') === recordFilter;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+}
+function investmentRecord() {
+  const entries = state.history.filter(entry => entry.investment).slice().reverse();
+  return '<h3>投入与收获</h3>' + (entries.length ? entries.map(entry => '<article class="investment-record"><h4>' + game.TERM_NAMES[entry.term - 1] + ' · ' + h(entry.event ? game.EVENTS[entry.event].title : game.ACTIONS[entry.action].title) + '</h4><span class="outcome-badge outcome-' + entry.investment.outcome + '">' + INVESTMENT_OUTCOMES[entry.investment.outcome] + '</span><p>投入 ' + entry.investment.amount + ' ' + investmentUnit(entry.investment.resource) + '</p><p>' + h(entry.investment.description + extraFeedback(entry)) + '</p><div class="action-gain">' + h(changeText(entry.changes)) + '</div></article>').join('') : '<p>暂无投入记录。</p>');
+}
+function growthRecord(includeRoutes = true, includeTimeline = false) {
+  const purchases = state.history.filter(entry => entry.command.operation === 'purchaseGrowth');
+  const upgrades = purchases.length ? '<h3>校园养成</h3><ul>' + purchases.map(entry => '<li>' + h(game.TERM_NAMES[entry.term - 1]) + '：' + h(entry.title) + '，支出 ' + (-entry.changes.money) + ' 元。' + h(game.GROWTH_NODES[entry.command.id].benefit) + '。</li>').join('') + '</ul>' : '';
+  const milestones = state.history.filter(entry => game.ACTIONS[entry.action]?.experience).map(entry => '<h3>' + h(game.ACTIONS[entry.action].experienceTitle) + '</h3><p>' + h(game.TERM_NAMES[entry.term - 1] + ' · ' + ACTION_FLAVOR[entry.action]) + '</p><p>' + h(changeText(entry.changes)) + '</p>').join('');
+  const practices = state.history.filter(entry => entry.action === 'hobbyPractice').length;
+  const entries = recordEntries();
+  const counts = recordCounts(entries);
+  const passed = state.courses.filter((item) => item.passed).length;
+  return upgrades + (practices ? '<h3>兴趣练习</h3><p>累计完成 ' + practices + ' 次兴趣练习。</p>' : '') + milestones + '<h3>记录概览</h3><p>角色 <b>' + h(state.nickname) + '</b> · 共 <b>' + entries.length + '</b> 条记录：行动 ' + counts.action + ' 次 · 事件 ' + counts.event + ' 个 · 学业节点 ' + counts.academic + ' 条；校园经历 ' + state.experiences.length + ' 项，已通过 <b>' + passed + ' / 8</b> 个学期。</p>' +
+    recordChainCardsMarkup(entries, true) +
+    (includeTimeline ? '<h3>行动与事件时间线</h3>' + recordTimelineMarkup(entries, { empty: '还没有行动或事件记录。' }) : '') +
+    courseTable() + investmentRecord() + walletHistory() +
+    '<h3>校园经历</h3>' + (state.experiences.length ? '<ul>' + state.experiences.map((item) => '<li>' + game.TERM_NAMES[item.term - 1] + '：' + h(EXPERIENCE_LABELS[item.type] || '校园经历') + '</li>').join('') + '</ul>' : '<p>还没有拿得出手的经历。</p>') +
+    (includeRoutes ? '<h3>毕业条件进度</h3>' + game.evaluateEndings(state).options.filter((item) => !['notQualified', 'delayed'].includes(item.id)).map((item) => '<h4>' + h(item.title) + '</h4>' + requirementsMarkup(item.requirements)).join('') : '');
 }
 const ENDING_TEXT = {
   ordinary: '毕业典礼的台子搭在操场边上，学士服领到手的时候还带着消毒水味。你想起大一第一次进校门，行李箱的轮子在石板路上响了一路。四年的账算下来不复杂：八张成绩单、几场活动、一次体测、几个没说出口的遗憾。有人去了远方，有人留在北京，你选了最稳的一条路。稳妥不是妥协，是你一个学期一个学期攒出来的底气。银杏大道下个秋天还会金黄，只是看它的人换了一批。行李打包完，你在宿舍门口站了会儿，把钥匙放在了宿管阿姨的窗口。出门的时候，风里有北京秋天常有的那种凉。你回头看了一眼，楼还是那栋楼。',
   furtherStudy: '录取结果出来的那天，你在图书馆的老位置上坐了很久。窗外银杏叶还没黄透，键盘边摊着你四年攒下的成绩单和项目结题报告。你想起实验室改到熄灯的晚上，想起答辩前手心出的汗，想起自习室里陌生人给你留的半张桌子。深造的路，是一次次「再来一遍」铺出来的。秋天你还会回到这间图书馆，只是身份换了：从占座的人，变成写论文的人。导师的邮件躺在邮箱里，回复写了又删，最后发出去一句「收到，谢谢老师」。窗外有鸟落在窗台上。你忽然想，四年前那个拖着行李箱的你，大概想不到今天。',
   employment: '三方协议签完那天，你在食堂吃了最后一顿窗口的饭。熟悉的打菜阿姨问你毕业去哪，你说了个城市名。实习时的通勤路线、改过七版的简历、面试官问倒你的那个问题，都成了档案里薄薄的几页。校门口的行李托运点排着长队，四年生活被打包成两三个纸箱。你最后看了一眼南门，知道下次回来，这里会叫你校友。手机亮了，是入职通知，提醒你下周一报到。你关掉屏幕，把手机塞进口袋，往地铁站走去。进站的风吹起衣角，晚高峰的人流把你卷了进去，和这座城市里的其他人一样。',
-  notQualified: '有些学期过得潦草，成绩单上有几行空着。收拾行李的时候你才发现，四年比想象中结束得快。遗憾是真的：欠下的课、没递出的申请、拖到最后的复习。但走过的路也不算白走——认识的人、熬过的夜、银杏大道上散过的步，都还是你的。人生不只有一张毕业证那么窄的路。先把这段日子收好，接下来怎么走，决定权还在你手里。远处操场传来口哨声，和四年前开学那天一样。你拉着箱子走向校门，门口的风把几张旧纸吹得翻起来。天还亮着。'
+  notQualified: '有些学期过得潦草，成绩单上有几行空着。收拾行李的时候你才发现，四年比想象中结束得快。遗憾是真的：欠下的课、没递出的申请、拖到最后的复习。但走过的路也不算白走——认识的人、熬过的夜、银杏大道上散过的步，都还是你的。人生不只有一张毕业证那么窄的路。先把这段日子收好，接下来怎么走，决定权还在你手里。远处操场传来口哨声，和四年前开学那天一样。你拉着箱子走向校门，门口的风把几张旧纸吹得翻起来。天还亮着。',
+  delayed: '教务处给你办了延毕。你成了校园里最熟悉银杏大道的人，也终于有时间把那门课重新学一遍。只是下一届新生入学时，你已经能给他们指路了。秋天再来的时候，你站在人群外面，忽然觉得多出来的一年也不算白费。',
+  blankResume: '简历上的教育经历写得很满，其他栏目干净得像刚打印出来。HR 问：你大学四年都在干什么？你说：在体验生活。面试间安静了几秒，窗外有人拖着行李箱走过。你忽然想起那些没加入的社团、没报名的项目、没投出去的实习申请，它们都没有消失，只是变成了简历上的空白。',
+  cheatNote: '你刚把小抄展开，监考老师已经在你身后站了半分钟。小抄第一行写着：不要紧张。教务处通报：本届最快结束期末考试的同学诞生了。',
+  cardThief: '保卫处老师把消费记录打印出来，时间精确到你犹豫的那三秒。家长被请到学校，你签了退学申请。校园卡大盗的职业生涯，只有一次消费。'
 };
 function showResult() {
   audio?.play('fanfare');
-  showDialog('finished', state.result.title, '<p>' + (ENDING_TEXT[state.result.direction] || '') + '</p><p>平均成绩 <b>' + state.result.average.toFixed(1) + '</b>，达标 <b>' + state.result.passed + '/8</b> 学期。</p><p>' + h(saveNotice || '可以把这段结局保存下来。') + '</p>' + requirementsMarkup(state.result.requirements) + growthRecord(), [{ id: 'resume', text: '返回地图', secondary: true }, { id: 'restart', text: '重新开始' }]);
+  const terminal = state.result.kind === 'terminal';
+  const economy = game.economyTag(state);
+  const intro = '<p>' + (ENDING_TEXT[state.result.direction] || '') + '</p>' + (terminal ? '<p class="dialog-note">触发原因：' + h(state.result.reason) + '</p>' : '') + '<p>平均成绩 <b>' + state.result.average.toFixed(1) + '</b>，达标 <b>' + state.result.passed + '/8</b> 学期。</p>' + (terminal ? '<p>本局在第 <b>' + state.result.term + '</b> 学期结束。</p>' : '') + '<p>毕业时余额 <b>' + state.money + ' 元</b> · 经济状态 <b>' + h(economy.label) + '</b></p>' + '<p>' + h(saveNotice || '可以把这段结局保存下来。') + '</p>' + (terminal ? '' : requirementsMarkup(state.result.requirements)) + growthRecord();
+  showDialog(terminal ? 'ended' : 'finished', state.result.title, intro, [{ id: 'resume', text: '返回地图', secondary: true }, { id: 'restart', text: '重新开始' }]);
 }
 function resumePhase() {
-  if (!state) { showAdmission(); return; }
+  if (!state) { showStartMenu(); return; }
+  state = game.resumeRequiredEvents(state);
+  const last = state.history.at(-1);
+  if (last?.command.operation === 'completeBasketball' && last.relationship && acknowledgedResultRevision !== state.revision) { showBasketballResult(last); return; }
+  if (last?.investment && acknowledgedResultRevision !== state.revision) { showEventResult(last); return; }
+  if (last?.relationship && acknowledgedResultRevision !== state.revision) { showRelationshipResult(last); return; }
   if (state.phase === 'eventPending') showEvent();
+  else if (state.phase === 'examPending') showExam();
   else if (state.phase === 'summary') showSummary();
   else if (state.phase === 'endingChoice') showEndings();
-  else if (state.phase === 'finished') showResult();
-  else dialog.close();
+  else if (state.phase === 'finished' || state.phase === 'ended') showResult();
+  else if (needsBudget()) showBudget();
+  else if (needsCourseSelection()) showCourseSelection();
+  else { dialog.close(); maybeZhouNingDirector(); setTimeout(() => { maybeShowMapCoach(); maybeShowTermUnlockCoach(); maybeShowEndTermCoach(); }, 180); }
 }
 function showLoad() {
   const info = saves.inspect();
-  showDialog('load', '选择读取栏位', '<p>选择读取后，当前未保存进度将被替换，之后自动保存到所读栏位。</p>' + slotCards(info, 'load'), [{ id: state ? 'resume' : 'admission', text: '取消', secondary: true }]);
+  showDialog('load', developerTesting ? '选择测试读取栏位' : '选择读取栏位', '<p>' + (developerTesting ? '隔离测试中：这里只读取独立测试存档，之后自动保存也使用测试栏位。' : '选择读取后，当前未保存进度将被替换，之后自动保存到所读栏位。') + '</p>' + slotCards(info, 'load'), [{ id: state ? 'resume' : 'startMenu', text: '取消', secondary: true }]);
 }
 function loadGame(slotId, source = 'primary') {
   const result = saves.load(slotId, source);
   if (!result.ok) { showToast(result.reason); return; }
+  cancelZhouRequest();
+  resetNpcSummaryJobs();
+  zhouChatDraft = ''; zhouChatNotice = ''; zhouHistoryOpen = false;
+  cancelBasketball();
   closePlace();
-  state = result.state;
+  state = game.resumeRequiredEvents(result.state);
   activeSaveSlot = slotId;
+  actionDrafts.clear();
+  pendingActionExtra = null;
+  eventDrafts.clear();
+  acknowledgedResultRevision = -1;
   savedRevision = state.revision;
+  savedNpcDialogueSummaries = npcSummarySaveStamp();
   savedAt = result.savedAt;
   saveNotice = '已恢复栏位 ' + slotId + ' · ' + displayTime(savedAt);
   clearTimeout(unlockTimer);
   uiLocked = false;
   failures.length = 0;
-  resetNpcSystem();
+  resetSeasonTracking();
+  resetAnimalSystem();
   audio?.play('load');
   audio?.startBgm();
+  hideStartMenu();
   renderState();
   resumePhase();
   showToast(source === 'backup' ? '已恢复栏位 ' + slotId + ' 的备份；下次保存时更新该栏位主档' : '已读取栏位 ' + slotId);
@@ -735,7 +3197,7 @@ function askRestart() {
   showDialog('restart', '重新开始？', '<p>确认后回到入学页，没保存的进度会被清空。已有存档在新局保存前仍可读取。</p>', [{ id: 'resume', text: '保留本局', secondary: true }, { id: 'confirmRestart', text: '确认重新开始' }]);
 }
 function exportLog() {
-  const report = { appVersion: game.RULES.appVersion, rulesVersion: game.RULES.version, nickname: state.nickname, seed: state.rng.seed, commands: state.history.map((entry) => ({ ...entry.command, commandId: entry.commandId })), operations: state.history, failures, finalState: state };
+  const report = { appVersion: game.RULES.appVersion, rulesVersion: game.RULES.version, nickname: state.nickname, seed: state.rng.seed, legacyEconomy: !state.economy || state.economy.startTerm > 1, economyStartTerm: state.economy?.startTerm ?? 9, commands: state.history.map((entry) => ({ ...entry.command, commandId: entry.commandId })), operations: state.history, failures, finalState: state };
   const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;
@@ -746,32 +3208,216 @@ function exportLog() {
 $('#dialogBody').addEventListener('submit', (event) => {
   if (event.target.id === 'admissionForm') { event.preventDefault(); startGame(); }
   else if (event.target.id === 'loginForm') { event.preventDefault(); doLogin(); }
-  else if (event.target.id === 'npcChatForm') { event.preventDefault(); sendNpcChat(); }
+  else if (event.target.id === 'zhouChatForm') { event.preventDefault(); sendZhouChat(); }
+  else if (event.target.id === 'courseForm') { event.preventDefault(); submitCourseSelection(event.target); }
+  else if (event.target.id === 'examForm') { event.preventDefault(); submitExamForm(event.target); }
 });
+$('#dialogBody').addEventListener('input', event => { if (event.target.id === 'zhouChatInput') zhouChatDraft = event.target.value; });
+$('#dialogBody').addEventListener('change', (event) => {
+  const examForm = event.target.closest('#examForm');
+  if (examForm && dialogMode === 'exam' && state?.phase === 'examPending') {
+    if (runCommand('updateExamAnswers', readExamAnswers(examForm), state.revision)) {
+      $('#examError').textContent = '';
+      updateExamProgress();
+    }
+    return;
+  }
+  const form = event.target.closest('#courseForm');
+  if (!form) return;
+  const count = form.querySelectorAll('input[name="course"]:checked').length;
+  const label = form.querySelector('#courseCount');
+  if (label) label.textContent = '已选 ' + count + ' / 3 门';
+});
+function completeAction(id, revision, investment, extra, positionId) {
+  const result = runCommand('executeAction', id, revision, undefined, investment, extra, positionId);
+  if (!result) { if (dialogMode === 'actionExtra' || dialogMode === 'positionPicker') resumePhase(); return; }
+  audio?.play(ACTION_SOUNDS[id] || 'success');
+  const positionNote = result.entry.position ? '已投递「' + result.entry.position.title + '」。' : '';
+  $('#actionFeedback').textContent = positionNote + (result.entry.investment?.description || ACTION_FLAVOR[result.entry.action] || result.entry.title + '完成') + extraFeedback(result.entry) + ' ' + changeText(result.changes) + (state.time === 0 ? ' 时间用完了，回地图结束这个学期吧。' : '');
+  if (result.entry.investment) showEventResult(result.entry);
+  else if (state.phase === 'eventPending') showEvent();
+  else maybeZhouNingDirector();
+}
+function offerActionExtra(id, revision, investment) {
+  const extra = game.getActionExtra(id);
+  if (!extra) return false;
+  const check = game.actionExtraAvailability(state, id, investment, extra.id);
+  if (!check.ok) return false;
+  pendingActionExtra = { id, revision, investment, extraId: extra.id };
+  const effect = game.previewActionInvestment(state, id, investment)?.effect || game.getAction(state, id);
+  const limitNote = extra.id === 'materials' ? '课程学习与自习共享每学期 2 次购买机会，每次额外学习进度最多 +2，合计最多 +4。' : '每学期最多购买 1 次，额外社交最多 +1、心情最多 +2。';
+  showDialog('actionExtra', game.ACTIONS[id].title + ' · 可选消费', '<p>' + h(extra.description) + '</p><div class="summary-lines"><span>本次原有成本 <b>' + h(costs(effect)) + '</b></span><span>额外费用 <b>' + extra.price + ' 元</b></span><span>本学期已购买 <b>' + check.used + ' / ' + extra.limit + ' 次</b></span></div><p>' + limitNote + '</p>', [{ id: 'extraSkip', text: '不购买，按原计划', secondary: true }, { id: 'extraBuy', text: '购买并完成行动' }, { id: 'extraCancel', text: '返回调整', secondary: true }]);
+  return true;
+}
+// 南门岗位库：按档位分组列出岗位，门槛达标态与锁定/申请都由规则命令驱动。
+function showPositionPicker() {
+  const tierClassLabels = { major: '大厂', mid: '中厂', startup: '初创', soe: '央企' };
+  const cards = [1, 2, 3].map((tier) => Object.values(game.POSITIONS).filter((position) => position.tier === tier).map((position) => {
+    const check = game.positionAvailability(state, position.id);
+    const applyOk = game.availability(state, 'applyInternship', undefined, position.id).ok && !uiLocked;
+    const company = game.COMPANIES[position.company];
+    const discount = position.requires.grade !== undefined && position.affinity?.majors.includes(state.background.major) ? position.affinity.gradeDiscount || 0 : 0;
+    const gradeText = position.requires.grade === undefined ? '无成绩线' : '平均成绩 ≥ ' + position.requires.grade + (discount ? '（对口 ' + (position.requires.grade - discount) + '）' : '');
+    const requirementText = position.requires.resumeAll
+      ? (position.affinity.majors.includes(state.background.major) && position.affinity.relaxToAny
+        ? '简历要件（对口放宽）：' + position.requires.resumeAll.map((key) => game.REQUIREMENT_LABELS[key]).join(' 或 ')
+        : '简历要件：' + position.requires.resumeAll.map((key) => game.REQUIREMENT_LABELS[key]).join(' 且 '))
+      : position.requires.resumeAny
+        ? '简历要件至少其一：' + position.requires.resumeAny.map((key) => game.REQUIREMENT_LABELS[key]).join(' / ')
+        : '无简历门槛';
+    return '<article class="position-card' + (state.targetPosition === position.id ? ' is-target' : '') + '">'
+      + '<header class="position-head"><span class="position-company">' + h(company.name) + '</span><span class="position-class">' + h(tierClassLabels[company.tierClass] || '') + '</span><span class="position-tier">T' + position.tier + '</span></header>'
+      + '<h4 class="position-title">' + h(position.title) + '</h4>'
+      + '<p class="position-flavor">' + h(position.flavor) + '</p>'
+      + '<p class="position-reqs">' + h('第 ' + position.window[0] + '–' + position.window[1] + ' 学期 · ' + gradeText + ' · ' + requirementText + ' · 段收入 ' + position.rewards.income + ' 元 · 求职准备 +' + position.rewards.jobPreparation + (position.costs && position.costs.fitness ? ' · 体能消耗 +' + position.costs.fitness + '/次' : '')) + '</p>'
+      + '<p class="position-status' + (check.ok ? ' is-ok' : '') + '">' + (check.ok ? '● 达标，可以投递' : h(check.reason)) + '</p>'
+      + '<div class="position-actions"><button type="button" class="secondary" data-position-lock="' + h(position.id) + '" data-revision="' + state.revision + '"' + (uiLocked ? ' disabled' : '') + '>' + (state.targetPosition === position.id ? '取消意向' : '锁定意向') + '</button>'
+      + '<button type="button" data-position-apply="' + h(position.id) + '" data-revision="' + state.revision + '"' + (applyOk ? '' : ' disabled') + '>申请这个岗位</button></div>'
+      + '</article>';
+  }).join('')).join('');
+  showDialog('positionPicker', '南门 · 岗位库', '<div class="position-list">' + cards + '</div>', [{ id: 'positionClose', text: '返回南门', secondary: true }]);
+}
 $('#actionList').addEventListener('click', (event) => {
-  const button = event.target.closest('[data-action]');
+  const button = event.target.closest('button');
+  if (button?.dataset.characterOpen && !dialog.open) { showCharacter(button.dataset.characterOpen); return; }
+  if (button?.dataset.zhouOpen && !dialog.open) { showCharacter('zhouNing'); return; }
+  // 南门的两级入口：先选“兼职赚钱 / 实习求职”，再进入具体行动卡；返回只回到分流页。
+  if (button?.dataset.gateSection) {
+    if (dialog.open || !Object.hasOwn(GATE_SECTIONS, button.dataset.gateSection)) return;
+    gateSection = button.dataset.gateSection;
+    renderActions();
+    $('#backButton').focus({ preventScroll: true });
+    return;
+  }
+  // 达标后的「办理实习证明」按钮也在行动卡内，必须先于地点/行动校验处理。
+  if (button?.dataset.settleInternship) {
+    const result = runCommand('settleInternship', null, button.dataset.revision);
+    if (result) { saveCurrent(true); showToast(positionFeedback(result.entry) || '实习证明办好了。'); }
+    return;
+  }
+  if (button?.dataset.actionInvestmentPreset) { updateActionInvestment(button.dataset.actionInvestmentPreset, Number(button.dataset.amount)); return; }
   if (!button || game.ACTIONS[button.dataset.action]?.place !== activePlace || dialog.open) return;
-  const result = runCommand('executeAction', button.dataset.action, button.dataset.revision);
-  if (!result) return;
-  audio?.play(ACTION_SOUNDS[button.dataset.action] || 'success');
-  $('#actionFeedback').textContent = (ACTION_FLAVOR[result.entry.action] || result.entry.title + '完成') + (state.time === 0 ? ' 时间用完了，回地图结束这个学期吧。' : '');
-  if (state.phase === 'eventPending') showEvent();
+  const id = button.dataset.action;
+  finishCoach('action-confirm');
+  if (game.ACTIONS[id]?.minigame === 'basketball') { startBasketball(); return; }
+  if (id === 'applyInternship') { showPositionPicker(); return; }
+  const investment = actionDraft(id);
+  if (!offerActionExtra(id, button.dataset.revision, investment)) completeAction(id, button.dataset.revision, investment);
 });
 $('#dialogBody').addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
+  if (button.dataset.meetStep) { advanceNpcMeetIntro(button.dataset); return; }
+  if (button.dataset.vnUi) {
+    const command = button.dataset.vnUi;
+    if (uiLocked) return;
+    if (command === 'profile') {
+      zhouHistoryOpen = false;
+      zhouView.profileOpen = !zhouView.profileOpen;
+      if (lastVisualNovel) { const scene = lastVisualNovel; showVisualNovel(scene.mode, scene.title, scene.speech, scene.choices, scene.options); }
+      return;
+    }
+    if (command === 'history') {
+      zhouHistoryOpen = !zhouHistoryOpen; zhouView.profileOpen = false;
+      if (lastVisualNovel) { const scene = lastVisualNovel; showVisualNovel(scene.mode, scene.title, scene.speech, scene.choices, scene.options); }
+      return;
+    }
+    if (command === 'prompt') { sendZhouChat(button.dataset.vnPrompt); return; }
+    if (command === 'acceptProposal' || command === 'declineProposal') { answerZhouProposal(command === 'acceptProposal' ? 'accept' : 'decline', button.dataset.proposalRevision); return; }
+    if (command === 'save') { showSave(); return; }
+    if (command === 'close') { cancelZhouRequest(); acknowledgedResultRevision = state.revision; resumePhase(); return; }
+    if (command === 'continue') {
+      acknowledgedResultRevision = state.revision;
+      if (state.phase === 'playing' && !needsCourseSelection()) showZhouNing(); else resumePhase();
+      return;
+    }
+    if (command === 'deepTalk' || command === 'presentation') {
+      const type = command === 'deepTalk' ? 'talk' : 'presentation';
+      const result = runCommand('interactWithZhouNing', type, button.dataset.revision, undefined, undefined, { characterVersion: 2 });
+      if (result) { if (type === 'talk') showRelationshipResult(result.entry); else showEvent(); }
+      return;
+    }
+    if(command==='story'){
+      if(activeNpcId==='zhouNing'){const r=runCommand('runNpcStory',{npcId:activeNpcId,choice:'start'},state.revision);if(r)showEvent();}
+      else{zhouView.screen='story';zhouView.text=null;showZhouNing({preserve:true});}return;
+    }
+    if(command==='storyChoice'){const r=runCommand('runNpcStory',{npcId:activeNpcId,choice:button.dataset.storyChoice},state.revision);if(r){acknowledgedResultRevision=state.revision;showRelationshipResult(r.entry);}return;}
+    if (command === 'confirmActivity') {
+      if (zhouView.activity === 'basketball') { startBasketball({ companionId: activeNpcId }); return; }
+      const profile = game.getActionInvestment(state, zhouView.activity);
+      const amount = zhouView.amount ?? profile?.default;
+      const result = runCommand('executeAction', zhouView.activity, button.dataset.revision, undefined, amount, { companionId: activeNpcId, characterVersion: 2 });
+      if (result) {
+        audio?.play(ACTION_SOUNDS[zhouView.activity] || 'success');
+        if (result.entry.investment) showEventResult(result.entry); else showRelationshipResult(result.entry);
+      }
+      return;
+    }
+    zhouView.text = null;
+    if (command === 'home') zhouView.screen = 'home';
+    else if (command === 'groups') zhouView.screen = 'groups';
+    else if (command === 'group') { zhouView.group = button.dataset.vnGroup; zhouView.screen = 'activities'; }
+    else if (command === 'backActivities') zhouView.screen = 'activities';
+    else if (command === 'activity' && Object.hasOwn(game.relationshipRules.ACTIVITIES, button.dataset.vnActivity)) { zhouView.activity = button.dataset.vnActivity; zhouView.amount = undefined; zhouView.screen = 'activity'; }
+    else if (command === 'tier') zhouView.amount = Number(button.dataset.vnAmount);
+    else if (command === 'topics') zhouView.screen = 'topics';
+    else if (command === 'topic') { zhouView.screen = 'topics'; zhouView.text = game.relationshipRules.dialogue(state, button.dataset.vnTopic); }
+    showZhouNing({ preserve: true });
+    return;
+  }
+  if(button.dataset.eventNpc){const r=runCommand('attachNpcToEvent',button.dataset.eventNpc,button.dataset.revision,button.dataset.instance);if(r)showEvent();return;}
+  if (button.dataset.zhouStudy) {
+    const result = runCommand('executeAction', 'selfStudy', button.dataset.revision, undefined, Number(button.dataset.zhouStudy), { companionId: 'zhouNing' });
+    if (result) { audio?.play('study'); showEventResult(result.entry); }
+    return;
+  }
+  if (button.dataset.dialogAction === 'zhouTalk' || button.dataset.dialogAction === 'zhouPresentation') {
+    const type = button.dataset.dialogAction === 'zhouTalk' ? 'talk' : 'presentation';
+    const result = runCommand('interactWithZhouNing', type, button.dataset.revision, undefined, undefined, { characterVersion: 2 });
+    if (result) { if (type === 'presentation') showEvent(); else showRelationshipResult(result.entry); }
+    return;
+  }
   if (button.id === 'smsSendButton') { requestSmsCode(); return; }
+  if (dialogMode === 'exam' && state?.phase === 'examPending') {
+    if (button.dataset.examQuestion !== undefined) { focusExamQuestion(Number(button.dataset.examQuestion)); return; }
+    if (button.dataset.examMissing) { focusExamQuestion(state.exam.questions.findIndex((_, index) => state.exam.answers[index] === undefined || state.exam.answers[index] === null)); return; }
+  }
+  if (button.dataset.cheatExam) { confirmCheatExam(); return; }
+  if (button.dataset.budgetDimension) { selectBudgetTier(button.dataset.budgetDimension, button.dataset.budgetTier); return; }
+  if (button.dataset.positionLock) {
+    const next = state.targetPosition === button.dataset.positionLock ? null : button.dataset.positionLock;
+    if (runCommand('setTargetPosition', next, button.dataset.revision) && dialogMode === 'positionPicker') showPositionPicker();
+    return;
+  }
+  if (button.dataset.positionApply) { completeAction('applyInternship', button.dataset.revision, undefined, undefined, button.dataset.positionApply); return; }
   if (button.dataset.saveSlot) {
     if (dialogMode === 'save') selectSaveSlot(Number(button.dataset.saveSlot));
   } else if (button.dataset.loadSlot) {
     if (['load', 'admission'].includes(dialogMode)) loadGame(Number(button.dataset.loadSlot), button.dataset.saveSource);
+  } else if (button.dataset.investmentPreset) {
+    updateInvestment(button.dataset.investmentPreset, Number(button.dataset.amount));
   } else if (button.dataset.eventChoice) {
-    const result = runCommand('submitEventChoice', button.dataset.eventChoice, button.dataset.revision, button.dataset.instance);
+    const pending = state.pendingEvent;
+    const event = pending && game.EVENTS[pending.id];
+    const choice = event?.choices.find((item) => item.id === button.dataset.eventChoice);
+    if (choice?.ending) {
+      terminalChoice = { choiceId: button.dataset.eventChoice, revision: button.dataset.revision, instanceId: button.dataset.instance };
+      showDialog('confirmEnding', choice.title, '<p>' + h(choice.description) + '</p><p class="dialog-note">这个选择会立即结束本局。确认后没有回头路。</p>', [{ id: 'confirmEventEnding', text: '确认选择' }, { id: 'backToEvent', text: '再想想', secondary: true }]);
+      return;
+    }
+    const result = runCommand('submitEventChoice', button.dataset.eventChoice, button.dataset.revision, button.dataset.instance, eventDraft(button.dataset.eventChoice));
     if (!result) return;
     audio?.play('success');
-    const feedback = EVENT_CHOICE_FLAVOR[result.entry.event + ':' + result.entry.choice] || (result.entry.outcome ? result.entry.outcome + '。' : result.entry.title + '。');
+    const narrative = result.entry.investment?.description || EVENT_CHOICE_FLAVOR[result.entry.event + ':' + result.entry.choice] || (result.entry.outcome ? result.entry.outcome + '。' : result.entry.title + '。');
+    const feedback = narrative + (result.changes?.money ? ' ' + changeText({ money: result.changes.money }) + '。' : '') + positionFeedback(result.entry) + debtFeedback(result.entry);
     $('#actionFeedback').textContent = feedback;
-    if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; } else { dialog.close(); showToast(feedback); }
+    if (state.phase === 'ended') { saveCurrent(true); showResult(); }
+    else if (result.entry.investment) showEventResult(result.entry);
+    else if (result.entry.relationship) showRelationshipResult(result.entry);
+    else if (state.phase === 'eventPending') { showEvent(); $('#dialogNotice').textContent = feedback; }
+    else if (pending.id === 'zhouNingPresentation') { showZhouNing({ text: '好，我们改天再安排。今天也可以聊点别的。' }); }
+    else if (needsCourseSelection()) { showCourseSelection(); $('#dialogNotice').textContent = feedback; }
+    else { dialog.close(); showToast(feedback); }
   } else if (button.dataset.ending) {
     if (runCommand('chooseEnding', button.dataset.ending, button.dataset.revision)) { saveCurrent(true); showResult(); }
   }
@@ -780,7 +3426,23 @@ $('#dialogButtons').addEventListener('click', (event) => {
   const button = event.target.closest('[data-dialog-action]');
   if (!button || uiLocked) return;
   const id = button.dataset.dialogAction;
-  if (id === 'resume') { if (dialogMode === 'finished') dialog.close(); else if (dialogMode === 'enrollment') showTutorial(); else resumePhase(); }
+  if (['extraBuy', 'extraSkip', 'extraCancel'].includes(id)) {
+    if (dialogMode !== 'actionExtra' || !pendingActionExtra) return;
+    const draft = pendingActionExtra;
+    pendingActionExtra = null;
+    if (id === 'extraCancel') { dialog.close(); return; }
+    completeAction(draft.id, draft.revision, draft.investment, id === 'extraBuy' ? draft.extraId : undefined);
+    return;
+  }
+  if (id === 'resume') { if (['finished', 'ended'].includes(dialogMode)) dialog.close(); else if (dialogMode === 'enrollment') showTutorial(); else resumePhase(); }
+  else if (id === 'positionClose' && dialogMode === 'positionPicker') { dialog.close(); }
+  else if (id === 'eventContinue' && dialogMode === 'eventResult') { acknowledgedResultRevision = state.revision; resumePhase(); }
+  else if (id === 'relationshipContinue' && dialogMode === 'relationshipResult') {
+    acknowledgedResultRevision = state.revision;
+    if (state.phase === 'playing' && !needsCourseSelection()) showZhouNing(); else resumePhase();
+  }
+  else if (id === 'basketballContinue' && dialogMode === 'basketballResult') { acknowledgedResultRevision = state.revision; resumePhase(); }
+  else if (id === 'startMenu') showStartMenu();
   else if (id === 'admission') showAdmission();
   else if (id === 'loginPrompt') { loginSkipped = false; try { storage?.removeItem(LOGIN_SKIP_KEY); } catch (_) {} showLogin(); }
   else if (id === 'switchAccount') {
@@ -794,44 +3456,295 @@ $('#dialogButtons').addEventListener('click', (event) => {
     try { storage?.setItem(LOGIN_SKIP_KEY, '1'); } catch (_) {}
     showAdmission();
   }
-  else if (id === 'npcTalk' && dialogMode === 'npc') showNpcLine();
   else if (id === 'confirmSave' && dialogMode === 'confirmSave' && saveTarget !== null) finishSave(saveTarget);
   else if (id === 'backToSave') showSave();
+  else if (id === 'beginExam' && dialogMode === 'confirmExam') {
+    if (runCommand('beginExam', null, button.dataset.revision)) {
+      if (activeSaveSlot !== null) saveCurrent(true);
+      showExam();
+    }
+  }
   else if (id === 'settle' && dialogMode === 'confirm') { if (runCommand('endTerm', null, button.dataset.revision)) { saveCurrent(true); showSummary(); } }
   else if (id === 'next' && dialogMode === 'summary') { if (runCommand('continueGame', null, button.dataset.revision)) resumePhase(); }
+  else if (id === 'budgetConfirm' && dialogMode === 'budget') submitBudget();
+  else if (id === 'cheatExam' && dialogMode === 'confirmCheat') { if (runCommand('cheatExam', null, button.dataset.revision)) { saveCurrent(true); showResult(); } }
+  else if (id === 'backToExam' && dialogMode === 'confirmCheat') showExam();
+  else if (id === 'confirmEventEnding' && dialogMode === 'confirmEnding' && terminalChoice) {
+    const selected = terminalChoice;
+    terminalChoice = null;
+    if (runCommand('submitEventChoice', selected.choiceId, selected.revision, selected.instanceId)) { saveCurrent(true); showResult(); }
+  }
+  else if (id === 'backToEvent' && dialogMode === 'confirmEnding') { terminalChoice = null; showEvent(); }
   else if (id === 'restart') askRestart();
   else if (id === 'confirmRestart') {
+    cancelZhouRequest();
+    resetNpcSummaryJobs();
+    zhouChatDraft = ''; zhouChatNotice = ''; zhouHistoryOpen = false;
+    cancelBasketball();
     closePlace();
-    resetNpcSystem();
+    resetAnimalSystem();
+    clearSeasonEffects();
     audio?.stopBgm();
     state = null;
+    renderNpcLayer();
+    renderGrowth();
+    eventDrafts.clear();
+    actionDrafts.clear();
+  pendingActionExtra = null;
+    acknowledgedResultRevision = -1;
     activeSaveSlot = null;
     saveTarget = null;
     savedRevision = -1;
+    savedNpcDialogueSummaries = '';
     savedAt = '';
     clearTimeout(unlockTimer);
     uiLocked = false;
-    showAdmission();
+    showStartMenu();
   }
 });
 hotspots.forEach((hotspot) => hotspot.addEventListener('click', () => openPlace(hotspot.dataset.place, hotspot)));
-const npcLayer = $('#npcLayer');
-if (npc && npcLayer) {
-  npcLayer.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-npc-id]');
-    if (button) talkToNpc(button.dataset.npcId);
+$('#relationshipList')?.addEventListener('click', event=>{const b=event.target.closest('[data-character-open]');if(b&&!dialog.open)showCharacter(b.dataset.characterOpen);});
+$('#npcLayer')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-npc-id]');
+  if (button && !dialog.open) showCharacter(button.dataset.npcId);
+});
+function bindAnimalDialogControls() {
+  $('#catArchiveActions')?.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-cat-panel]');
+    if (trigger) showCatArchive(trigger);
   });
-  npcTick();
+  $('#animalButtons').addEventListener('click', (event) => {
+    const action = event.target.closest('[data-animal-action]')?.dataset.animalAction;
+    const mode = $('#animalWorld').dataset.mode;
+    if (action === 'pet' && mode === 'menu') startAnimalTiming();
+    else if (action === 'feed' && mode === 'menu') confirmAnimalFeed();
+    else if (action === 'cyclePose' && mode === 'menu' && animalEncounter?.species === 'cat') cycleCatPose();
+    else if (action === 'back' && mode === 'feed') showAnimalMenu();
+    else if (action === 'feedYes' && mode === 'feed') finishAnimalInteraction('feed');
+  });
+  $('#animalPetTarget').addEventListener('click', (event) => {
+    if ($('#animalWorld').dataset.mode === 'pet' && animalTiming) finishAnimalInteraction('pet', event);
+  });
+  $('#animalExit').addEventListener('click', closeAnimalEncounter);
 }
-$('#backButton').addEventListener('click', closePlace);
-$('#endTermButton').addEventListener('click', requestEndTerm);
+if (animals) {
+  $('#catArchiveClose')?.addEventListener('click', () => catArchiveDialog.close());
+  $('#animalLayer')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-animal-id]');
+    if (button) openAnimalEncounter(button.dataset.animalId);
+  });
+  bindAnimalDialogControls();
+  $('#animalWorld').addEventListener('pointermove', trackAnimalHand);
+  $('#animalWorld').addEventListener('pointerleave', () => {
+    if ($('#animalWorld').dataset.mode === 'pet') $('#animalWorld').dataset.tracking = 'false';
+  });
+  animalDialog?.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closeAnimalEncounter();
+  });
+  animalPortrait = animals.createPortrait($('#animalMotionCanvas'));
+  animalTick();
+}
+$('#backButton').addEventListener('click', () => {
+  if (activePlace === 'gate' && gateSection) {
+    gateSection = null;
+    renderActions();
+    return;
+  }
+  closePlace();
+});
+$('#basketballQuit')?.addEventListener('click', () => basketballSession?.finish());
+$('#basketballCancel')?.addEventListener('click', cancelBasketball);
+basketballDialog?.addEventListener('cancel', (event) => {
+  if (!basketballSession) return;
+  event.preventDefault();
+  cancelBasketball();
+});
+$('#endTermButton').addEventListener('click', () => { finishCoach('semester-end'); requestEndTerm(); });
 $('#saveButton').addEventListener('click', showSave);
 $('#dialogSave').addEventListener('click', showSave);
 $('#loadButton').addEventListener('click', showLoad);
 $('#helpButton').addEventListener('click', () => { if (state) showTutorial(); });
 $('#backgroundButton').addEventListener('click', () => { if (state) showBackground(); });
 $('#restartButton').addEventListener('click', () => { if (state) askRestart(); });
-$('#historyButton').addEventListener('click', () => { if (state) showDialog('history', '四年成长记录', growthRecord(), [{ id: 'resume', text: '继续安排' }]); });
+$('#historyButton').addEventListener('click', () => { if (state) showDialog('history', '成长记录', growthRecord(true, true), [{ id: 'resume', text: '继续安排' }]); });
+for (const selector of ['#mapStats', '#placeStats']) $(selector).addEventListener('click', event => {
+  if (state && !uiLocked && event.target.closest('[data-wallet-budget]')) showDialog('wallet', '钱包收支', walletHistory(), [{ id: 'resume', text: '继续安排' }]);
+});
+
+document.querySelectorAll('[data-record-filter]').forEach((button) => {
+  button.addEventListener('click', () => {
+    recordFilter = button.dataset.recordFilter || 'all';
+    renderRecordsPanel();
+  });
+});
+
+document.querySelectorAll('[data-attr]').forEach((node) => {
+  const open = (event) => {
+    if (event) event.stopPropagation();
+    showAttrPopover(node.dataset.attr, node);
+  };
+  node.addEventListener('click', open);
+  node.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(event); }
+  });
+});
+
+const avatarButton = $('#playerAvatar');
+if (avatarButton && typeof avatarButton.addEventListener === 'function') {
+  avatarButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    showPopover(openPopoverName === 'avatar' ? null : 'avatar');
+  });
+}
+const playerNameButton = $('#playerName');
+if (playerNameButton && typeof playerNameButton.addEventListener === 'function') {
+  playerNameButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    showPopover(openPopoverName === 'name' ? null : 'name');
+  });
+}
+const popoverChangeAvatar = $('#popoverChangeAvatar');
+if (popoverChangeAvatar && typeof popoverChangeAvatar.addEventListener === 'function') popoverChangeAvatar.addEventListener('click', pickAvatar);
+const popoverResetAvatar = $('#popoverResetAvatar');
+if (popoverResetAvatar && typeof popoverResetAvatar.addEventListener === 'function') popoverResetAvatar.addEventListener('click', resetAvatar);
+const nameSaveButton = $('#nameSaveButton');
+if (nameSaveButton && typeof nameSaveButton.addEventListener === 'function') nameSaveButton.addEventListener('click', submitNickname);
+const nameCancelButton = $('#nameCancelButton');
+if (nameCancelButton && typeof nameCancelButton.addEventListener === 'function') nameCancelButton.addEventListener('click', closePopovers);
+const nameInput = $('#nameInput');
+if (nameInput && typeof nameInput.addEventListener === 'function') {
+  nameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); submitNickname(); }
+  });
+}
+const avatarInput = $('#avatarInput');
+if (avatarInput && typeof avatarInput.addEventListener === 'function') {
+  avatarInput.addEventListener('change', () => {
+    const file = avatarInput.files && avatarInput.files[0];
+    if (file) saveAvatarFile(file);
+    try { avatarInput.value = ''; } catch (_) {}
+  });
+}
+const motionButton = $('#motionButton');
+if (motionButton && typeof motionButton.addEventListener === 'function') {
+  motionButton.addEventListener('click', () => {
+    motionOn = !motionOn;
+    applyMotion();
+    try { window.localStorage.setItem(MOTION_KEY, motionOn ? '1' : '0'); } catch (_) {}
+  });
+}
+const hotspotButton = $('#hotspotButton');
+if (hotspotButton && typeof hotspotButton.addEventListener === 'function') {
+  hotspotButton.addEventListener('click', () => {
+    hotspotsOn = !hotspotsOn;
+    applyHotspots();
+    try { window.localStorage.setItem(HOTSPOT_KEY, hotspotsOn ? '1' : '0'); } catch (_) {}
+  });
+}
+const resetAvatarButton = $('#resetAvatarButton');
+if (resetAvatarButton && typeof resetAvatarButton.addEventListener === 'function') resetAvatarButton.addEventListener('click', resetAvatar);
+loadAvatar();
+loadPreferences();
+
+document.querySelectorAll('.app-menu-button[data-panel-group]').forEach((button) => {
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closePopovers();
+    const group = PANEL_GROUPS.find((item) => item.id === button.dataset.panelGroup);
+    if (!group) return;
+    const current = PANEL_GROUP_INDEX[openPanelName];
+    setPanel(current?.id === group.id ? null : group.panels[0].id);
+  });
+});
+$('#panelSubnav')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-panel]');
+  if (!button) return;
+  event.stopPropagation();
+  setPanel(button.dataset.panel);
+});
+document.querySelectorAll('.advisory-close').forEach((button) => button.addEventListener('click', closePanel));
+$('#growthToggle')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  if (!state || dialog.open) return;
+  if (activeCoach?.id.startsWith('term-unlock:')) finishCoach(activeCoach.id);
+  setPanel(openPanelName === 'growth' ? null : 'growth');
+  if (openPanelName === 'growth') $('#growthTitle').focus({ preventScroll: true });
+});
+$('#growthClose')?.addEventListener('click', closePanel);
+$('#growthDetails')?.addEventListener('click', (event) => {
+  const back = event.target.closest('[data-growth-back]');
+  if (back) {
+    event.stopPropagation();
+    growthView = 'tree';
+    renderGrowth();
+    $('#growthNodes').querySelector('[data-growth-select="' + selectedGrowthId + '"]')?.focus({ preventScroll: true });
+    return;
+  }
+  const button = event.target.closest('[data-growth-place]');
+  if (!button || !state || uiLocked || dialog.open || !Object.hasOwn(game.PLACES, button.dataset.growthPlace)) return;
+  event.stopPropagation();
+  openPlace(button.dataset.growthPlace);
+});
+$('#growthTabs')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-growth-dimension]');
+  if (!button || !state) return;
+  const dimension = game.GROWTH_DIMENSIONS.find(item => item.id === button.dataset.growthDimension);
+  if (!dimension) return;
+  event.stopPropagation();
+  if (dimension.id === selectedGrowthDimension) return;
+  selectedGrowthDimension = dimension.id;
+  const first = game.growthStatus(state).nodes.find(node => node.dimension === dimension.id);
+  if (first) selectedGrowthId = first.id;
+  $('#growthNotice').textContent = '';
+  renderGrowth();
+  $('#growthTabs').querySelector('[data-growth-dimension="' + dimension.id + '"]')?.focus({ preventScroll: true });
+});
+$('#growthNodes')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-growth-select]');
+  if (!button || dialog.open || !Object.hasOwn(game.GROWTH_NODES, button.dataset.growthSelect)) return;
+  event.stopPropagation();
+  selectedGrowthId = button.dataset.growthSelect;
+  $('#growthNotice').textContent = '';
+  const mobile = !!window.matchMedia?.('(max-width: 640px)').matches;
+  if (mobile) {
+    growthView = 'detail';
+    renderGrowth();
+    const layout = $('#growthLayout');
+    if (layout) layout.scrollTop = 0;
+    $('#growthDetails').focus({ preventScroll: true });
+    return;
+  }
+  renderGrowth();
+  $('#growthNodes').querySelector('[data-growth-select="' + selectedGrowthId + '"]')?.focus({ preventScroll: true });
+});
+$('#growthPurchase')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-growth-buy]');
+  if (!button || dialog.open || uiLocked) return;
+  event.stopPropagation();
+  const result = runCommand('purchaseGrowth', button.dataset.growthBuy, button.dataset.revision);
+  if (!result) return;
+  const node = game.GROWTH_NODES[button.dataset.growthBuy];
+  $('#growthNotice').textContent = '已添置' + node.title + '，支出 ' + node.price + ' 元。' + node.benefit + '。';
+  $('#growthDetails').focus({ preventScroll: true });
+  audio?.play('success');
+});
+document.addEventListener('click', (event) => {
+  if (!openPanelName) return;
+  const target = event.target;
+  if (target && typeof target.closest === 'function' && (target.closest('.app-bar') || target.closest('.app-panels'))) return;
+  closePanel();
+});
+window.addEventListener('resize', syncBarHeight);
+syncBarHeight();
+document.addEventListener('click', (event) => {
+  if (!openPopoverName) return;
+  const target = event.target;
+  if (target && typeof target.closest === 'function' && (target.closest('.profile-popover') || target.closest('#playerAvatar') || target.closest('#playerName'))) return;
+  closePopovers();
+});
+const versionNote = $('#versionNote');
+if (versionNote) versionNote.textContent = '版本 ' + (game.RULES.appVersion || '未知') + ' · 规则 v' + (game.RULES.version || '—') + ' · 存档格式 v' + (game.RULES.saveFormatVersion || '—');
 $('#exportLogButton').addEventListener('click', () => { if (state) exportLog(); });
 const soundButton = $('#soundButton');
 if (audio) {
@@ -839,28 +3752,216 @@ if (audio) {
   soundButton.addEventListener('click', () => {
     audio.setEnabled(!audio.isEnabled());
     soundButton.textContent = '声音:' + (audio.isEnabled() ? '开' : '关');
+    updateStartSoundButton();
   });
 } else {
   soundButton.hidden = true;
 }
+$('#startNew')?.addEventListener('click', startNewGame);
+$('#startContinue')?.addEventListener('click', startContinueGame);
+$('#startSettings')?.addEventListener('click', toggleStartSettings);
+$('#startExit')?.addEventListener('click', startExitGame);
+$('#startSoundButton')?.addEventListener('click', () => {
+  if (!audio) return;
+  audio.setEnabled(!audio.isEnabled());
+  updateStartSoundButton();
+  if (soundButton) soundButton.textContent = '声音:' + (audio.isEnabled() ? '开' : '关');
+});
+$('#startMotionButton')?.addEventListener('click', () => {
+  motionOn = !motionOn;
+  applyMotion();
+  try { window.localStorage.setItem(MOTION_KEY, motionOn ? '1' : '0'); } catch (_) {}
+});
+$('#startHelpButton')?.addEventListener('click', () => showTutorial(true));
+$('#startResetTips')?.addEventListener('click', () => {
+  coachProgress = {};
+  saveCoachProgress();
+  hideCoach();
+  const status = $('#startStatus');
+  if (status) status.textContent = '新手提示已重置，已重新显示。';
+  maybeShowStartCoach(true);
+});
+$('#startSettingsBack')?.addEventListener('click', () => { const panel = $('#startSettingsPanel'); if (panel) panel.hidden = true; });
+$('#endTermQuick')?.addEventListener('click', () => { finishCoach('semester-end'); requestEndTerm(); });
+$('#coachNext')?.addEventListener('click', () => { if (activeCoach) finishCoach(activeCoach.id); });
+$('#coachSkip')?.addEventListener('click', skipAllCoach);
+window.addEventListener('resize', positionCoach);
+window.addEventListener('scroll', positionCoach, true);
 document.addEventListener('click', (event) => {
   if (event.target.closest('button')) audio?.play('click');
 }, { capture: true });
 $('#debugPanel').hidden = !debug;
 window.addEventListener('storage', (event) => {
+  if (developerTesting) return;
   if (activeSaveSlot !== null && (event.key === null || event.key === CampusSave.getSlotKeys(activeSaveSlot).primary)) {
     $('#sessionNote').textContent = '另一个标签页更新了栏位 ' + activeSaveSlot + '。当前游戏仍可继续，保存前请读取最新存档。';
     showToast('当前存档栏位发生变化，请先读取最新存档');
   }
 });
 dialog.addEventListener('cancel', (event) => {
-  if (!state || ['eventPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment'].includes(dialogMode)) event.preventDefault();
+  if (!state || ['eventPending', 'examPending', 'summary', 'endingChoice'].includes(state.phase) || ['admission', 'login', 'restart', 'enrollment', 'courseSelection', 'budget', 'exam', 'confirmCheat', 'confirmEnding'].includes(dialogMode)) event.preventDefault();
+  else if (dialogMode === 'relationship') cancelZhouRequest();
+  else if (dialogMode === 'npcMeetIntro') npcMeetIntro = null;
 });
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && activePlace && !dialog.open) closePlace();
+  if (event.key !== 'Escape' || basketballDialog?.open || animalDialog?.open) return;
+  if (openPopoverName) { closePopovers(); return; }
+  if (openPanelName) { closePanel(); return; }
+  if (activePlace && !dialog.open) closePlace();
 });
+window.addEventListener('beforeunload', guardUnsavedProgress);
 if (typeof HTMLDialogElement === 'undefined' || typeof HTMLDialogElement.prototype.showModal !== 'function') {
   $('.game-shell').innerHTML = '<div class="browser-notice"><h2>请使用较新的浏览器打开</h2><p>本游戏需要支持弹窗等现代网页特性的浏览器。请升级微信或浏览器，或用系统浏览器打开本地址。</p><p class="browser-notice-url">https://zjr231.github.io/BJTU-Life-Simulator/</p></div>';
 } else {
-  showAdmission();
+  showStartMenu();
+}
+
+if (typeof CampusDeveloperPanel !== 'undefined') {
+  let developerOriginalBasketball = null;
+  let developerOriginalCompanion = null;
+  let developerOriginalAnimal = null;
+  let developerPauseNpcMemory = null;
+  function captureDeveloperAnimal() {
+    if (!animalDialog?.open || !animalEncounter) return null;
+    const world = $('#animalWorld');
+    return {
+      encounter: CampusDeveloperTools.clone(animalEncounter),
+      timing: animalTiming ? { ...animalTiming, running: Math.max(0, animalClock() - animalTiming.startedAt) } : null,
+      reactionRemaining: animalReactionCallback && animalReactionDueAt ? Math.max(0, animalReactionDueAt - Date.now()) : null,
+      pose: animalPose ? CampusDeveloperTools.clone(animalPose) : null,
+      world: { html: world.innerHTML, dataset: { ...world.dataset }, handStyle: $('#animalHand').getAttribute('style') }
+    };
+  }
+  function restoreDeveloperAnimal(snapshot) {
+    if (!snapshot) return;
+    const world = $('#animalWorld');
+    world.innerHTML = snapshot.world.html;
+    bindAnimalDialogControls();
+    Object.assign(world.dataset, snapshot.world.dataset);
+    const hand = $('#animalHand');
+    if (snapshot.world.handStyle === null) hand.removeAttribute('style'); else hand.setAttribute('style', snapshot.world.handStyle);
+    animalEncounter = CampusDeveloperTools.clone(snapshot.encounter);
+    applyAnimalArtwork(world);
+    animalTiming = snapshot.timing ? { ...snapshot.timing, startedAt: animalClock() - snapshot.timing.running } : null;
+    delete animalTiming?.running;
+    animalPose = snapshot.pose ? CampusDeveloperTools.clone(snapshot.pose) : null;
+    animalPortrait = animals?.createPortrait($('#animalMotionCanvas')) || null;
+    if (animalPose) renderAnimalPose(animalPose.species, animalPose.weights);
+    const drawer = $('#developerPanel'), wasOpen = drawer.open;
+    if (wasOpen) drawer.close();
+    animalDialog.showModal();
+    if (wasOpen) drawer.showModal();
+    if (animalTiming) updateAnimalTiming();
+    animalReactionCallback = developerOriginalAnimal?.callback || null;
+    animalReactionDueAt = snapshot.reactionRemaining === null ? 0 : Date.now() + snapshot.reactionRemaining;
+  }
+  // Keep all state replacement at the UI boundary; production rule and save validation stay strict.
+  function replaceDeveloperState(next, resume = true) {
+    cancelZhouRequest(); cancelBasketball(); closePlace(); closePanel(); closePopovers(); hideCoach();
+    resetNpcSummaryJobs();
+    clearTimeout(unlockTimer); uiLocked = false;
+    actionDrafts.clear(); eventDrafts.clear(); openActionCards.clear(); pendingActionExtra = null;
+    budgetDraft = null; budgetDraftTerm = null; terminalChoice = null; termUnlockQueue = [];
+    zhouChatDraft = ''; zhouChatNotice = ''; zhouHistoryOpen = false;
+    state = next;
+    savedRevision = -1; savedAt = ''; saveNotice = developerTesting ? '隔离测试副本，普通游戏存档不受影响。' : '';
+    savedNpcDialogueSummaries = '';
+    acknowledgedResultRevision = state?.revision ?? -1;
+    resetSeasonTracking(); resetAnimalSystem();
+    if (dialog.open) dialog.close();
+    if (state) { hideStartMenu(); renderState(); if (resume) resumePhase(); }
+    else { renderNpcLayer(); showStartMenu(); }
+    const drawer = $('#developerPanel');
+    if (drawer.open) { drawer.close(); drawer.showModal(); }
+  }
+  developerPanel = CampusDeveloperPanel.install({
+    storage, state: () => state, failures: () => failures,
+    capture: () => ({ state, activeSaveSlot, savedRevision, savedNpcDialogueSummaries, savedAt, saveNotice, failures, activePlace, gateSection,
+      budgetDraft, budgetDraftTerm, acknowledgedResultRevision, basketball: !!basketballSession, uiLocked,
+      activeNpcId, zhouView, zhouChatDraft, zhouChatNotice, zhouHistoryOpen, saveTarget, terminalChoice,
+      animal: captureDeveloperAnimal(),
+      eventDrafts: [...eventDrafts], actionDrafts: [...actionDrafts], openActionCards: [...openActionCards], pendingActionExtra,
+      dialog: { open: dialog.open, mode: dialogMode, className: dialog.className, title: $('#dialogTitle').textContent, body: $('#dialogBody').innerHTML, buttons: $('#dialogButtons').innerHTML, notice: $('#dialogNotice').textContent, kicker: $('.dialog-kicker').textContent, saveHidden: $('#dialogSave').hidden } }),
+    testing(enabled, testStore) {
+      developerTesting = enabled; saves = enabled ? testStore : normalSaves;
+      if (enabled) {
+        activeSaveSlot = null; failures.length = 0;
+        developerOriginalBasketball = basketballSession; developerOriginalCompanion = basketballCompanion;
+        basketballSession = null; basketballCompanion = null;
+      }
+    },
+    replace: replaceDeveloperState,
+    restore(snapshot) {
+      replaceDeveloperState(snapshot.state, false);
+      activeSaveSlot = snapshot.activeSaveSlot; savedRevision = snapshot.savedRevision; savedAt = snapshot.savedAt; saveNotice = snapshot.saveNotice;
+      savedNpcDialogueSummaries = snapshot.savedNpcDialogueSummaries;
+      failures.splice(0, failures.length, ...snapshot.failures);
+      budgetDraft = snapshot.budgetDraft; budgetDraftTerm = snapshot.budgetDraftTerm; acknowledgedResultRevision = snapshot.acknowledgedResultRevision;
+      activeNpcId = snapshot.activeNpcId; zhouView = snapshot.zhouView; zhouChatDraft = snapshot.zhouChatDraft; zhouChatNotice = snapshot.zhouChatNotice; zhouHistoryOpen = snapshot.zhouHistoryOpen;
+      saveTarget = snapshot.saveTarget; terminalChoice = snapshot.terminalChoice; pendingActionExtra = snapshot.pendingActionExtra;
+      for (const [key,value] of snapshot.eventDrafts) eventDrafts.set(key,value);
+      for (const [key,value] of snapshot.actionDrafts) actionDrafts.set(key,value);
+      if (state) {
+        renderState();
+        if (snapshot.activePlace) {
+          openPlace(snapshot.activePlace, document.querySelector('[data-place="' + snapshot.activePlace + '"]'));
+          gateSection = snapshot.gateSection;
+          snapshot.openActionCards.forEach(id => openActionCards.add(id)); renderActions();
+        }
+      }
+      gateSection = snapshot.gateSection;
+      const saved = snapshot.dialog;
+      dialogMode = saved.mode;
+      if (saved.open) {
+        dialog.className = saved.className; $('#dialogTitle').textContent = saved.title; $('#dialogBody').innerHTML = saved.body;
+        $('#dialogButtons').innerHTML = saved.buttons; $('#dialogNotice').textContent = saved.notice; $('.dialog-kicker').textContent = saved.kicker; $('#dialogSave').hidden = saved.saveHidden;
+        // The developer drawer must remain the last modal in the browser's top layer.
+        const drawer = $('#developerPanel'), wasOpen = drawer.open;
+        if (wasOpen) drawer.close();
+        dialog.showModal();
+        if (wasOpen) drawer.showModal();
+      }
+      if (snapshot.basketball && developerOriginalBasketball) {
+        basketballSession = developerOriginalBasketball; basketballCompanion = developerOriginalCompanion;
+        renderBasketballHud(basketballSession.getState());
+        const drawer = $('#developerPanel'), wasOpen = drawer.open;
+        if (wasOpen) drawer.close();
+        basketballDialog.showModal();
+        if (wasOpen) drawer.showModal();
+      }
+      if (snapshot.animal && developerOriginalAnimal) restoreDeveloperAnimal(snapshot.animal);
+      developerOriginalBasketball = null; developerOriginalCompanion = null;
+      developerOriginalAnimal = null;
+      if (snapshot.uiLocked) lockUi();
+    },
+    character: id => showCharacter(id),
+    animal: openDeveloperAnimal,
+    pause(paused) {
+      if (paused === developerPaused) return;
+      developerPaused = paused;
+      if (paused) {
+        developerPauseStarted = Date.now(); cancelZhouRequest(); basketballSession?.pause(); hideCoach();
+        developerPauseNpcMemory = { summaries: CampusDeveloperTools.clone(state?.npcDialogueSummaries), memory: CampusDeveloperTools.clone(state?.npcAgentMemory) };
+        resetNpcSummaryJobs();
+        if (state) { state.npcDialogueSummaries = CampusDeveloperTools.clone(developerPauseNpcMemory.summaries); state.npcAgentMemory = CampusDeveloperTools.clone(developerPauseNpcMemory.memory); }
+        if (!developerTesting || !developerOriginalAnimal) {
+          developerOriginalAnimal = { callback: animalReactionCallback,
+            remaining: animalReactionCallback && animalReactionDueAt ? Math.max(0, animalReactionDueAt - Date.now()) : null };
+        }
+        if (animalReactionTimer !== null) { clearTimeout(animalReactionTimer); animalReactionTimer = null; }
+      } else {
+        developerAnimalOffset += Date.now() - developerPauseStarted; basketballSession?.resume(); maybeZhouNingDirector();
+        if (!developerTesting && state) {
+          for (const npcId of Object.keys(game.npcCast.PROFILES)) refreshNpcSummary(npcId);
+          maybeQueueNpcReflection('term-end');
+        }
+        developerPauseNpcMemory = null;
+        if (animalReactionCallback && animalDialog?.open && animalReactionDueAt) {
+          const remaining = Math.max(0, animalReactionDueAt - Date.now());
+          animalReactionDueAt = Date.now() + remaining;
+          animalReactionTimer = setTimeout(animalReactionCallback, remaining);
+        }
+      }
+    }
+  });
 }

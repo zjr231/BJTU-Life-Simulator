@@ -70,14 +70,28 @@ test('模型无内容或网络失败分别返回 502 与 504', async () => {
   assert.equal(offline.statusCode, 504);
 });
 
-test('阿里云 HTTP 触发器签名：handler 写入状态码与 JSON 响应', async () => {
-  const resp = { statusCode: 0, headers: {}, send(body) { this.body = body; }, setHeader(key, value) { this.headers[key] = value; } };
-  await handler({ method: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }) }, resp, {}, { apiKey: KEY, fetchFn: async () => okJson });
-  assert.equal(resp.statusCode, 200);
-  assert.equal(JSON.parse(resp.body).reply, '你好呀，同学！');
-  await handler({ method: 'OPTIONS' }, resp, {});
-  assert.equal(resp.statusCode, 204);
-  assert.equal(resp.headers['Access-Control-Allow-Origin'], '*');
+test('阿里云事件函数签名：handler 返回标准结构，兼容对象/Buffer 事件与控制台测试', async () => {
+  const options = { apiKey: KEY, fetchFn: async () => okJson };
+  // 网关事件：body 为 JSON 字符串
+  const post = await handler({ httpMethod: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }) }, {}, options);
+  assert.equal(post.statusCode, 200);
+  assert.equal(post.isBase64Encoded, false);
+  assert.equal(JSON.parse(post.body).reply, '你好呀，同学！');
+  assert.equal(post.headers['Access-Control-Allow-Origin'], '*');
+  // FC 3.0 Node.js 运行时可能把整个事件以 Buffer 传入
+  const buffered = await handler(Buffer.from(JSON.stringify({ httpMethod: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }) }), 'utf-8'), {}, options);
+  assert.equal(buffered.statusCode, 200);
+  assert.equal(JSON.parse(buffered.body).reply, '你好呀，同学！');
+  // 控制台“测试”直接传 messages JSON
+  const bare = await handler({ messages: [{ role: 'user', content: 'hi' }] }, {}, options);
+  assert.equal(bare.statusCode, 200);
+  assert.equal(JSON.parse(bare.body).reply, '你好呀，同学！');
+  // 预检与非法方法
+  const preflight = await handler({ httpMethod: 'OPTIONS' }, {});
+  assert.equal(preflight.statusCode, 204);
+  assert.equal(preflight.headers['Access-Control-Allow-Origin'], '*');
+  const wrong = await handler({ httpMethod: 'GET' }, {});
+  assert.equal(wrong.statusCode, 405);
 });
 
 test('华为云 API 网关签名：main 返回状态码、CORS 头与非 base64 JSON', async () => {
@@ -86,6 +100,31 @@ test('华为云 API 网关签名：main 返回状态码、CORS 头与非 base64 
   assert.equal(result.isBase64Encoded, false);
   assert.equal(JSON.parse(result.body).reply, '你好呀，同学！');
   assert.equal(result.headers['Access-Control-Allow-Origin'], '*');
+});
+
+test('质量标记：尾部【Q:n】被剥离并单独返回 quality，正文原样保留', async () => {
+  const withReply = (content) => call({ messages: [{ role: 'user', content: 'hi' }] }, async () => ({ ok: true, json: async () => ({ choices: [{ message: { content } }] }) }));
+  for (const quality of [0, 1, 2]) {
+    const result = await withReply('同学，去问了就好。【Q:' + quality + '】');
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.body.quality, quality);
+    assert.equal(result.body.reply, '同学，去问了就好。');
+  }
+  // 没有标记：quality 为 null，正文不动，前端退回本地启发式评分。
+  const plain = await withReply('你好呀，同学！');
+  assert.equal(plain.body.quality, null);
+  assert.equal(plain.body.reply, '你好呀，同学！');
+  // 非法标记（越界、半角括号）不识别也不剥离，避免误伤正文。
+  for (const content of ['好的【Q:5】', '好的[Q:2]', '【Q:2】不是结尾']) {
+    const result = await withReply(content);
+    assert.equal(result.body.quality, null, content);
+    assert.equal(result.body.reply, content, content);
+  }
+  // 超长回复：先剥离标记再截断，末尾不会残留半截标记。
+  const long = await withReply('长'.repeat(500) + '。【Q:2】');
+  assert.equal(long.body.quality, 2);
+  assert.equal(long.body.reply.length, 400);
+  assert.doesNotMatch(long.body.reply, /【/);
 });
 
 test('CORS 头固定允许任意来源并限定方法与请求头', () => {

@@ -1,0 +1,166 @@
+[
+  {
+    "npcId": "linXia",
+    "name": "拒绝跑步后改聊电影",
+    "kind": "chat",
+    "inputs": [
+      "我今天不想跑。",
+      "今晚可以一起去看个电影吗？"
+    ],
+    "intents": [
+      "none",
+      "none"
+    ],
+    "criteria": "接住拒绝，随后回应电影，可以有自己的喜好。"
+  },
+  {
+    "npcId": "linXia",
+    "name": "明确提出一起自习",
+    "kind": "chat",
+    "inputs": [
+      "我今天想补补上周的课。",
+      "现在一起去自习吧。"
+    ],
+    "intents": [
+      "none",
+      "selfStudy"
+    ],
+    "criteria": "第一轮聊学习，第二轮才形成自习邀请。"
+  },
+  {
+    "npcId": "linXia",
+    "name": "运动后初见",
+    "kind": "meet",
+    "context": "玩家刚在操场完成单人运动。",
+    "inputs": [
+      ""
+    ],
+    "intents": [
+      "none"
+    ],
+    "criteria": "根据单人运动后的相遇介绍自己，不假设已有交情。"
+  },
+  {
+    "npcId": "linXia",
+    "name": "操场主动问候",
+    "kind": "proactive",
+    "context": "玩家刚在操场完成慢跑练习。",
+    "inputs": [
+      ""
+    ],
+    "intents": [
+      "none"
+    ],
+    "criteria": "像遇到认识的同学一样打个招呼，即使在操场也不转成训练邀约。"
+  },
+  {
+    "npcId": "zhouNing",
+    "name": "邀请吃饭后改口",
+    "kind": "chat",
+    "inputs": [
+      "今晚一起吃饭？",
+      "其实我今天想一个人待会儿。"
+    ],
+    "intents": [
+      "none",
+      "none"
+    ],
+    "criteria": "回应吃饭及其后的改口，不引导去做其他活动。"
+  },
+  {
+    "npcId": "zhouNing",
+    "name": "明确提议看演出",
+    "kind": "chat",
+    "inputs": [
+      "最近有什么演出吗？",
+      "那我们现在一起去看演出吧。"
+    ],
+    "intents": [
+      "none",
+      "show"
+    ],
+    "criteria": "第一轮聊话题，第二轮发出与玩家提议一致的邀请。"
+  },
+  {
+    "npcId": "zhouNing",
+    "name": "玩家更新偏好",
+    "kind": "chat",
+    "inputs": [
+      "我以前爱看演出，现在更喜欢散步。",
+      "我刚刚说我现在喜欢什么？"
+    ],
+    "intents": [
+      "none",
+      "none"
+    ],
+    "criteria": "区分过去和现在的喜好，不把喜好当作邀约。"
+  },
+  {
+    "npcId": "zhouNing",
+    "name": "图书馆事件偶遇",
+    "kind": "cameo",
+    "context": "你在图书馆遇见玩家，正在发生课程讨论。",
+    "inputs": [
+      ""
+    ],
+    "intents": [
+      "none"
+    ],
+    "criteria": "回应眼前的课程讨论，不编造讨论或活动结果。"
+  },
+  {
+    "npcId": "chenTeacher",
+    "name": "学生烦躁转聊电影",
+    "kind": "chat",
+    "inputs": [
+      "这周有点烦，想找部电影看看。",
+      "老师，你会看喜剧吗？"
+    ],
+    "intents": [
+      "none",
+      "none"
+    ],
+    "criteria": "以普通师长的口吻接住电影话题，不自动布置任务。"
+  },
+  {
+    "npcId": "chenTeacher",
+    "name": "明确请求当面请教",
+    "kind": "chat",
+    "inputs": [
+      "我整理了些项目资料。",
+      "老师，现在能一起看我的项目资料吗？"
+    ],
+    "intents": [
+      "none",
+      "selfStudy"
+    ],
+    "criteria": "听完玩家诉求，再发出当轮允许的资料指导邀请。"
+  },
+  {
+    "npcId": "chenTeacher",
+    "name": "初次讨论项目",
+    "kind": "meet",
+    "context": "玩家刚提交项目申请，这是你们第一次相识。",
+    "inputs": [
+      ""
+    ],
+    "intents": [
+      "none"
+    ],
+    "criteria": "介绍自己和眼下的指导场景，不假定已经帮助过玩家。"
+  },
+  {
+    "npcId": "chenTeacher",
+    "name": "意见与行动意愿不同",
+    "kind": "chat",
+    "inputs": [
+      "这个答辩方向我想再考虑一下。",
+      "我觉得现在还没准备好一起做。"
+    ],
+    "intents": [
+      "none",
+      "none"
+    ],
+    "criteria": "听完顾虑，不抢先安排答辩或指导。"
+  }
+]

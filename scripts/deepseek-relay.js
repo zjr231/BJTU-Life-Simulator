@@ -1,5 +1,5 @@
 'use strict';
-// DeepSeek 对话中转：部署在阿里云函数计算（HTTP 触发器，用 exports.handler）
+// DeepSeek 对话中转：适配阿里云事件函数（HTTP 触发器，用 exports.handler）
 // 或华为云函数工作流（API 网关触发器，用 exports.main）。
 // DeepSeek 密钥只放在云函数的环境变量 DEEPSEEK_API_KEY 里，前端永远接触不到；
 // 部署与验收步骤见 docs/DeepSeek对话接入说明.md。
@@ -48,9 +48,19 @@ async function relay(body, options = {}) {
       return { statusCode: 502, body: { error: '模型服务返回 ' + response.status + (detail ? '：' + detail : '') } };
     }
     const data = await response.json();
-    const reply = String(data?.choices?.[0]?.message?.content ?? '').trim().slice(0, MAX_REPLY);
+    // 前端提示词要求模型在回复末尾单独输出对话质量标记【Q:0/1/2】（游戏按质量结算社交/心情收益）。
+    // 先剥离标记再做长度截断，避免截断把标记切成半截；没有标记时 quality 为 null，前端退回本地启发式评分。
+    const raw = String(data?.choices?.[0]?.message?.content ?? '').trim();
+    let quality = null;
+    let content = raw;
+    const marker = raw.match(/【\s*Q[:：]?\s*([012])\s*】\s*$/);
+    if (marker) {
+      quality = Number(marker[1]);
+      content = raw.slice(0, marker.index).trimEnd();
+    }
+    const reply = content.slice(0, MAX_REPLY);
     if (!reply) return { statusCode: 502, body: { error: '模型没有返回内容' } };
-    return { statusCode: 200, body: { reply } };
+    return { statusCode: 200, body: { reply, quality } };
   } catch (error) {
     return { statusCode: 504, body: { error: error && error.name === 'AbortError' ? '模型响应超时' : '中转调用失败' } };
   } finally {
@@ -58,18 +68,57 @@ async function relay(body, options = {}) {
   }
 }
 
-// 阿里云函数计算 HTTP 触发器：exports.handler = async (req, resp, context) => {}
+// 阿里云函数计算 HTTP 触发器：exports.handler = async (event, context) => {}
+// 事件函数写法，返回 { statusCode, headers, body } 标准结构。
+// FC 3.0 的 Node.js 运行时可能把整个事件以 Buffer/字符串传入，这里统一归一化为对象；
 // 末尾的 options 仅供本地测试注入，云平台运行时不会传入。
-async function handler(req, resp, _context, options = {}) {
+async function handler(event, context, options = {}) {
   const headers = corsHeaders();
-  Object.entries(headers).forEach(([key, value]) => resp.setHeader(key, value));
-  if (req.method === 'OPTIONS') { resp.statusCode = 204; resp.send(); return; }
-  if (req.method !== 'POST') { resp.statusCode = 405; resp.send(JSON.stringify({ error: '只接受 POST' })); return; }
+  // 事件归一化：Buffer / JSON 字符串 → 对象（控制台“测试”传入的裸 JSON 也兼容）
+  let parsed = event;
+  if (Buffer.isBuffer(parsed) || typeof parsed === 'string') {
+    try { parsed = JSON.parse(parsed.toString('utf-8')); } catch (_) { parsed = {}; }
+  }
+  if (!parsed || typeof parsed !== 'object') parsed = {};
+
+  // 获取请求方法，兼容不同版本的事件结构
+  const method = parsed.method || parsed.httpMethod || (parsed.requestContext && parsed.requestContext.http && parsed.requestContext.http.method) || 'POST';
+
+  // 处理 CORS 预检请求
+  if (method === 'OPTIONS') {
+    return { statusCode: 204, headers, body: '', isBase64Encoded: false };
+  }
+  if (method !== 'POST') {
+    return { statusCode: 405, headers, body: JSON.stringify({ error: '只接受 POST' }), isBase64Encoded: false };
+  }
+
+  // 解析请求体
   let body = null;
-  try { body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {}); } catch (_) {}
+  try {
+    let rawBody = parsed.body;
+    if (rawBody === undefined || rawBody === null || rawBody === '') {
+      body = parsed; // 控制台“测试”直接把 messages JSON 作为事件传入的情况
+    } else if (Buffer.isBuffer(rawBody)) {
+      body = JSON.parse(rawBody.toString('utf-8'));
+    } else if (typeof rawBody === 'string') {
+      body = JSON.parse(parsed.isBase64Encoded ? Buffer.from(rawBody, 'base64').toString('utf-8') : rawBody);
+    } else {
+      body = rawBody; // 网关已把 body 解析成对象
+    }
+  } catch (err) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: '请求体不是合法的 JSON' }), isBase64Encoded: false };
+  }
+
+  // 调用中转逻辑
   const result = await relay(body, options);
-  resp.statusCode = result.statusCode;
-  resp.send(JSON.stringify(result.body));
+
+  // 返回标准格式
+  return {
+    statusCode: result.statusCode,
+    headers,
+    body: JSON.stringify(result.body),
+    isBase64Encoded: false
+  };
 }
 
 // 华为云函数工作流 + API 网关：exports.main = async (event, context) => {}

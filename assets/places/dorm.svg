@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" role="img" aria-label="宿舍">
+  <defs>
+    <linearGradient id="d-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eaefe8"/><stop offset="1" stop-color="#f8f1e2"/>
+    </linearGradient>
+    <linearGradient id="d-wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4ead6"/><stop offset="1" stop-color="#e4d2b0"/>
+    </linearGradient>
+    <linearGradient id="d-glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b7d3d3"/><stop offset="1" stop-color="#8db1b5"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" rx="28" fill="url(#d-sky)"/>
+  <ellipse cx="320" cy="408" rx="240" ry="28" fill="#1d3a33" opacity=".10"/>
+  <!-- 宿舍楼 -->
+  <rect x="150" y="170" width="340" height="236" rx="10" fill="url(#d-wall)"/>
+  <rect x="150" y="150" width="340" height="28" rx="10" fill="#b5654a"/>
+  <!-- 阳台层 -->
+  <g>
+    <rect x="168" y="196" width="304" height="52" rx="4" fill="#fbf6ea"/>
+    <rect x="168" y="264" width="304" height="52" rx="4" fill="#fbf6ea"/>
+    <rect x="168" y="332" width="304" height="52" rx="4" fill="#fbf6ea"/>
+  </g>
+  <g fill="url(#d-glass)">
+    <rect x="182" y="206" width="52" height="34" rx="3"/><rect x="250" y="206" width="52" height="34" rx="3"/>
+    <rect x="318" y="206" width="52" height="34" rx="3"/><rect x="386" y="206" width="52" height="34" rx="3"/>
+    <rect x="182" y="274" width="52" height="34" rx="3"/><rect x="250" y="274" width="52" height="34" rx="3"/>
+    <rect x="318" y="274" width="52" height="34" rx="3"/><rect x="386" y="274" width="52" height="34" rx="3"/>
+    <rect x="182" y="342" width="52" height="34" rx="3"/><rect x="250" y="342" width="52" height="34" rx="3"/>
+    <rect x="318" y="342" width="52" height="34" rx="3"/><rect x="386" y="342" width="52" height="34" rx="3"/>
+  </g>
+  <!-- 晾衣绳 -->
+  <path d="M170 250 q150 18 300 0" fill="none" stroke="#8a6a44" stroke-width="3"/>
+  <g>
+    <rect x="222" y="250" width="18" height="26" rx="3" fill="#d98a7a"/><rect x="288" y="254" width="18" height="26" rx="3" fill="#7fa8b3"/>
+    <rect x="354" y="254" width="18" height="26" rx="3" fill="#f0c65a"/><rect x="420" y="250" width="18" height="26" rx="3" fill="#9fc4c8"/>
+  </g>
+  <!-- 门 -->
+  <rect x="296" y="356" width="48" height="50" rx="4" fill="#2f6f5e" opacity=".6"/>
+  <!-- 灯 -->
+  <circle cx="320" cy="176" r="6" fill="#f7d98a"/>
+  <g fill="#3f7d64">
+    <circle cx="96" cy="382" r="24"/><circle cx="80" cy="402" r="16"/>
+    <circle cx="548" cy="382" r="24"/><circle cx="564" cy="402" r="16"/>
+  </g>
+</svg>

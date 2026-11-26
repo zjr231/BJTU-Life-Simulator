@@ -1,8 +1,9 @@
 (function (root) {
   'use strict';
-  // 音效与背景音乐由 Web Audio 在浏览器内实时合成，不依赖任何外部素材或网络。
+  // 背景音乐和常规音效由 Web Audio 实时合成，小猫哈气使用本地录音。
   // 偏好只保存在独立键中，不进入游戏存档格式。
   const PREF_KEY = 'bjtu-life:audio:enabled';
+  const catHissAudio = root.document?.getElementById?.('catHissAudio');
   let ctx = null;
   let master = null;
   let sfxBus = null;
@@ -105,6 +106,7 @@
     const peak = options.gain || 0.2;
     gainNode.gain.setValueAtTime(0.0001, options.time);
     gainNode.gain.exponentialRampToValueAtTime(peak, options.time + 0.004);
+    if (options.hold) gainNode.gain.exponentialRampToValueAtTime(peak * 0.65, options.time + options.hold);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, options.time + options.duration);
     source.connect(filter);
     filter.connect(gainNode);
@@ -118,6 +120,11 @@
     click(now) { noiseHit({ time: now, duration: 0.045, freq: 2400, q: 0.9, gain: 0.11 }); tone({ time: now, freq: 1200, duration: 0.04, gain: 0.035, type: 'triangle' }); },
     success(now) { tone({ time: now, freq: 659.25, duration: 0.24, gain: 0.15, type: 'triangle' }); tone({ time: now + 0.1, freq: 783.99, duration: 0.32, gain: 0.13, type: 'triangle', pan: 0.3 }); tone({ time: now + 0.1, freq: 987.77, duration: 0.26, gain: 0.05, echo: 0.18, echoPan: -0.4 }); },
     deny(now) { tone({ time: now, freq: 155, duration: 0.2, gain: 0.12, type: 'sawtooth' }); tone({ time: now + 0.02, freq: 138, duration: 0.22, gain: 0.11, type: 'sawtooth' }); tone({ time: now + 0.09, freq: 116, duration: 0.3, gain: 0.11, type: 'sawtooth' }); },
+    catHiss() {
+      if (!catHissAudio) return;
+      catHissAudio.currentTime = 0;
+      catHissAudio.play().catch(() => {});
+    },
     event(now) { bell(now, 880, 1.0, 0.11); tone({ time: now + 0.05, freq: 1760, duration: 0.7, gain: 0.04, echo: 0.3 }); tone({ time: now, freq: 659.25, duration: 1.4, gain: 0.06, type: 'triangle', attack: 0.05 }); },
     study(now) { noiseHit({ time: now, duration: 0.18, freq: 900, slideTo: 500, q: 0.6, gain: 0.09 }); tone({ time: now, freq: 523.25, duration: 0.14, gain: 0.1, type: 'triangle', detune: -3 }); tone({ time: now + 0.09, freq: 659.25, duration: 0.2, gain: 0.1, type: 'triangle', detune: 3, pan: 0.25 }); },
     relax(now) { for (const [freq, detune, pan] of [[220, -4, -0.3], [220, 4, 0.3]]) tone({ time: now, freq, duration: 0.6, type: 'triangle', attack: 0.06, gain: 0.08, detune, pan }); for (const [freq, detune, pan] of [[261.63, -4, -0.25], [261.63, 4, 0.25]]) tone({ time: now + 0.14, freq, duration: 0.65, type: 'triangle', attack: 0.06, gain: 0.08, detune, pan }); },
@@ -233,6 +240,7 @@
       if (bgmRequested) startBgm();
     } else {
       if (master) master.gain.value = 0;
+      catHissAudio?.pause();
       // Muting pauses playback; only leaving the game cancels its music request.
       bgmActive = false;
       clearScheduled();
@@ -242,6 +250,7 @@
   ['pointerdown', 'keydown', 'touchstart'].forEach((type) => root.addEventListener(type, () => { if (enabled) ensure(); }, { capture: true, once: true, passive: true }));
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
+      if (document.hidden) catHissAudio?.pause();
       if (!ctx) return;
       if (document.hidden) {
         if (bgmActive) clearScheduled();

@@ -1,0 +1,272 @@
+[
+  {
+    "seed": "wallet-route-0",
+    "semesters": [
+      {
+        "term": 1,
+        "money": 70,
+        "grade": 62,
+        "work": 1
+      },
+      {
+        "term": 2,
+        "money": 140,
+        "grade": 73,
+        "work": 1
+      },
+      {
+        "term": 3,
+        "money": 210,
+        "grade": 69,
+        "work": 1
+      },
+      {
+        "term": 4,
+        "money": 280,
+        "grade": 69,
+        "work": 1
+      },
+      {
+        "term": 5,
+        "money": 350,
+        "grade": 70,
+        "work": 1
+      },
+      {
+        "term": 6,
+        "money": 420,
+        "grade": 69,
+        "work": 1
+      },
+      {
+        "term": 7,
+        "money": 490,
+        "grade": 67,
+        "work": 1
+      },
+      {
+        "term": 8,
+        "money": 560,
+        "grade": 67,
+        "work": 1
+      }
+    ],
+    "finalMoney": 560
+  },
+  {
+    "seed": "wallet-route-100",
+    "semesters": [
+      {
+        "term": 1,
+        "money": 70,
+        "grade": 61,
+        "work": 1
+      },
+      {
+        "term": 2,
+        "money": 140,
+        "grade": 65,
+        "work": 1
+      },
+      {
+        "term": 3,
+        "money": 210,
+        "grade": 69,
+        "work": 1
+      },
+      {
+        "term": 4,
+        "money": 280,
+        "grade": 62,
+        "work": 1
+      },
+      {
+        "term": 5,
+        "money": 350,
+        "grade": 68,
+        "work": 1
+      },
+      {
+        "term": 6,
+        "money": 420,
+        "grade": 67,
+        "work": 1
+      },
+      {
+        "term": 7,
+        "money": 490,
+        "grade": 67,
+        "work": 1
+      },
+      {
+        "term": 8,
+        "money": 560,
+        "grade": 70,
+        "work": 1
+      }
+    ],
+    "finalMoney": 560
+  },
+  {
+    "seed": "wallet-route-207",
+    "semesters": [
+      {
+        "term": 1,
+        "money": 70,
+        "grade": 63,
+        "work": 1
+      },
+      {
+        "term": 2,
+        "money": 140,
+        "grade": 62,
+        "work": 1
+      },
+      {
+        "term": 3,
+        "money": 210,
+        "grade": 68,
+        "work": 1
+      },
+      {
+        "term": 4,
+        "money": 280,
+        "grade": 65,
+        "work": 1
+      },
+      {
+        "term": 5,
+        "money": 350,
+        "grade": 66,
+        "work": 1
+      },
+      {
+        "term": 6,
+        "money": 420,
+        "grade": 67,
+        "work": 1
+      },
+      {
+        "term": 7,
+        "money": 490,
+        "grade": 69,
+        "work": 1
+      },
+      {
+        "term": 8,
+        "money": 560,
+        "grade": 69,
+        "work": 1
+      }
+    ],
+    "finalMoney": 560
+  },
+  {
+    "seed": "wallet-route-303",
+    "semesters": [
+      {
+        "term": 1,
+        "money": 70,
+        "grade": 63,
+        "work": 1
+      },
+      {
+        "term": 2,
+        "money": 140,
+        "grade": 68,
+        "work": 1
+      },
+      {
+        "term": 3,
+        "money": 210,
+        "grade": 67,
+        "work": 1
+      },
+      {
+        "term": 4,
+        "money": 280,
+        "grade": 70,
+        "work": 1
+      },
+      {
+        "term": 5,
+        "money": 350,
+        "grade": 66,
+        "work": 1
+      },
+      {
+        "term": 6,
+        "money": 420,
+        "grade": 62,
+        "work": 1
+      },
+      {
+        "term": 7,
+        "money": 490,
+        "grade": 67,
+        "work": 1
+      },
+      {
+        "term": 8,
+        "money": 560,
+        "grade": 70,
+        "work": 1
+      }
+    ],
+    "finalMoney": 560
+  },
+  {
+    "seed": "wallet-route-400",
+    "semesters": [
+      {
+        "term": 1,
+        "money": 70,
+        "grade": 62,
+        "work": 1
+      },
+      {
+        "term": 2,
+        "money": 140,
+        "grade": 68,
+        "work": 1
+      },
+      {
+        "term": 3,
+        "money": 210,
+        "grade": 64,
+        "work": 1
+      },
+      {
+        "term": 4,
+        "money": 280,
+        "grade": 66,
+        "work": 1
+      },
+      {
+        "term": 5,
+        "money": 350,
+        "grade": 67,
+        "work": 1
+      },
+      {
+        "term": 6,
+        "money": 420,
+        "grade": 69,
+        "work": 1
+      },
+      {
+        "term": 7,
+        "money": 490,
+        "grade": 70,
+        "work": 1
+      },
+      {
+        "term": 8,
+        "money": 560,
+        "grade": 70,
+        "work": 1
+      }
+    ],
+    "finalMoney": 560
+  }
+]

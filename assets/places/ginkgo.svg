@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" role="img" aria-label="银杏大道">
+  <defs>
+    <linearGradient id="gi-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef1e6"/><stop offset="1" stop-color="#f8f1e2"/>
+    </linearGradient>
+    <linearGradient id="gi-road" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8dcc0"/><stop offset="1" stop-color="#d6c4a0"/>
+    </linearGradient>
+    <linearGradient id="gi-crown" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0c65a"/><stop offset="1" stop-color="#d9a53c"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" rx="28" fill="url(#gi-sky)"/>
+  <!-- 透视道路 -->
+  <path d="M296 480 L250 250 L390 250 L344 480 z" fill="url(#gi-road)"/>
+  <path d="M320 480 L320 250" stroke="#fdf6e6" stroke-width="3" opacity=".6" stroke-dasharray="14 12"/>
+  <!-- 两侧银杏树 -->
+  <g>
+    <g transform="translate(150 300)">
+      <rect x="-6" y="0" width="12" height="70" fill="#7a5a36"/>
+      <circle cx="0" cy="-30" r="46" fill="url(#gi-crown)"/><circle cx="-34" cy="-6" r="26" fill="#e8b64c" opacity=".9"/>
+      <circle cx="34" cy="-8" r="24" fill="#f0c65a" opacity=".9"/>
+    </g>
+    <g transform="translate(240 250)">
+      <rect x="-5" y="0" width="10" height="54" fill="#7a5a36"/>
+      <circle cx="0" cy="-24" r="34" fill="url(#gi-crown)"/><circle cx="-24" cy="-4" r="18" fill="#e8b64c"/>
+    </g>
+    <g transform="translate(490 300)">
+      <rect x="-6" y="0" width="12" height="70" fill="#7a5a36"/>
+      <circle cx="0" cy="-30" r="46" fill="url(#gi-crown)"/><circle cx="34" cy="-6" r="26" fill="#e8b64c" opacity=".9"/>
+      <circle cx="-34" cy="-8" r="24" fill="#f0c65a" opacity=".9"/>
+    </g>
+    <g transform="translate(400 250)">
+      <rect x="-5" y="0" width="10" height="54" fill="#7a5a36"/>
+      <circle cx="0" cy="-24" r="34" fill="url(#gi-crown)"/><circle cx="24" cy="-4" r="18" fill="#e8b64c"/>
+    </g>
+  </g>
+  <!-- 落叶 -->
+  <g fill="#e8b64c" opacity=".8">
+    <path d="M210 430 q10 -14 20 0 q-10 14 -20 0z"/><path d="M430 420 q10 -14 20 0 q-10 14 -20 0z"/>
+    <path d="M300 452 q8 -12 16 0 q-8 12 -16 0z"/><path d="M360 444 q8 -12 16 0 q-8 12 -16 0z"/>
+    <path d="M150 452 q8 -12 16 0 q-8 12 -16 0z" fill="#d9a53c"/>
+  </g>
+  <!-- 散步的人 -->
+  <g transform="translate(360 330)" fill="#1d3a33" opacity=".6">
+    <circle cx="0" cy="-44" r="7"/>
+    <path d="M0 -36 l-2 26 l10 0 l-2 -26 z"/>
+    <path d="M-2 -10 l-6 22 M8 -10 l8 22" stroke="#1d3a33" stroke-width="5" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -9,24 +9,380 @@ const vm = require('node:vm');
 const game = require('./game.js');
 const saves = require('./save.js');
 const sms = require('./sms.js');
+const characterScene = require('./character-scene.js');
+
+test('家庭预算在预算页、钱包与成长记录中展示；录取页不重复预算；打开收支不重复拨款', () => {
+  const ui = app();
+  ui.start();
+  let seed = 'budget-ui-0';
+  for (let i = 0; game.familyForSeed(seed).id !== 'ordinary'; i++) seed = 'budget-ui-' + (i + 1);
+  ui.evaluate('state = CampusGame.createGame({ seed: ' + JSON.stringify(seed) + ' }); renderState(); showEnrollment()');
+  const enrollment = ui.element('#dialogBody').innerHTML;
+  assert.match(enrollment, /普通家庭/);
+  assert.match(enrollment, /你的家庭环境/);
+  assert.match(enrollment, /你来自一个收入稳定的普通家庭/);
+  assert.doesNotMatch(enrollment, /每月|个月/);
+  assert.doesNotMatch(enrollment, /默认预留|基础通勤|开学可支配资金|<h3>本学期生活费/);
+  ui.evaluate('showBudget()');
+  const budget = ui.element('#dialogBody').innerHTML;
+  assert.match(budget, /本学期生活费/);
+  assert.match(budget, /\+6000 元/);
+  assert.match(budget, /默认预留 <b>4800 元/);
+  assert.match(budget, /1200 元/);
+  assert.doesNotMatch(budget, /当前可用余额/);
+  assert.ok(budget.indexOf('data-budget-tier=') < budget.indexOf('本学期预算合计'));
+  assert.ok(budget.indexOf('本学期预算合计') < budget.indexOf('本学期生活费'));
+  ui.evaluate("showBackground()");
+  assert.match(ui.element("#dialogBody").innerHTML, /你的家庭环境/);
+  ui.evaluate('showCourseSelection()');
+  assert.equal(ui.evaluate('dialogMode'), 'budget', '未确认预算时仍先进入预算页');
+  ui.evaluate('dialog.close()');
+  const before = JSON.stringify(ui.evaluate('state'));
+  ui.click('#mapStats', { walletBudget: '1' });
+  assert.equal(ui.evaluate('dialogMode'), 'wallet');
+  const wallet = ui.element('#dialogBody').innerHTML;
+  assert.match(wallet, /历次学期拨款/);
+  assert.match(wallet, /当前余额/);
+  assert.doesNotMatch(wallet, /当前可用余额/);
+  assert.match(wallet, /衣 · 普通 <b>1000 元/);
+  assert.match(wallet, /食 · 普通 <b>2400 元/);
+  assert.match(wallet, /住 · 普通宿舍 <b>1000 元/);
+  assert.match(wallet, /行 · 基础通勤 <b>400 元/);
+  assert.match(wallet, /本学期现金流/);
+  assert.match(wallet, /经济状态/);
+  assert.equal(JSON.stringify(ui.evaluate('state')), before);
+  ui.evaluate('showDialog("history", "成长记录", growthRecord())');
+  assert.match(ui.element('#dialogBody').innerHTML, /家庭生活费到账/);
+});
+
+test('学期总结显示预留4800与期末零扣费，旧版总结仍展示300与补助', () => {
+  const ui = app();
+  ui.start();
+  const modern = ui.evaluate('summaryMarkup(CampusGame.previewSettlement(state))');
+  assert.match(modern, /预算合计 <b>4800 元/);
+  assert.match(modern, /期末额外扣费 <b>0 元/);
+  assert.doesNotMatch(modern, /−300 元/);
+  const legacy = ui.evaluate('summaryMarkup(CampusGame.previewSettlement({ ...CampusGame.createGame({ legacyEconomy: true }), money: 100 }))');
+  assert.match(legacy, /旧版生活费 <b>−300 元/);
+  assert.match(legacy, /补助 <b>\+200 元/);
+});
+
+test('勤工档位在确认前明确固定100/200/300元报酬', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('dialog.close(); activePlace = "gate"; gateSection = "partTime"; renderActions()');
+  const html = ui.element('#actionList').innerHTML;
+  for (const amount of [100, 200, 300]) assert.match(html, new RegExp('固定报酬 \\+' + amount + ' 元'));
+});
+
+test('南门分流入口与实习事件链指示器', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = { ...state, term: 3 }; openPlace("gate")');
+  const hub = ui.element('#actionList').innerHTML;
+  assert.match(hub, /data-gate-section="partTime"/);
+  assert.match(hub, /data-gate-section="internship"/);
+  assert.doesNotMatch(hub, /action-card/);
+  // 兼职赚钱：只有勤工助学；顶部按钮变为“返回南门”，点击后回到两个入口
+  ui.click('#actionList', { gateSection: 'partTime' });
+  assert.match(ui.element('#actionList').innerHTML, /校内勤工助学/);
+  assert.doesNotMatch(ui.element('#actionList').innerHTML, /申请实习岗位/);
+  assert.match(ui.element('#backButton').innerHTML, /返回南门/);
+  ui.click('#backButton');
+  assert.match(ui.element('#backButton').innerHTML, /返回地图/);
+  assert.match(ui.element('#actionList').innerHTML, /data-gate-section="internship"/);
+  // 实习求职：三步指示器 + 三张卡
+  ui.click('#actionList', { gateSection: 'internship' });
+  assert.match(ui.element('#backButton').innerHTML, /返回南门/);
+  const idle = ui.element('#actionList').innerHTML;
+  assert.match(idle, /chain-steps/);
+  assert.match(idle, /待申请/);
+  assert.match(idle, /申请后开放/);
+  assert.match(idle, /达标后开放/);
+  assert.match(idle, /申请实习岗位/);
+  assert.match(idle, /实习投入/);
+  assert.match(idle, /求职准备/);
+  // 进行中：申请已完成、投入进行中、证明未解锁
+  ui.evaluate('state = { ...state, term: 5, chains: { ...state.chains, internship: { status: "active", progress: 0, startedTerm: 5, deadline: 6, nextEligibleTerm: 1, reviewAfter: 5, positionId: "qiandu_testdev", workTime: 2, workEnergy: 15, milestoneSeen: false } } }; renderActions()');
+  const active = ui.element('#actionList').innerHTML;
+  assert.match(active, /已申请/);
+  assert.match(active, /进行中/);
+  assert.match(active, /达标后开放/);
+  // 已完成：三步全部完成
+  ui.evaluate('state = { ...state, chains: { ...state.chains, internship: { ...state.chains.internship, status: "completed" } }, experiences: [{ type: "internship", term: 5, positionId: "qiandu_testdev" }] }; renderActions()');
+  const done = ui.element('#actionList').innerHTML;
+  assert.match(done, /已完成/);
+  assert.match(done, /已办理/);
+});
+
+test('校园卡赔偿余额不足时归还入口可用，界面明确说明待还金额', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = { ...state, money: 10, phase: "eventPending", pendingEvent: { id: "cardTrace", term: 1, instanceId: "daily:cardTrace:1" } }; renderState(); showEvent()');
+  assert.match(ui.element('#dialogBody').innerHTML, /钱包 −10 元/);
+  ui.click('#dialogBody', { eventChoice: 'return', revision: String(ui.evaluate('state.revision')), instance: 'daily:cardTrace:1' });
+  assert.equal(ui.evaluate('state.money'), 0);
+  assert.equal(ui.evaluate('state.cardDebt'), 40);
+  assert.match(ui.element('#actionFeedback').textContent, /赔偿待还 40 元/);
+});
+
+test('地点行动按单个行动折叠，不共用分区展开框', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("dorm")');
+  const html = ui.element('#actionList').innerHTML;
+  assert.match(html, /details class="action-card action-accordion" data-action-id="chat">/);
+  assert.match(html, /details class="action-card action-accordion" data-action-id="rest">/);
+  assert.match(html, /室友交流/);
+  assert.match(html, /休息调整/);
+  assert.doesNotMatch(html, /place-action-section/);
+  assert.doesNotMatch(html, /action-accordion[^>]* open/);
+});
+
+test('顶部导航收敛为四组，组内页签切换对应面板', () => {
+  const ui = app();
+  ui.start();
+  assert.equal(ui.evaluate('PANEL_GROUPS.length'), 4);
+  assert.equal(ui.evaluate('PANEL_GROUPS.flatMap((group) => group.panels).length'), 8);
+  ui.evaluate('setPanel("status")');
+  assert.equal(ui.evaluate('openPanelName'), 'status');
+  assert.match(ui.element('#panelSubnav').innerHTML, /data-panel="status"/);
+  assert.match(ui.element('#panelSubnav').innerHTML, /data-panel="relationships"/);
+  assert.doesNotMatch(ui.element('#panelSubnav').innerHTML, /data-panel="term"/);
+  ui.evaluate('setPanel("records")');
+  assert.equal(ui.evaluate('openPanelName'), 'records');
+  assert.match(ui.element('#panelSubnav').innerHTML, /data-panel="goals"/);
+  assert.match(ui.element('#panelSubnav').innerHTML, /data-panel="records"/);
+  assert.match(ui.element('#panelSubnav').innerHTML, /aria-current="page">记录/);
+});
+
+test('学习先询问可选资料；确认前不扣费，购买后仅加2点且不会重复提交', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("think")');
+  const before = ui.evaluate('JSON.stringify(state)');
+  const plain = game.executeAction(JSON.parse(before), 'study', { investment: 15, npcSupportVersion: 1, npcCastVersion: 1 });
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'actionExtra');
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.match(ui.element('#dialogBody').innerHTML, /80 元/);
+  assert.match(ui.element('#dialogBody').innerHTML, /合计最多 \+4/);
+  ui.click('#dialogButtons', { dialogAction: 'extraBuy' });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.equal(ui.evaluate('state.money'), plain.state.money - 80);
+  assert.equal(ui.evaluate('state.preparation'), plain.state.preparation + 2);
+  assert.equal(ui.evaluate('state.time'), plain.state.time);
+  assert.match(ui.element('#dialogBody').innerHTML, /额外消费：配套学习资料/);
+  const after = ui.evaluate('JSON.stringify(state)');
+  ui.flush();
+  ui.click('#dialogButtons', { dialogAction: 'extraBuy' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), after);
+  ui.click('#dialogSave'); ui.click('#dialogBody', { saveSlot: '2' });
+  ui.click('#loadButton'); ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), after);
+  assert.match(ui.element('#dialogBody').innerHTML, /额外消费：配套学习资料/);
+  assert.match(ui.evaluate('investmentRecord()'), /配套学习资料 −80 元/);
+});
+
+test('取消可选消费不会执行所选行动', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("library")');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#actionList', { action: 'selfStudy', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'actionExtra');
+  ui.click('#dialogButtons', { dialogAction: 'extraCancel' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.equal(ui.element('#termDialog').open, false);
+});
+
+test('跳过可选消费只执行基础行动', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("library")');
+  const before = ui.evaluate('state');
+  ui.click('#actionList', { action: 'selfStudy', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'actionExtra');
+  ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
+  assert.equal(ui.evaluate('state.revision'), before.revision + 1);
+  assert.equal(ui.evaluate('state.history.at(-1).action'), 'selfStudy');
+  assert.equal(ui.evaluate('state.history.at(-1).extra'), undefined);
+  assert.equal(ui.evaluate('state.money'), before.money);
+});
+
+test('学习资料的余额边界：0 和 79 元只结算基础学习，80 元可购买', () => {
+  for (const balance of [0, 79, 80]) {
+    const ui = app();
+    ui.start();
+    ui.evaluate('state = { ...state, money: ' + balance + ' }; openPlace("think")');
+    const revision = ui.evaluate('state.revision');
+    ui.click('#actionList', { action: 'study', revision: String(revision) });
+    if (balance === 80) {
+      assert.equal(ui.evaluate('dialogMode'), 'actionExtra');
+      assert.equal(ui.evaluate('state.revision'), revision);
+      assert.equal(ui.evaluate('state.money'), balance);
+      ui.click('#dialogButtons', { dialogAction: 'extraBuy' });
+      assert.equal(ui.evaluate('state.history.at(-1).extra.id'), 'materials');
+    } else {
+      assert.notEqual(ui.evaluate('dialogMode'), 'actionExtra');
+      assert.equal(ui.evaluate('state.history.at(-1).extra'), undefined);
+    }
+    assert.equal(ui.evaluate('state.history.at(-1).action'), 'study');
+    assert.equal(ui.evaluate('state.revision'), revision + 1);
+    assert.equal(ui.evaluate('state.money'), balance === 80 ? 0 : balance);
+  }
+});
+
+test('仅三项行动有可选消费，付费确认使用原版本号，过期时不扣费', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("think")');
+  assert.equal(ui.evaluate('offerActionExtra("tutoring", state.revision, 100)'), false);
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  ui.evaluate('state = CampusGame.executeAction(state, "rest").state');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#dialogButtons', { dialogAction: 'extraBuy' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.match(ui.element('#toast').textContent, /更新/);
+});
 
 function memory() {
   const data = new Map();
   return { data, getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
 }
-function app(storage = memory(), withSms = false, withNpc = false) {
+function growthUi() {
+  const ui = app();
+  ui.start();
+  let seed = 'growth-ui-0';
+  for (let i = 1; game.familyForSeed(seed).id !== 'ordinary'; i++) seed = 'growth-ui-' + i;
+  ui.evaluate('state = CampusGame.createGame({seed: ' + JSON.stringify(seed) + '}); state = CampusGame.chooseBudget(state, CampusGame.DEFAULT_BUDGET).state; state = CampusGame.selectCourses(state, CampusGame.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map(course => course.id)).state; uiLocked = false; dialog.close(); renderState()');
+  return ui;
+}
+
+test('养成侧栏展示价格、解锁进度与余额，购买后刷新并可在三栏位恢复', () => {
+  const ui = growthUi();
+  ui.element('#growthToggle').emit('click', { stopPropagation() {} });
+  assert.equal(ui.evaluate('openPanelName'), 'growth');
+  assert.match(ui.element('#growthOverview').innerHTML, /1200/);
+  assert.match(ui.element('#growthNodes').innerHTML, /舒适寝具/);
+  // 移动端将节点树与详情拆成两页，详情页提供返回按钮。
+  assert.equal(ui.evaluate('growthView'), 'tree');
+  assert.doesNotMatch(ui.element('#growthDetails').innerHTML, /data-growth-back/);
+  ui.evaluate('growthView = "detail"; renderGrowth()');
+  assert.match(ui.element('#growthDetails').innerHTML, /data-growth-back/);
+  ui.evaluate('growthView = "tree"; renderGrowth()');
+  assert.doesNotMatch(ui.element('#growthDetails').innerHTML, /data-growth-back/);
+  // 二期：顶部维度标签切换，默认显示住宿，只有选中维度的卡片出现在下方。
+  const tabHtml = ui.element('#growthTabs').innerHTML;
+  for (const label of ['衣', '食', '住', '行', '学习', '兴趣', '习惯']) assert.match(tabHtml, new RegExp('>' + label + '<'));
+  assert.equal((tabHtml.match(/data-growth-dimension=/g) || []).length, 7);
+  assert.equal(ui.evaluate('selectedGrowthDimension'), 'housing');
+  assert.match(ui.element('#growthNodes').innerHTML, /住 · 生活与空间/);
+  assert.match(ui.element('#growthNodes').innerHTML, /舒适寝具/);
+  assert.doesNotMatch(ui.element('#growthNodes').innerHTML, /正装套装|水果篮|自行车/);
+  ui.click('#growthTabs', { growthDimension: 'clothing' });
+  assert.equal(ui.evaluate('selectedGrowthDimension'), 'clothing');
+  assert.match(ui.element('#growthNodes').innerHTML, /衣 · 衣着与形象/);
+  assert.match(ui.element('#growthNodes').innerHTML, /正装套装/);
+  assert.match(ui.element('#growthNodes').innerHTML, /轻便运动鞋/);
+  assert.doesNotMatch(ui.element('#growthNodes').innerHTML, /舒适寝具/);
+  ui.click('#growthNodes', { growthSelect: 'formalSuit' });
+  assert.match(ui.element('#growthDetails').innerHTML, /第 5 学期开始开放/);
+  const selectionState = ui.evaluate('JSON.stringify(state)');
+  ui.click('#growthTabs', { growthDimension: 'habit' });
+  assert.match(ui.element('#growthNodes').innerHTML, /习惯 · 习惯养成/);
+  assert.match(ui.element('#growthNodes').innerHTML, /累计休息/);
+  ui.click('#growthNodes', { growthSelect: 'routine' });
+  assert.equal(ui.evaluate('selectedGrowthId'), 'routine');
+  assert.match(ui.element('#growthDetails').innerHTML, /累计休息 0 \/ 3 次/);
+  assert.match(ui.element('#growthPurchase').innerHTML, /disabled/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), selectionState);
+  ui.click('#growthNodes', { growthSelect: '__proto__' });
+  assert.equal(ui.evaluate('selectedGrowthId'), 'routine');
+  ui.click('#growthTabs', { growthDimension: 'housing' });
+  ui.click('#growthNodes', { growthSelect: 'bedding' });
+  assert.match(ui.element('#growthDetails').innerHTML, /每次休息额外恢复 3 点精力/);
+  const before = ui.evaluate('state.revision');
+  ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(before) });
+  assert.equal(ui.evaluate('state.money'), 900);
+  assert.equal(ui.element('#growthCount').textContent, '1 / 16');
+  assert.match(ui.element('#growthNodes').innerHTML, /已拥有 ✓/);
+  assert.match(ui.element('#growthNotice').textContent, /支出 300 元/);
+  assert.match(ui.evaluate('growthRecord()'), /添置舒适寝具/);
+  const purchased = ui.evaluate('JSON.stringify(state)');
+  ui.click('#growthPurchase', { growthBuy: 'hobbyCorner', revision: String(before) });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), purchased);
+  ui.flush();
+  ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), purchased);
+  ui.click('#saveButton');
+  ui.click('#dialogBody', { saveSlot: '3' });
+  ui.click('#loadButton');
+  ui.click('#dialogBody', { loadSlot: '3', saveSource: 'primary' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), purchased);
+  assert.equal(ui.element('#growthCount').textContent, '1 / 16');
+  ui.click('#growthClose');
+  ui.element('#growthToggle').emit('click', { stopPropagation() {} });
+  assert.equal(ui.evaluate('openPanelName'), 'growth');
+  assert.equal(ui.element('#growthNotice').textContent, '');
+  ui.click('#growthClose');
+  assert.equal(ui.evaluate('openPanelName'), null);
+});
+
+test('养成侧栏余额不足不能扣款，弹窗期间忽略购买，休息结果显示额外恢复', () => {
+  const ui = growthUi();
+  ui.evaluate('state.money = 100; renderState()');
+  assert.match(ui.element('#growthDetails').innerHTML, /余额不足，还差 200 元/);
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  ui.evaluate('state.money = 1200; dialog.showModal()');
+  ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.growth'), undefined);
+  ui.evaluate('dialog.close(); state.energy = 20; state.mood = 40');
+  ui.click('#growthPurchase', { growthBuy: 'bedding', revision: String(ui.evaluate('state.revision')) });
+  ui.flush();
+  ui.evaluate('openPlace("dorm")');
+  ui.click('#actionList', { action: 'rest', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.match(ui.element('#dialogBody').innerHTML, /校园养成额外恢复：精力 \+3/);
+});
+
+test('新学期解锁以聚光灯指向行动、养成与南门岗位', () => {
+  const ui = growthUi();
+  const steps = ui.evaluate('termUnlockSteps(3)');
+  assert.equal(steps.length, 2);
+  const gate = steps.find(step => step.selector === '.hotspot-gate');
+  assert.match(gate.text, /行动：申请实习岗位/);
+  assert.match(gate.text, /南门岗位库新增 7 个实习岗位/);
+  const growth = steps.find(step => step.selector === '#growthToggle');
+  assert.match(growth.text, /养成单品：通勤公交卡/);
+  assert.equal(ui.evaluate('termUnlockSteps(1).length'), 0);
+  ui.evaluate('state.term = 3; state.economy = null; state.selectedCourses = []; state.history = []; renderState(); maybeShowTermUnlockCoach()');
+  assert.equal(ui.evaluate('activeCoach.id'), 'term-unlock:3:action:gate');
+  assert.match(ui.element('#coachText').textContent, /申请实习岗位/);
+  ui.evaluate('hideCoach(); termUnlockQueue = []; state.selectedCourses = []; showCourseSelection()');
+  assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /term-unlocks|本学期新解锁/);
+});
+
+function app(storage = memory(), withSms = false, autoStart = true, withAnimals = false) {
   const elements = new Map();
   function element(selector) {
     if (!elements.has(selector)) {
       const listeners = new Map();
       const classes = new Set();
       elements.set(selector, {
-        innerHTML: '', textContent: '', value: '', open: false, hidden: false, style: {},
+        innerHTML: '', textContent: '', value: '', open: false, hidden: false, dataset: {},
+        style: {
+          setProperty(name, value) { this[name] = value; },
+          removeProperty(name) { delete this[name]; }
+        },
         classList: { add: name => classes.add(name), remove: name => classes.delete(name), contains: name => classes.has(name),
           toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); } },
         addEventListener: (type, callback) => listeners.set(type, callback),
         emit(type, event = {}) { listeners.get(type)?.(event); },
-        focus() {}, setAttribute() {}, querySelector: () => null, querySelectorAll: () => [],
+        focus() { this.focused = true; }, scrollIntoView() { this.scrolled = true; }, setAttribute() {}, querySelector: () => null, querySelectorAll: () => [],
         showModal() { this.open = true; }, close() { this.open = false; }
       });
     }
@@ -36,31 +392,55 @@ function app(storage = memory(), withSms = false, withNpc = false) {
   let sequence = 0;
   const window = element('window');
   window.localStorage = storage;
-  const globals = { CampusGame: game, CampusSave: saves, window,
+  window.crypto = { getRandomValues(values) { values[0] = 1; return values; } };
+  const globals = { CampusGame: game, CampusSave: saves, CampusCharacterScene: characterScene, window,
     HTMLDialogElement: class { showModal() {} },
     document: { querySelector: element, querySelectorAll: () => [], body: { style: {} }, addEventListener() {} },
     location: { search: '' }, URLSearchParams, Uint32Array,
     setTimeout(callback) { timers.set(++sequence, callback); return sequence; },
     clearTimeout(id) { timers.delete(id); } };
   if (withSms) globals.CampusSms = sms;
-  if (withNpc) globals.CampusNpc = require('./npc.js');
+  if (withAnimals) globals.CampusAnimals = require('./animals.js');
   const context = vm.createContext(globals);
   vm.runInContext(fs.readFileSync(require.resolve('./app.js'), 'utf8'), context);
   const evaluate = expression => vm.runInContext(expression, context);
+  if (autoStart) {
+    element('#startNew').emit('click', { target: { closest: () => ({ dataset: {} }), stopPropagation() {} } });
+    try { storage.removeItem('bjtu-life:coach:v1'); } catch (_) {}
+    try { vm.runInContext('coachProgress = {}', context); } catch (_) {}
+  }
   function click(selector, dataset = {}) {
-    element(selector).emit('click', { target: { closest: () => ({ dataset }) } });
+    element(selector).emit('click', { target: { closest: () => ({ dataset }) }, stopPropagation() {} });
   }
   return { storage, element, evaluate, click, window,
-    start() {
+    start(selectCourses = true) {
       element('#nicknameInput').value = '界面测试';
       evaluate('startGame()');
       assert.equal(evaluate('dialogMode'), 'enrollment');
       click('#dialogButtons', { dialogAction: 'resume' });
       assert.equal(evaluate('dialogMode'), 'tutorial');
       click('#dialogButtons', { dialogAction: 'resume' });
+      if (selectCourses && ['courseSelection', 'budget'].includes(evaluate('dialogMode'))) {
+        const ids = evaluate('CampusGame.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map((course) => course.id)');
+        evaluate('state = CampusGame.selectCourses(state, ' + JSON.stringify(ids) + ', { expectedRevision: state.revision }).state; renderState(); resumePhase()');
+        assert.equal(evaluate('state.selectedCourses.length'), 3);
+        assert.equal(evaluate('state.phase'), 'playing');
+      }
     },
     flush() { const jobs = [...timers.values()]; timers.clear(); jobs.forEach(callback => callback()); } };
 }
+
+test('数学题干规范渲染矩阵、积分上下限和上标，并保持转义', () => {
+  const ui = app();
+  const matrix = ui.evaluate('mathText(' + JSON.stringify('矩阵 [[1,2],[3,4]] 的行列式是？') + ')');
+  assert.match(matrix, /class="math-matrix"/);
+  assert.match(matrix, /<span>1<\/span><span>2<\/span><span>3<\/span><span>4<\/span>/);
+  const integral = ui.evaluate('mathText(' + JSON.stringify('定积分 ∫[0,5] 4x dx 的值是？') + ')');
+  assert.match(integral, /∫<span class="math-limits"><sup>5<\/sup><sub>0<\/sub><\/span>/);
+  const power = ui.evaluate('mathText(' + JSON.stringify('函数 f(x)=x^2 的导数是？') + ')');
+  assert.match(power, /x<sup>2<\/sup>/);
+  assert.equal(ui.evaluate('mathText(' + JSON.stringify('<script>') + ')'), '&lt;script&gt;');
+});
 
 test('暂不登录偏好刷新后保留，可返回登录，登录和切换账号清除跳过偏好', async () => {
   const storage = memory();
@@ -144,9 +524,40 @@ test('切换栏位保存失败时，继续保留原当前栏位及内存进度',
   assert.match(ui.element('#dialogNotice').textContent, /失败/);
 });
 
+test('离开页面时仅对未保存进度发出提醒', () => {
+  const ui = app();
+  let prevented = false;
+  const leave = { preventDefault() { prevented = true; }, returnValue: undefined };
+  ui.window.emit('beforeunload', leave);
+  assert.equal(prevented, false);
+  assert.equal(leave.returnValue, undefined);
+
+  ui.start();
+  prevented = false;
+  leave.returnValue = undefined;
+  ui.window.emit('beforeunload', leave);
+  assert.equal(prevented, true);
+  assert.equal(leave.returnValue, '');
+
+  ui.click('#saveButton');
+  ui.click('#dialogBody', { saveSlot: '1' });
+  prevented = false;
+  leave.returnValue = undefined;
+  ui.window.emit('beforeunload', leave);
+  assert.equal(prevented, false);
+  assert.equal(leave.returnValue, undefined);
+
+  ui.evaluate('state = CampusGame.executeAction(state, "study", { commandId: "unsaved-leave", expectedRevision: state.revision }).state; renderState()');
+  prevented = false;
+  leave.returnValue = undefined;
+  ui.window.emit('beforeunload', leave);
+  assert.equal(prevented, true);
+  assert.equal(leave.returnValue, '');
+});
+
 test('新局未选栏位时结算保留内存，首次选栏后后续结算只自动保存到该栏', () => {
   const ui = app();
-  ui.start();
+  ui.start(false);
   ui.click('#endTermButton');
   ui.click('#dialogButtons', { dialogAction: 'settle', revision: '0' });
   assert.equal(ui.evaluate('state.phase'), 'summary');
@@ -203,7 +614,7 @@ for (const state of phaseStates()) {
       ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
       assert.equal(ui.evaluate('activeSaveSlot'), 2);
       assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state)')), state);
-      const mode = { eventPending: 'event', summary: 'summary', endingChoice: 'endingChoice', finished: 'finished' }[state.phase];
+      const mode = { playing: 'budget', eventPending: 'event', summary: 'summary', endingChoice: 'endingChoice', finished: 'finished' }[state.phase];
       if (mode) assert.equal(ui.evaluate('dialogMode'), mode);
       else assert.equal(ui.element('#termDialog').open, false);
       ui.click('#saveButton');
@@ -241,6 +652,8 @@ test('读取备份使用所选栏位；重新开始后清除自动保存目标',
   service.save(game.executeAction(original, 'study').state, 3);
   storage.data.set(saves.getSlotKeys(3).primary, '{broken');
   const ui = app(storage);
+  ui.evaluate('showStartMenu()');
+  ui.click('#startContinue');
   assert.match(ui.element('#dialogBody').innerHTML, /data-save-source="backup"/);
   ui.click('#dialogBody', { loadSlot: '3', saveSource: 'backup' });
   assert.equal(ui.evaluate('activeSaveSlot'), 3);
@@ -266,16 +679,25 @@ test('其他栏位的 storage 变化不提示当前栏位冲突，当前栏位�
   assert.match(ui.element('#sessionNote').textContent, /另一个标签页/);
 });
 
-test('旧档显示为栏位 1，昵称转义，存储不可用时仍可开始游戏', () => {
-  const storage = memory();
-  // 旧版昵称规则宽松，旧档可能带 HTML 特殊字符；新规则只约束创建，加载时保持宽松并转义显示。
-  saves.createSaveService(storage).save({ ...game.createGame({ nickname: '旧档玩家' }), nickname: '<x>' });
-  const ui = app(storage);
-  const html = ui.element('#dialogBody').innerHTML;
-  assert.match(html, /&lt;x&gt;/);
-  assert.doesNotMatch(html, /<x>/);
-  ui.click('#dialogBody', { loadSlot: '1', saveSource: 'primary' });
-  assert.equal(ui.evaluate('state.nickname'), '<x>');
+test('从继续游戏读取栏位 1 的旧档并按文本显示旧昵称', () => {
+  const legacy = require('./qa/legacy-wallet-v055.json');
+  for (const nickname of [legacy.state.nickname, '<x>']) {
+    const storage = memory();
+    storage.setItem(saves.KEYS.primary, JSON.stringify({ ...legacy, state: { ...legacy.state, nickname } }));
+    const ui = app(storage, false, false, false);
+    ui.click('#startContinue');
+    const html = ui.element('#dialogBody').innerHTML;
+    assert.match(html, /栏位 1/);
+    assert.match(html, /data-load-slot="1"/);
+    assert.ok(html.includes(nickname === '<x>' ? '&lt;x&gt;' : nickname));
+    assert.doesNotMatch(html, /<x>/);
+    ui.click('#dialogBody', { loadSlot: '1', saveSource: 'primary' });
+    assert.equal(ui.evaluate('state.nickname'), nickname);
+    assert.equal(ui.evaluate('state.term'), legacy.state.term);
+  }
+});
+
+test('存储不可用时仍可开局，保存栏位不可用', () => {
   const denied = app(null);
   denied.start(); denied.click('#saveButton');
   assert.equal((denied.element('#dialogBody').innerHTML.match(/disabled/g) || []).length, 3);
@@ -307,76 +729,801 @@ test('进入场所时地图离场、入场动画标记按定时清理，返回�
   assert.equal(placeScreen.classList.contains('is-entering'), true);
 });
 
-test('地图上的偶遇 NPC 渲染与点击搭话轮换台词，离场保留淡出', () => {
-  const ui = app(memory(), false, true);
+test('地图只显示已认识的固定人物，三个标记都能打开对应对话', () => {
+  const ui = app();
   ui.start();
-  // 换成立即生成、间隔为 0 的引擎，避免依赖真实时钟；场上限两人由引擎保证。
-  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
-  ui.flush(); ui.flush();
-  const html = ui.element('#npcLayer').innerHTML;
-  assert.match(html, /npc-figure/);
-  assert.match(html, /npc-svg/);
-  assert.match(html, /npc-label/);
-  assert.equal((html.match(/data-npc-id=/g) || []).length, 2);
-  const id = ui.evaluate('npcSystem.active()[0].id');
-  const label = ui.evaluate('npcSystem.active()[0].label');
-  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
-  assert.equal(ui.evaluate('dialogMode'), 'npc');
-  assert.match(ui.element('#dialogBody').innerHTML, /npc-dialog-line/);
-  assert.equal(ui.element('#dialogTitle').textContent, label);
-  assert.match(ui.element('#dialogButtons').innerHTML, /data-dialog-action="npcTalk"/);
-  const firstLine = ui.element('#dialogBody').innerHTML;
-  ui.click('#dialogButtons', { dialogAction: 'npcTalk' });
-  assert.notEqual(ui.element('#dialogBody').innerHTML, firstLine);
+  const layer = ui.element('#npcLayer');
+  assert.equal(layer.innerHTML, '');
+
+  ui.evaluate('for (const id of Object.keys(game.npcCast.PROFILES)) state = game.npcCast.meet(state, id); renderState()');
+  const ids = [...layer.innerHTML.matchAll(/data-npc-id="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual(ids, ['zhouNing', 'chenTeacher', 'linXia']);
+  for (const id of ids) {
+    const name = game.npcCast.profile(id).name;
+    assert.ok(layer.innerHTML.includes(name + ' · 已认识'));
+    ui.click('#npcLayer', { npcId: id });
+    assert.equal(ui.evaluate('activeNpcId'), id);
+    assert.equal(ui.evaluate('dialogMode'), 'relationship');
+    assert.match(ui.element('#dialogTitle').textContent, new RegExp(name));
+    ui.evaluate('dialog.close()');
+  }
+  ui.click('#dialogButtons', { dialogAction: 'confirmRestart' });
+  assert.equal(layer.innerHTML, '');
+});
+
+test('林夏从对话界面收到当前地点、学期与连续话题', async () => {
+  const playerLines = ['咋啦，想约我一起？', '算了。不过我们可以一起去吃饭呀', '或者今晚去看电影？'];
+  for (const hasPlans of [false, true]) {
+    const ui = app();
+    ui.start();
+    const preset = hasPlans ? '我答应了方宁晚上听她练展示，吃顿饭还来得及。' : '我正想找个地方吃饭，你想吃什么？';
+    const replies = ['本来还想约你练练接棒。', preset, '电影得挑部咱俩都想看的。'];
+    const requests = [];
+    ui.window.chatFetch = async (_, { body }) => {
+      requests.push(JSON.parse(body).messages);
+      return { ok: true, json: async () => ({ reply: JSON.stringify({ say: replies[requests.length - 1], intent: 'none' }) }) };
+    };
+    ui.evaluate('fetch = window.chatFetch; state = game.npcCast.meet({ ...state, term: 5 }, "linXia"); showCharacter("linXia", { place: "library" })');
+    for (const line of playerLines) {
+      await ui.evaluate('sendZhouChat(' + JSON.stringify(line) + ')');
+      ui.flush();
+    }
+    assert.equal(requests.length, 3);
+    requests.forEach((rows, i) => {
+      const prompt = rows.map(row => row.content).join('\n');
+      assert.match(prompt, /当前学期：第5学期/);
+      assert.ok(prompt.includes('当前地点：' + game.PLACES.library.title));
+      for (const content of game.npcCast.profile('linXia').persona.personality) {
+        assert.ok(rows.some(row => row.role === 'system' && row.content.startsWith(content)));
+      }
+      assert.match(prompt, /本轮必须返回完整 JSON/);
+      assert.doesNotMatch(prompt, /八点半|林夏自己的往事/);
+      assert.deepEqual(rows.at(-1), { role: 'user', content: playerLines[i] });
+    });
+    const movieContext = requests.at(-1).map(row => row.content).join('\n');
+    assert.ok(movieContext.includes(playerLines[1]) && movieContext.includes(preset));
+    assert.equal(movieContext.includes('晚上听她练展示'), hasPlans);
+    assert.match(ui.element('#dialogBody').innerHTML, /电影得挑部咱俩都想看的/);
+  }
+});
+
+test('林夏初遇归还耳机盒后回到地图，再次主动搭话才进入聊天，两段情节可存档重放', async () => {
+  const ui = app();
+  ui.start();
+  const start = ui.evaluate(`(() => {
+    let result = game.executeAction(state, 'soloSport', { commandId: 'track-action', npcCastVersion: 1 });
+    for (let i = 0; result.ok && result.state.pendingEvent && i < 6; i++) {
+      const current = result.state;
+      const event = current.pendingEvent;
+      result = game.submitEventChoice(current, game.EVENTS[event.id].choices[0].id, {
+        commandId: 'track-event-' + i, eventInstanceId: event.instanceId, npcCastVersion: 1
+      });
+    }
+    if (!result.ok) throw Error(result.reason);
+    state = result.state;
+    return state;
+  })()`);
+  const occasion = game.npcOpportunity(start);
+  assert.equal(occasion.npcId, 'linXia');
+  const scene = game.npcCast.profile('linXia').meetScene;
+  const invalid = game.recordNpcDialogue(start, {
+    npcId: occasion.npcId, kind: 'meet', text: '', say: '我们刚才一起跑完了。', intent: 'none',
+    source: 'local', trigger: occasion.key, sceneId: scene.id, sceneChoices: ['byBench', 'invalid']
+  });
+  assert.equal(invalid.ok, false);
+  assert.equal(invalid.state, start);
+  const body = () => ui.element('#dialogBody').innerHTML;
+  const choice = (meetStep, meetOption) => ui.click('#dialogBody', { meetStep, meetOption });
+  await ui.evaluate('maybeZhouNingDirector()');
+  assert.match(body(), /data-meet-view="item"[\s\S]*捡起来看看/);
+  assert.doesNotMatch(body(), /林夏|小橘子|npc-meet-portrait|zhouChatInput/);
+  choice('farewell', 'noProblem');
+  assert.equal(ui.evaluate('state.revision'), start.revision);
+  choice('item', 'inspect');
+  assert.match(body(), /小橘子[\s\S]*女生[\s\S]*你有没有看见一个灰色的耳机盒/);
+  assert.doesNotMatch(body(), /林夏|zhouChatInput/);
+  choice('return', 'later');
+  assert.equal(ui.evaluate('dialog.open'), false);
+  assert.equal(ui.evaluate('state.revision'), start.revision);
+  await ui.evaluate('maybeZhouNingDirector()');
+  assert.match(body(), /data-meet-view="item"/);
+  choice('item', 'inspect');
+  choice('return', 'byBench');
+  assert.match(body(), /她看了一眼贴纸[\s\S]*我还以为落在路上了/);
+  assert.doesNotMatch(body(), /林夏|zhouChatInput/);
+  assert.equal(ui.evaluate('state.revision'), start.revision);
+  assert.equal(saves.createSlotService(ui.storage).save(ui.evaluate('state'), 1).ok, true);
+  ui.evaluate('loadGame(1)');
+  if (ui.evaluate('dialogMode') === 'eventResult') ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  assert.match(body(), /data-meet-view="item"/);
+  choice('item', 'inspect');
+  choice('return', 'byBench');
+  choice('farewell', 'noProblem');
+  choice('farewell', 'noProblem');
+  assert.equal(ui.evaluate('dialog.open'), false);
+  assert.match(ui.element('#npcLayer').innerHTML, /操场遇到的同学/);
+  assert.doesNotMatch(ui.element('#npcLayer').innerHTML, /林夏/);
+  const afterMeeting = ui.evaluate('state');
+  assert.equal(afterMeeting.revision, start.revision + 1);
+  for (const key of ['time', 'energy', 'money']) assert.equal(afterMeeting[key], start[key], key);
+  assert.equal(game.characterAgent.read(afterMeeting, 'linXia').proposal, null);
+  assert.equal(afterMeeting.history.at(-1).command.data.sceneId, scene.id);
+  assert.deepEqual(afterMeeting.history.at(-1).command.data.sceneChoices, ['byBench', 'noProblem']);
+  assert.equal(game.npcAvailability(afterMeeting, 'linXia', 'walk').ok, false);
+  for (const [snapshot, dialogue] of [
+    [start, { kind: 'introduce', text: '', say: scene.reunion.line, sceneId: scene.id }],
+    [afterMeeting, { kind: 'introduce', text: '', say: '我们以前认识。', sceneId: scene.id }],
+    [afterMeeting, { kind: 'chat', text: '你好', say: '你好' }]
+  ]) {
+    const rejected = game.recordNpcDialogue(snapshot, { npcId: 'linXia', intent: 'none', source: 'local', ...dialogue });
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.state, snapshot);
+  }
+  assert.equal(saves.createSlotService(ui.storage).save(afterMeeting, 2).ok, true);
+  ui.flush();
+  ui.evaluate('dialog.close(); loadGame(2); dialog.close()');
+  assert.match(ui.element('#npcLayer').innerHTML, /操场遇到的同学/);
+  assert.match(ui.element('#relationshipList').innerHTML, /操场遇到的同学/);
+  assert.doesNotMatch(ui.element('#relationshipList').innerHTML, /林夏/);
+  ui.click('#npcLayer', { npcId: 'linXia' });
+  assert.match(body(), /data-meet-view="reunion"[\s\S]*操场遇到的同学[\s\S]*上回耳机盒的事，谢谢。对了，我叫林夏。/);
+  assert.doesNotMatch(body(), /zhouChatInput/);
+  choice('reunion', 'later');
+  assert.equal(ui.evaluate('dialog.open'), false);
+  assert.equal(ui.evaluate('state.revision'), afterMeeting.revision);
+  ui.click('#npcLayer', { npcId: 'linXia' });
+  choice('reunion', 'greet');
+  choice('reunion', 'greet');
+  assert.match(body(), /class="vn-chat-event"[\s\S]*就在长椅脚边[\s\S]*没事。[\s\S]*我叫林夏。[\s\S]*你好，林夏。[\s\S]*zhouChatInput/);
+  assert.equal(body().split(scene.reunion.line).length - 1, 1);
+  assert.doesNotMatch(body(), /我刚才还以为弄丢了|在线对话暂时没连上/);
+  const afterIntroduction = ui.evaluate('state');
+  assert.equal(afterIntroduction.revision, afterMeeting.revision + 1);
+  assert.equal(afterIntroduction.history.at(-1).dialogue.kind, 'introduce');
+  for (const key of ['time', 'energy', 'money']) assert.equal(afterIntroduction[key], start[key], key);
+  for (const snapshot of [afterMeeting, afterIntroduction]) {
+    const replay = game.replay({
+      nickname: snapshot.nickname, seed: snapshot.rng.seed,
+      commands: snapshot.history.map(entry => ({ ...entry.command, commandId: entry.commandId }))
+    });
+    assert.ok(replay.ok, replay.reason);
+    assert.deepEqual(replay.state, snapshot);
+  }
+  assert.ok(saves.createSlotService(ui.storage).save(afterIntroduction, 2).ok);
+  ui.flush();
+  ui.evaluate('dialog.close(); loadGame(2); dialog.close(); showCharacter("linXia", { place: "track" })');
+  assert.match(body(), /我叫林夏。[\s\S]*你好，林夏。[\s\S]*zhouChatInput/);
+  assert.doesNotMatch(body(), /data-meet-view/);
+  const requests = [];
+  const lines = [
+    ['你也是咱们学校的学生吗', '嗯，交通运输的。你也是？'],
+    ['是呀，哈哈。', '嗯，那以后见。'],
+    ['我们见过吗？', '上次还我耳机盒的是你吧？'],
+    ['你平时练中长跑吗？', '练，比较熟的是一千五。']
+  ];
+  ui.window.meetingFetch = async (_, { body }) => {
+    const say = lines[requests.length][1];
+    requests.push(JSON.parse(body).messages);
+    return { ok: true, json: async () => ({ reply: JSON.stringify({ say, intent: 'none' }) }) };
+  };
+  ui.evaluate('fetch = window.meetingFetch');
+  for (const [line] of lines) {
+    await ui.evaluate('sendZhouChat(' + JSON.stringify(line) + ')');
+    ui.flush();
+  }
+  assert.equal(requests.length, lines.length);
+  const joined = rows => rows.map(row => row.content).join('\n');
+  for (const rows of requests.slice(0, 2)) {
+    const chatPrompt = joined(rows);
+    assert.match(chatPrompt, /环形跑道|当前地点：[^。]*操场/);
+    assert.match(chatPrompt, /对方简单确认、话题已经说完时，应一声就够/);
+    assert.match(chatPrompt, /地点只说明你们现在在哪儿。具体事实只用游戏记录、已有记忆或明确对话/);
+    assert.doesNotMatch(chatPrompt, /跑步|中长跑|一千五|接力|练习配速|exercise|篮球/);
+  }
+  assert.deepEqual(requests[1].slice(-3), [
+    { role: 'user', content: lines[0][0] },
+    { role: 'assistant', content: JSON.stringify({ emotion: null, say: lines[0][1], intent: 'none' }) },
+    { role: 'user', content: lines[1][0] }
+  ]);
+  const prompt = joined(requests[2]);
+  assert.match(prompt, /游戏记录：.*操场边.*耳机盒[\s\S]*玩家原话：是这个吗？就在长椅脚边。[\s\S]*玩家原话：没事。[\s\S]*玩家原话：你好，林夏。/);
+  assert.doesNotMatch(prompt, /训练记录|风吹过来|一起跑完/);
+  assert.deepEqual(requests[2].at(-1), { role: 'user', content: '我们见过吗？' });
+  assert.match(joined(requests[3]), /林夏自己的往事[\s\S]*林夏平时练中长跑，最熟悉的是一千五/);
+  assert.equal(ui.evaluate('state.history.filter(entry => entry.dialogue?.sceneId).length'), 2);
+});
+
+test('林夏聊天框和后续请求只取台词，旧记录在读取时同样隐藏字段名', async () => {
+  const ui = app();
+  ui.start();
+  const npcId = 'linXia';
+  const oldSay = '今天我先回去了。';
+  const lines = [
+    ['今晚一起去健身呗', '今晚啊……我这会儿刚在操场，健身房那边我还是想再熟点再说，这次先不去啦。'],
+    ['那好吧，那可以加个微信吗', '微信再等等吧，我一般不太熟就先不加，别介意啊。'],
+    ['没事没事，那就先这样吧', '嗯，那回头操场碰见再说。']
+  ];
+  const tagged = say => `say: ${say}\nintent: none`;
+  const visible = () => ui.element('#dialogBody').innerHTML;
+  ui.window.oldReply = tagged(oldSay);
+  ui.evaluate(`state = game.npcCast.meet(state, 'linXia');
+    state = game.recordNpcDialogue(state, { npcId: 'linXia', kind: 'chat', text: '还待一会儿吗？',
+      say: window.oldReply, intent: 'none', source: 'online' }).state;
+    showCharacter('linXia', { place: 'track' });`);
+  assert.ok(visible().includes(oldSay));
+  assert.doesNotMatch(visible(), /say:|intent: none/);
+
+  const requests = [];
+  ui.window.dialogueFetch = async (_, { body }) => {
+    const say = lines[requests.length][1];
+    requests.push(JSON.parse(body).messages);
+    return { ok: true, json: async () => ({ reply: tagged(say) }) };
+  };
+  ui.evaluate('fetch = window.dialogueFetch');
+  for (const [text, say] of lines) {
+    await ui.evaluate('sendZhouChat(' + JSON.stringify(text) + ')');
+    ui.flush();
+    assert.ok(visible().includes(say));
+    assert.doesNotMatch(visible(), /say:|intent: none/);
+    const saved = ui.evaluate('state.history.at(-1).dialogue');
+    assert.equal(saved.say, say);
+    assert.equal(saved.intent, 'none');
+    assert.equal(saved.source, 'online');
+  }
+  assert.equal(requests.length, lines.length);
+  assert.ok(requests[0].some(row => row.role === 'assistant' && JSON.parse(row.content).say === oldSay));
+  assert.ok(requests[1].some(row => row.role === 'assistant' && JSON.parse(row.content).say === lines[0][1]));
+  assert.equal(ui.evaluate('state.history.find(entry => entry.dialogue?.npcId === "linXia").dialogue.say'), tagged(oldSay));
+  assert.equal(game.characterAgent.read(ui.evaluate('state'), npcId).proposal, null);
+});
+
+test('林夏两版纸条初遇的旧档保留原剧情和聊天入口', async () => {
+  const ui = app();
+  ui.start();
+  const start = ui.evaluate(`(() => {
+    const action = game.executeAction(state, 'soloSport', { npcCastVersion: 1 });
+    state = action.state;
+    while (state.pendingEvent) {
+      const event = state.pendingEvent;
+      state = game.submitEventChoice(state, game.EVENTS[event.id].choices[0].id, { eventInstanceId: event.instanceId }).state;
+    }
+    return state;
+  })()`);
+  const trigger = game.npcOpportunity(start).key;
+  for (const [sceneId, sceneChoices, expected] of [
+    ['linXiaTrackNotesV1', undefined, /你捡起来[\s\S]*我还以为今天这几圈白记了[\s\S]*zhouChatInput/],
+    ['linXiaTrackNotesV2', ['wind', 'classmate'], /滑到了你脚边[\s\S]*刚被风吹过来了[\s\S]*你好，我也是这儿的学生[\s\S]*zhouChatInput/]
+  ]) {
+    const scene = game.npcCast.meetingScene('linXia', sceneId);
+    const legacy = game.recordNpcDialogue(start, {
+      npcId: 'linXia', kind: 'meet', text: '', say: scene.say || scene.introOptions[0].say, intent: 'none',
+      source: 'local', trigger, sceneId, sceneChoices
+    });
+    assert.ok(legacy.ok, legacy.reason);
+    const saved = saves.createSlotService(ui.storage).save(legacy.state, 3);
+    assert.ok(saved.ok, saved.reason);
+    ui.evaluate('dialog.close(); loadGame(3); dialog.close(); showCharacter("linXia")');
+    assert.match(ui.element('#dialogBody').innerHTML, expected);
+    assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /data-meet-view|耳机盒/);
+  }
+});
+
+test('既有校园事件先处理，林夏的操场初遇等到地图出场', async () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate(`(() => {
+    const action = game.executeAction(state, 'soloSport');
+    const pendingEvent = { id: 'sportsMeet', term: state.term, instanceId: 'daily:sportsMeet:' + state.term };
+    state = game.planNpcDirector({ ...action.state, pendingEvent, phase: 'eventPending' });
+    showEvent();
+  })()`);
+  assert.equal(ui.evaluate('game.npcOpportunity(state).npcId'), 'linXia');
+  assert.equal(ui.evaluate('dialogMode'), 'event');
+  await ui.evaluate('maybeZhouNingDirector()');
+  assert.equal(ui.evaluate('!!game.npcCast.get(state, "linXia")'), false);
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /耳机盒/);
+  ui.evaluate(`(() => {
+    const result = game.submitEventChoice(state, 'fun', { eventInstanceId: state.pendingEvent.instanceId, npcCastVersion: 1 });
+    if (!result.ok) throw Error(result.reason);
+    state = result.state;
+    dialog.close();
+  })()`);
+  await ui.evaluate('maybeZhouNingDirector()');
+  assert.equal(ui.evaluate('dialogMode'), 'npcMeetIntro');
+  ui.click('#dialogBody', { meetStep: 'item', meetOption: 'inspect' });
+  ui.click('#dialogBody', { meetStep: 'return', meetOption: 'checkCase' });
+  assert.match(ui.element('#dialogBody').innerHTML, /我刚才还以为弄丢了/);
+  ui.click('#dialogBody', { meetStep: 'farewell', meetOption: 'seeYou' });
+  assert.equal(ui.evaluate('dialog.open'), false);
+  assert.deepEqual(ui.evaluate('state.history.at(-1).dialogue.sceneChoices'), ['checkCase', 'seeYou']);
+  ui.flush();
+  await ui.evaluate('maybeZhouNingDirector()');
+  assert.equal(ui.evaluate('dialog.open'), false);
+});
+
+test('固定人物对话关闭重开、保存读取和旧档无记忆侧车时恢复上下文', () => {
+  const ui = app();
+  ui.start();
+  const setup = ui.evaluate(`(() => {
+    let current = state;
+    let result = game.executeAction(current, 'soloSport', { commandId: 'memory-action', npcCastVersion: 1 });
+    if (!result.ok) return { error: result.reason };
+    current = result.state;
+    let guard = 0;
+    while (current.pendingEvent && guard++ < 6) {
+      const event = current.pendingEvent;
+      const choice = game.EVENTS[event.id].choices[0];
+      result = game.submitEventChoice(current, choice.id, { commandId: 'memory-event-' + current.revision, eventInstanceId: event.instanceId, npcCastVersion: 1 });
+      if (!result.ok) return { error: result.reason };
+      current = result.state;
+    }
+    const occasion = game.npcOpportunity(current);
+    if (!occasion) return { error: '没有可用的人物相识调度', phase: current.phase };
+    result = game.recordNpcDialogue(current, { npcId: occasion.npcId, kind: occasion.kind, text: '', say: '你好，我是' + game.npcCast.profile(occasion.npcId).name, intent: 'none', source: 'local', trigger: occasion.key });
+    if (!result.ok) return { error: result.reason };
+    result = game.recordNpcDialogue(result.state, { npcId: occasion.npcId, kind: 'chat', text: '我最近在准备课程展示，有点紧张', say: '别急，我们先理清展示的重点。', intent: 'none', source: 'local' });
+    if (!result.ok) return { error: result.reason };
+    state = result.state;
+    renderState();
+    showCharacter(occasion.npcId);
+    return { npcId: occasion.npcId };
+  })()`);
+  assert.ok(setup && !setup.error, setup && setup.error);
+  const npcId = setup.npcId;
+  assert.match(ui.element('#dialogBody').innerHTML, /准备课程展示/);
+  ui.evaluate('dialog.close()');
+  ui.evaluate('showCharacter(' + JSON.stringify(npcId) + ')');
+  assert.match(ui.element('#dialogBody').innerHTML, /准备课程展示/);
+
+  const saved = saves.createSlotService(ui.storage).save(ui.evaluate('state'), 2);
+  assert.equal(saved.ok, true, saved.reason);
+  ui.evaluate('dialog.close(); loadGame(2)');
+  ui.evaluate('showCharacter(' + JSON.stringify(npcId) + ')');
+  assert.match(ui.element('#dialogBody').innerHTML, /准备课程展示/);
+
+  const old = JSON.parse(JSON.stringify(ui.evaluate('state')));
+  delete old.npcAgentMemory;
+  delete old.npcDialogueSummaries;
+  const oldSaved = saves.createSlotService(ui.storage).save(old, 3);
+  assert.equal(oldSaved.ok, true, oldSaved.reason);
+  ui.evaluate('dialog.close(); loadGame(3)');
+  ui.evaluate('showCharacter(' + JSON.stringify(npcId) + ')');
+  assert.equal(ui.evaluate('dialogMode'), 'relationship');
+  assert.match(ui.element('#dialogBody').innerHTML, /准备课程展示/);
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /一张写着圈数和时间的纸/);
+});
+
+test('含路人聊天历史的旧存档仍可加载，地图不显示路人', () => {
+  const ui = app();
+  const start = game.createGame({ nickname: '旧版进度', seed: 'old-roaming-npc' });
+  const chat = game.chatWithNpc(start, { identityId: 'senior', quality: 2 });
+  assert.equal(chat.ok, true);
+  const written = saves.createSlotService(ui.storage).save(chat.state, 2);
+  assert.equal(written.ok, true, written.reason);
+  ui.evaluate('loadGame(2)');
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state)')), chat.state);
+  assert.equal(ui.element('#npcLayer').innerHTML, '');
+});
+
+test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返回地图', () => {
+  const cases = [
+    { species: 'cat', catId: 'wumei', name: '五妹', atlas: 'cat-wumei-v4.webp', pose: 'alert', title: '五妹哈气了', result: /五妹愣了一下/, mood: '心情 −2' },
+    { species: 'cat', catId: 'maolv', name: '毛驴', atlas: 'cat-maolv-v3.webp', pose: 'alert', title: '毛驴哈气了', result: /毛驴愣了一下/, mood: '心情 −2' },
+    { species: 'goose', name: '明湖的鹅', atlas: 'goose-atlas.webp', pose: 'calm', title: '摸到了', result: /它轻轻抖了抖羽毛/, mood: '心情 +7' }
+  ];
+  for (const { species, catId, name, atlas, pose, title, result, mood } of cases) {
+    const ui = app(memory(), false, true, true);
+    ui.start();
+    ui.window.animal = { id: 1, species, catId, x: 25, y: 50 };
+    ui.evaluate('animalSystem = { tick: () => window.animal, finish() {} }; renderAnimalLayer(window.animal, true)');
+    assert.ok(ui.element('#animalLayer').innerHTML.includes('aria-label="遇见' + name + '"'));
+    assert.ok(ui.element('#animalLayer').innerHTML.includes(atlas));
+    ui.click('#animalLayer', { animalId: '1' });
+    assert.equal(ui.element('#animalDialog').open, true);
+    assert.equal(ui.element('#animalTitle').textContent, name);
+    assert.equal(ui.element('#animalDetail').textContent, '');
+    assert.match(ui.element('#animalButtons').innerHTML, /试着摸一下/);
+    ui.click('#animalButtons', { animalAction: 'pet' });
+
+    const world = ui.element('#animalWorld');
+    const controls = ui.element('#animalControls');
+    for (const currentPose of ['calm', 'alert']) {
+      ui.evaluate('animalTiming.startedAt = animalClock() - ' + (currentPose === 'calm' ? 'animalTiming.start' : '0') + '; updateAnimalTiming()');
+      assert.equal(world.dataset.pose, currentPose);
+      assert.equal(controls.hidden, true);
+      assert.equal(ui.element('#animalCue').textContent, '');
+      assert.equal(ui.element('#animalDetail').textContent, '');
+      assert.equal(ui.element('#animalButtons').innerHTML, '');
+    }
+    if (pose === 'calm') ui.evaluate('animalTiming.startedAt = animalClock() - animalTiming.start; updateAnimalTiming()');
+    ui.click('#animalPetTarget');
+    if (species === 'cat') {
+      assert.equal(world.dataset.mode, 'result');
+      assert.equal(world.dataset.pose, 'startled');
+    } else {
+      assert.equal(controls.hidden, true);
+    }
+    ui.flush();
+
+    assert.equal(world.dataset.mode, 'result');
+    assert.equal(world.style['--animal-atlas'], 'url("assets/animals/' + atlas + '")');
+    assert.equal(controls.hidden, false);
+    assert.equal(ui.element('#animalTitle').textContent, title);
+    assert.match(ui.element('#animalCue').textContent, result);
+    assert.equal(ui.element('#animalDetail').textContent, mood);
+    assert.equal(ui.element('#animalButtons').innerHTML, '');
+    assert.equal(ui.element('#animalPetTarget').hidden, true);
+    ui.click('#animalExit');
+    assert.equal(ui.element('#animalDialog').open, false);
+  }
+});
+
+test('开学选课、结束学期开考与期末总结界面可依次渲染', () => {
+  const ui = app();
+  ui.start(false);
+  assert.equal(ui.evaluate('dialogMode'), 'budget');
+  ui.evaluate('showCourseSelection()');
+  assert.equal(ui.evaluate('dialogMode'), 'budget', '预算未确认时不能从其他入口绕过到选课');
+  ui.click('#dialogButtons', { dialogAction: 'budgetConfirm' });
+  ui.flush();
+  assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
+  assert.match(ui.element('#dialogBody').innerHTML, /id="courseForm"/);
+  assert.match(ui.element('#dialogBody').innerHTML, /course-card/);
+  assert.match(ui.element('#dialogBody').innerHTML, /学分/);
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /本学期生活预算|默认预留|开学可支配资金/);
+  const ids = ui.evaluate('CampusGame.coursesForTerm(state.term, state.background.id, state.background.major).slice(0, 3).map((course) => course.id)');
+  ui.evaluate('state = CampusGame.selectCourses(state, ' + JSON.stringify(ids) + ', { expectedRevision: state.revision }).state; renderState(); dialog.close()');
+  ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'confirmExam');
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.match(ui.element('#dialogBody').innerHTML, /id="examForm"/);
+  assert.equal((ui.element('#dialogBody').innerHTML.match(/class="exam-question"/g) || []).length, 5);
+  const answers = ui.evaluate('state.exam.questions.map((question) => question.answer)');
+  ui.evaluate('state = CampusGame.submitExam(state, ' + JSON.stringify(answers) + ', { expectedRevision: state.revision }).state; renderState(); showSummary()');
+  assert.equal(ui.evaluate('dialogMode'), 'summary');
+  assert.match(ui.element('#dialogBody').innerHTML, /平时分/);
+  assert.match(ui.element('#dialogBody').innerHTML, /期末考试/);
+});
+
+function queueTermReflections(ui) {
+  const replies = new Map();
+  ui.window.reflectionFetch = (_, { body }) => {
+    const detail = JSON.parse(body).messages[1].content;
+    const name = detail.match(/^人物：(.+?)（/)[1];
+    return new Promise(resolve => replies.set(name, resolve));
+  };
+  ui.evaluate('fetch = window.reflectionFetch');
+  ui.start(false);
+  ui.evaluate('for (const npcId of Object.keys(game.npcCast.PROFILES)) state = game.npcCast.meet(state, npcId)');
+  ui.click('#endTermButton');
+  ui.click('#dialogButtons', { dialogAction: 'settle', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'summary');
+  assert.equal(replies.size, 3);
+  const pending = ui.evaluate('new Map([...npcReflectionJobs].map(([id, job]) => [id, job.promise]))');
+  return async (npcId, text) => {
+    const name = game.npcCast.profile(npcId).name;
+    replies.get(name)({
+      ok: true,
+      json: async () => ({ reply: JSON.stringify({ reflection: text, coreMemory: text, focus: '', memories: [] }) })
+    });
+    await pending.get(npcId);
+  };
+}
+
+test('学期末三位人物的反思乱序返回，进入下学期后也都能写回', async () => {
+  const ui = app();
+  const reply = queueTermReflections(ui);
+  await reply('linXia', '一起练习接力');
+  ui.flush();
+  ui.click('#dialogButtons', { dialogAction: 'next', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.term'), 2);
+  const nextTermState = ui.evaluate('state');
+  await reply('zhouNing', '一起准备课程展示');
+  await reply('chenTeacher', '一起复盘项目方案');
+
+  const memories = nextTermState.npcAgentMemory.byNpc;
+  assert.equal(memories.linXia.lastReflection?.text, '一起练习接力');
+  assert.equal(memories.zhouNing.lastReflection?.text, '一起准备课程展示');
+  assert.equal(memories.chenTeacher.lastReflection?.text, '一起复盘项目方案');
+  assert.equal(ui.evaluate('state'), nextTermState);
+  assert.ok(Object.values(memories).every(memory => memory.lastReflection.term === 1));
+  assert.equal(game.characterAgent.validAgentMemory(nextTermState), true);
+});
+
+test('读档后，旧存档的迟到反思不会写入当前进度', async () => {
+  const ui = app();
+  const saved = game.createGame({ nickname: '其他进度', seed: 'reflection-other-slot' });
+  assert.equal(saves.createSlotService(ui.storage).save(saved, 2).ok, true);
+  const reply = queueTermReflections(ui);
+  ui.evaluate('loadGame(2)');
+
+  await Promise.all(Object.keys(game.npcCast.PROFILES).map(id => reply(id, '旧进度的回忆')));
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state)')), saved);
+  assert.equal(ui.evaluate('hasUnsavedProgress()'), false);
+});
+
+test('开学预算四项各三档可选、低体能警告与不可负担禁用', () => {
+  const ui = app();
+  ui.start(false);
+  let seed = 'budget-picker-0';
+  for (let i = 0; game.familyForSeed(seed).id !== 'ordinary'; i++) seed = 'budget-picker-' + (i + 1);
+  ui.evaluate('state = CampusGame.createGame({ seed: ' + JSON.stringify(seed) + ' }); budgetDraft = null; budgetDraftTerm = null; renderState(); showBudget()');
+  assert.equal(ui.evaluate('dialogMode'), 'budget');
+  let body = ui.element('#dialogBody').innerHTML;
+  // 四个维度都渲染三个可选档位，legacy 档位不出现在界面。
+  assert.equal((body.match(/data-budget-dimension=/g) || []).length, 12);
+  for (const dimension of ['clothing', 'food', 'housing', 'transport']) {
+    assert.equal((body.match(new RegExp('data-budget-dimension="' + dimension + '"', 'g')) || []).length, 3, dimension);
+  }
+  assert.equal((body.match(/data-budget-tier=/g) || []).length, 12);
+  assert.doesNotMatch(body, /data-budget-tier="excellent"|data-budget-tier="healthy"|固定安排|影响待完善/);
+  assert.match(body, /精致/);
+  assert.match(body, /品鉴家/);
+  assert.match(body, /打车出行/);
+  assert.match(body, /本学期预算合计 4800 元/);
+  assert.match(body, /与默认预留持平/);
+  assert.equal((body.match(/aria-pressed="true"/g) || []).length, 4);
+  assert.doesNotMatch(ui.element('#dialogButtons').innerHTML, /disabled/);
+  assert.equal(ui.evaluate('state.money'), 1200);
+
+  ui.evaluate('state = { ...state, fitness: 21 }; showBudget()');
+  assert.match(ui.element('#dialogBody').innerHTML, /预计体能 24，低于 25 会生病/);
+
+  ui.evaluate('dialog.scrollTop = 222');
+  ui.click('#dialogBody', { budgetDimension: 'clothing', budgetTier: 'refined' });
+  assert.equal(ui.evaluate('budgetDraft.clothing'), 'refined');
+  assert.equal(ui.evaluate('dialog.scrollTop'), 222, '选择档位后保持滚动位置');
+  body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /本学期预算合计 5400 元/);
+  assert.match(body, /需追加 600 元/);
+  ui.click('#dialogBody', { budgetDimension: 'clothing', budgetTier: 'ordinary' });
+
+  ui.click('#dialogBody', { budgetDimension: 'food', budgetTier: 'gourmet' });
+  assert.equal(ui.evaluate('budgetDraft.food'), 'gourmet');
+  body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /本学期预算合计 5800 元/);
+  assert.match(body, /需追加 1000 元/);
+  ui.click('#dialogBody', { budgetDimension: 'food', budgetTier: 'ordinary' });
+
+  ui.click('#dialogBody', { budgetDimension: 'transport', budgetTier: 'taxi' });
+  assert.equal(ui.evaluate('budgetDraft.transport'), 'taxi');
+  body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /本学期预算合计 5400 元/);
+  assert.match(body, /需追加 600 元/);
+  ui.click('#dialogBody', { budgetDimension: 'transport', budgetTier: 'basic' });
+
+  ui.click('#dialogBody', { budgetDimension: 'housing', budgetTier: 'offCampus' });
+  body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /本学期预算合计 6800 元/);
+  assert.match(body, /需追加 2000 元/);
+  assert.match(body, /余额不足，还差 800 元/);
+  assert.match(ui.element('#dialogButtons').innerHTML, /disabled/);
+  const revision = ui.evaluate('state.revision');
+  ui.click('#dialogButtons', { dialogAction: 'budgetConfirm' });
+  assert.equal(ui.evaluate('state.revision'), revision);
+  assert.equal(ui.evaluate('dialogMode'), 'budget');
+  assert.match(ui.element('#budgetError').textContent, /预算未能确认/);
+
+  ui.click('#dialogBody', { budgetDimension: 'housing', budgetTier: 'ordinaryDorm' });
+  ui.click('#dialogButtons', { dialogAction: 'budgetConfirm' });
+  ui.flush();
+  assert.equal(ui.evaluate('dialogMode'), 'courseSelection');
+  assert.equal(ui.evaluate('state.economy.grants[0].budgetChosen'), true);
+  assert.equal(ui.evaluate('state.economy.grants[0].budget.clothing'), 'ordinary');
+  assert.equal(ui.evaluate('state.economy.grants[0].budget.food'), 'ordinary');
+  assert.equal(ui.evaluate('state.economy.grants[0].budget.housing'), 'ordinaryDorm');
+  assert.equal(ui.evaluate('state.economy.grants[0].budget.transport'), 'basic');
+  assert.equal(ui.evaluate('state.money'), 1200);
+});
+
+test('开考确认显示剩余时间和平时分，打开与取消均不生成试卷或修改进度', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = CampusGame.executeAction(state, "study").state; while (state.pendingEvent) state = CampusGame.submitEventChoice(state, "later").state; acknowledgedResultRevision = state.revision; renderState()');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'confirmExam');
+  assert.match(ui.element('#dialogBody').innerHTML, /剩余时间 <b>10 点/);
+  assert.match(ui.element('#dialogBody').innerHTML, new RegExp('当前平时分 <b>' + ui.evaluate('state.preparation') + ' / 100'));
+  assert.match(ui.element('#dialogBody').innerHTML, /不能再安排学习、休息等行动/);
+  assert.match(ui.element('#dialogButtons').innerHTML, /继续安排/);
+  assert.match(ui.element('#dialogButtons').innerHTML, /确认开考/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.equal(ui.storage.data.size, 0);
   ui.click('#dialogButtons', { dialogAction: 'resume' });
   assert.equal(ui.element('#termDialog').open, false);
-  // 引擎判定离场后，NPC 保留淡出标记并渲染出 is-fading（模拟 npcTick 对离场事件的记录）。
-  const removed = ui.evaluate('(() => { const events = npcSystem.tick(Date.now() + 80000); for (const npc of events.removed) npcFades.set(npc.id, { npc, since: Date.now() }); return events.removed.length; })()');
-  assert.ok(removed > 0);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.equal(ui.evaluate('CampusGame.availability(state, "study").ok'), true);
+});
+
+test('确认后才开考，重复点击及重新打开试卷不重复生成或写入操作', () => {
+  const ui = app();
+  ui.start();
+  const revision = ui.evaluate('state.revision');
+  ui.click('#endTermButton');
+  const confirm = { dialogAction: 'beginExam', revision: String(revision) };
+  ui.click('#dialogButtons', confirm);
+  assert.equal(ui.evaluate('state.phase'), 'examPending');
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.equal(ui.evaluate('state.revision'), revision + 1);
+  assert.equal(ui.evaluate('state.history.filter(entry => entry.command.operation === "beginExam").length'), 1);
+  assert.equal(ui.storage.data.size, 0);
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#dialogButtons', confirm);
   ui.flush();
-  assert.match(ui.element('#npcLayer').innerHTML, /is-fading/);
+  ui.click('#dialogButtons', confirm);
+  ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
 });
 
-test('NPC 在线对话：配置中转地址后发送消息走云端回复，历史保留且输入复位', async () => {
-  const ui = app(memory(), false, true);
+test('已有存档栏位只在确认开考后自动保存，刷新读档直接恢复原试卷', () => {
+  const ui = app();
   ui.start();
-  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
-  ui.flush(); ui.flush();
-  const id = ui.evaluate('npcSystem.active()[0].id');
-  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
-  assert.equal(ui.evaluate('dialogMode'), 'npc');
-  // 首次对话在配置中转之前打开，没有输入框；配置后换一句台词即带上。
-  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
-  ui.evaluate('fetch = async (url, options) => ({ ok: true, json: async () => ({ reply: "AI 测试回复：同学好！" }) })');
-  ui.click('#dialogButtons', { dialogAction: 'npcTalk' });
-  ui.element('#npcChatInput').value = '你好呀';
-  await ui.evaluate('sendNpcChat()');
-  assert.equal(ui.element('.npc-dialog-line').textContent, 'AI 测试回复：同学好！');
-  assert.equal(ui.element('#npcChatInput').value, '', '发送后输入框清空');
-  assert.equal(ui.element('#npcChatInput').disabled, false, '发送完成后输入框恢复可用');
-  assert.equal(ui.evaluate('npcChatLogs.get(' + JSON.stringify(id) + ').length'), 2, '一问一答进入聊天记录');
+  ui.click('#saveButton'); ui.click('#dialogBody', { saveSlot: '2' });
+  const previous = new Map(ui.storage.data);
+  ui.click('#endTermButton');
+  assert.deepEqual(ui.storage.data, previous);
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  const loaded = saves.createSlotService(ui.storage).load(2);
+  assert.equal(loaded.ok, true, loaded.reason);
+  assert.equal(loaded.state.phase, 'examPending');
+  assert.equal(loaded.saveSequence, 2);
+  assert.equal(ui.storage.getItem(saves.getSlotKeys(1).primary), null);
+  assert.equal(ui.storage.getItem(saves.getSlotKeys(3).primary), null);
+  const restored = app(ui.storage);
+  restored.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(restored.evaluate('dialogMode'), 'exam');
+  assert.deepEqual(JSON.parse(restored.evaluate('JSON.stringify(state)')), loaded.state);
 });
 
-test('NPC 在线对话：中转不可达时回退本地台词并提示，聊天不中断', async () => {
-  const ui = app(memory(), false, true);
+test('时间为零时仍需确认开考，确认前不改变状态', () => {
+  const ui = app();
   ui.start();
-  ui.evaluate('npcSystem = CampusNpc.createSystem({ random: () => Math.random(), settings: { firstDelay: [0, 0], gap: [0, 0] } })');
-  ui.flush(); ui.flush();
-  const id = ui.evaluate('npcSystem.active()[0].id');
-  const identityId = ui.evaluate('npcSystem.active()[0].identityId');
-  ui.element('#npcLayer').emit('click', { target: { closest: () => ({ dataset: { npcId: id } }) } });
-  ui.evaluate('CampusGame.AI_CHAT.relay = "https://relay.test/chat"');
-  ui.evaluate('fetch = async () => { throw new Error("offline"); }');
-  ui.click('#dialogButtons', { dialogAction: 'npcTalk' });
-  const before = ui.element('#dialogBody').innerHTML;
-  ui.element('#npcChatInput').value = '在吗';
-  await ui.evaluate('sendNpcChat()');
-  assert.match(ui.element('#dialogNotice').textContent, /本地台词/);
-  const after = ui.element('#dialogBody').innerHTML;
-  assert.notEqual(before, after, '弹窗重建为下一句台词');
-  const shown = (after.match(/<p class="npc-dialog-line">([^<]*)<\/p>/) || [])[1];
-  const lines = ui.evaluate('CampusNpc.linesFor(' + JSON.stringify(identityId) + ')').join('');
-  assert.ok(lines.includes(shown), '回退台词来自该身份台词库');
+  ui.evaluate('state.time = 0; renderState()');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'confirmExam');
+  assert.match(ui.element('#dialogBody').innerHTML, /剩余时间 <b>0 点/);
+  assert.match(ui.element('#dialogBody').innerHTML, /时间已用完/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.phase'), 'examPending');
+});
+
+test('过期的开考确认不会锁定更新后的学期，重新确认后可以开考', () => {
+  const ui = app();
+  ui.start();
+  ui.click('#endTermButton');
+  const revision = ui.evaluate('state.revision');
+  ui.evaluate('state = CampusGame.executeAction(state, "study").state; while (state.pendingEvent) state = CampusGame.submitEventChoice(state, "later").state');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(revision) });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.match(ui.element('#dialogNotice').textContent, /状态已更新/);
+  ui.click('#dialogButtons', { dialogAction: 'resume' });
+  ui.click('#endTermButton');
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.phase'), 'examPending');
+});
+
+test('待处理校园事件优先展示，不弹出开考确认或生成试卷', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = CampusGame.executeAction(state, "applyClub").state');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#endTermButton');
+  assert.equal(ui.evaluate('dialogMode'), 'event');
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  assert.equal(ui.evaluate('state.exam'), null);
+});
+
+test('考试中每次选择都保存在状态，进度导航标出已答与未答题', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = CampusGame.beginExam(state).state; showExam()');
+  const revision = ui.evaluate('state.revision');
+  assert.equal(ui.element('#dialogSave').hidden, false);
+  assert.match(ui.element('#examProgress').textContent, /已答 0 \/ 5 题/);
+  assert.equal((ui.element('#examNavigation').innerHTML.match(/is-unanswered/g) || []).length, 5);
+  let selected = [1, null, null, null, null];
+  const form = {
+    querySelector(selector) {
+      const index = Number(selector.match(/q(\d+)/)?.[1]);
+      const answer = selected[index];
+      return answer === null || !selector.endsWith(':checked') ? null : { value: String(answer) };
+    }
+  };
+  ui.element('#dialogBody').emit('change', { target: { closest: selector => selector === '#examForm' ? form : null } });
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state.exam.answers)')), selected);
+  assert.equal(ui.evaluate('state.revision'), revision + 1);
+  assert.match(ui.element('#examProgress').textContent, /已答 1 \/ 5 题/);
+  assert.equal((ui.element('#examNavigation').innerHTML.match(/is-answered/g) || []).length, 1);
+  assert.equal((ui.element('#examNavigation').innerHTML.match(/is-unanswered/g) || []).length, 4);
+  selected = [1, null, 3, null, 2];
+  ui.element('#dialogBody').emit('change', { target: { closest: selector => selector === '#examForm' ? form : null } });
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state.exam.answers)')), selected);
+  assert.match(ui.element('#examProgress').textContent, /已答 3 \/ 5 题/);
+  assert.equal((ui.element('#examNavigation').innerHTML.match(/is-answered/g) || []).length, 3);
+});
+
+test('考试中打开存档栏位后返回，部分答案不丢；刷新后答案仍勾选', () => {
+  const storage = memory();
+  const ui = app(storage);
+  ui.start();
+  ui.evaluate('state = CampusGame.beginExam(state).state; showExam()');
+  const answers = [null, 2, null, 1, null];
+  ui.evaluate('state = CampusGame.updateExamAnswers(state, ' + JSON.stringify(answers) + ').state; showExam()');
+  ui.click('#dialogSave');
+  assert.equal(ui.evaluate('dialogMode'), 'save');
+  ui.click('#dialogButtons', { dialogAction: 'resume' });
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state.exam.answers)')), answers);
+  assert.match(ui.element('#dialogBody').innerHTML, /value="2"[^>]* checked/);
+  ui.click('#dialogSave');
+  ui.click('#dialogBody', { saveSlot: '2' });
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state.exam.answers)')), answers);
+  assert.equal(ui.evaluate('activeSaveSlot'), 2);
+  assert.match(ui.element('#dialogBody').innerHTML, /value="2"[^>]* checked/);
+  assert.match(ui.element('#dialogBody').innerHTML, /value="1"[^>]* checked/);
+  const restored = app(storage);
+  restored.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(restored.evaluate('dialogMode'), 'exam');
+  assert.deepEqual(JSON.parse(restored.evaluate('JSON.stringify(state.exam.answers)')), answers);
+  assert.match(restored.element('#examProgress').textContent, /已答 2 \/ 5 题/);
+  assert.match(restored.element('#dialogBody').innerHTML, /value="2"[^>]* checked/);
+  assert.match(restored.element('#dialogBody').innerHTML, /value="1"[^>]* checked/);
+});
+
+test('提交不完整试卷报告漏题并定位，全部答完后才能结算', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state = CampusGame.beginExam(state).state; state = CampusGame.updateExamAnswers(state, [0, null, null, 1, null]).state; showExam()');
+  const answers = [0, null, null, 1, null];
+  const form = {
+    id: 'examForm',
+    querySelector(selector) {
+      const index = Number(selector.match(/q(\d+)/)?.[1]);
+      const answer = answers[index];
+      return answer === null || !selector.endsWith(':checked') ? null : { value: String(answer) };
+    }
+  };
+  ui.element('#dialogBody').emit('submit', { target: form, preventDefault() {} });
+  assert.match(ui.element('#examError').textContent, /第 2、3、5 题/);
+  assert.equal(ui.element('#examQuestion1').scrolled, true);
+  assert.equal(ui.evaluate('state.phase'), 'examPending');
+  answers[1] = 2; answers[2] = 1; answers[4] = 0;
+  ui.element('#dialogBody').emit('change', { target: { closest: selector => selector === '#examForm' ? form : null } });
+  assert.match(ui.element('#examProgress').textContent, /已答 5 \/ 5 题/);
+  assert.equal(ui.element('#examMissing').disabled, true);
+  assert.deepEqual(JSON.parse(ui.evaluate('JSON.stringify(state.exam.answers)')), answers);
+  ui.element('#dialogBody').emit('submit', { target: form, preventDefault() {} });
+  assert.equal(ui.evaluate('state.phase'), 'summary');
+  assert.equal(ui.evaluate('dialogMode'), 'summary');
+});
+
+test('题号导航定位指定题和首个漏题，不会修改答题状态', () => {
+  const ui = app();
+  ui.start();
+  ui.click('#endTermButton');
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('uiLocked'), true);
+  assert.doesNotMatch(ui.element('#examNavigation').innerHTML, / disabled/);
+  ui.click('#dialogBody', { examQuestion: '4' });
+  assert.equal(ui.element('#examQuestion4').scrolled, true);
+  ui.flush();
+  assert.equal(ui.evaluate('uiLocked'), false);
+  ui.evaluate('state = CampusGame.updateExamAnswers(state, [0, null, null, 2, null]).state; showExam()');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#dialogBody', { examQuestion: '3' });
+  assert.equal(ui.element('#examQuestion3').scrolled, true);
+  ui.click('#dialogBody', { examMissing: 'true' });
+  assert.equal(ui.element('#examQuestion1').scrolled, true);
+  ui.click('#dialogBody', { examQuestion: '0' });
+  assert.match(ui.element('#examProgress').textContent, /已答 2 \/ 5 题/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
 });
 
 test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当前进度和目标新档', () => {
@@ -394,15 +1541,425 @@ test('确认覆盖前其他标签更新目标栏位，覆盖失败且保留当�
   assert.match(ui.element('#dialogNotice').textContent, /标签页/);
 });
 
-test('新增校园经历从存档恢复后显示中文名称，成长记录不出现 undefined', () => {
+test('新增校园经历从存档恢复后显示中文名称，简历面板不出现 undefined', () => {
   const state = game.createGame({ nickname: '经历显示' });
   state.experiences = ['military', 'singer', 'trip', 'contest'].map(type => ({ type, term: 1 }));
   const storage = memory();
   assert.equal(saves.createSlotService(storage).save(state, 2).ok, true);
   const ui = app(storage);
   ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
-  ui.click('#historyButton');
-  const html = ui.element('#dialogBody').innerHTML;
+  ui.evaluate('setPanel("resume")');
+  const html = ui.element('#resumeBody').innerHTML;
   for (const name of ['军训', '歌手大赛', '返乡', '竞赛']) assert.ok(html.includes(name), name);
+  for (const title of ['实习经历', '项目经历', '竞赛经历', '社团经历']) assert.ok(html.includes(title), title);
+  assert.ok(html.includes('resume-req'), '简历要件 chips 应渲染');
   assert.doesNotMatch(html, /undefined/);
+});
+
+
+test('事件只预览成本，确认后显示具体结果；保存、读档和成长记录保留叙述且不重抽', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate("state = { ...game.executeAction(game.executeAction(state, 'study', { npcSupportVersion: 1, npcCastVersion: 1 }).state, 'study', { npcSupportVersion: 1, npcCastVersion: 1 }).state }; showEvent()");
+  assert.match(ui.element('#dialogBody').innerHTML, /整个军训的安排/);
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#dialogBody', { investmentPreset: 'join', amount: '26' });
+  assert.match(ui.element('#investment-options-join').innerHTML, /data-amount="26" aria-pressed="true"/);
+  assert.match(ui.element('#investment-cost-join').textContent, /精力 −33.*体能 −\d+/);
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /常见|预计|平均|约八成|体能 约/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.match(ui.element('#dialogBody').innerHTML, /本次投入.*33 点精力/);
+  assert.match(ui.element('#dialogBody').innerHTML, /实际变化/);
+  assert.equal(ui.evaluate('state.energy'), 17);
+  const story = ui.evaluate('state.history.at(-1).investment.description');
+  assert.ok(ui.element('#dialogBody').innerHTML.includes(story));
+  const settled = ui.evaluate('JSON.stringify(state)');
+  ui.flush();
+  ui.click('#dialogSave');
+  ui.evaluate('selectSaveSlot(2)');
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.equal(ui.evaluate('activeSaveSlot'), 2);
+  assert.equal(ui.evaluate('savedRevision'), JSON.parse(settled).revision);
+  ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'military2');
+  ui.click('#dialogBody', { eventChoice: 'perform', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  ui.flush();
+  for (let read = 0; read < 2; read++) {
+    ui.click('#loadButton');
+    ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+    assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+    assert.equal(ui.evaluate('JSON.stringify(state)'), settled);
+    assert.ok(ui.element('#dialogBody').innerHTML.includes(story));
+  }
+  ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  ui.click('#historyButton');
+  assert.ok(ui.element('#dialogBody').innerHTML.includes(story));
+  assert.match(ui.element('#dialogBody').innerHTML, /投入与收获/);
+});
+
+test('档位按钮拒绝任意数字，资源不足可改选有效档位', () => {
+  const ui = app(); ui.start();
+  ui.evaluate("state = { ...game.executeAction(game.executeAction(state, 'study', { npcSupportVersion: 1, npcCastVersion: 1 }).state, 'study', { npcSupportVersion: 1, npcCastVersion: 1 }).state }; showEvent()");
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /type="range"|type="number"/);
+  const original = ui.evaluate('JSON.stringify(state)');
+  for (const amount of ['4', '11', '24', '3.5']) {
+    ui.click('#dialogBody', { investmentPreset: 'join', amount });
+    assert.equal(ui.element('#event-choice-join').disabled, true);
+    ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+    assert.equal(ui.evaluate('JSON.stringify(state)'), original);
+  }
+  for (const [fitness, cost] of [[50, 10], [44, 13]]) {
+    ui.evaluate('state = { ...' + original + ', fitness: ' + fitness + ', energy: ' + (cost - 1) + ' }; showEvent()');
+    ui.click('#dialogBody', { investmentPreset: 'join', amount: '10' });
+    assert.match(ui.element('#investment-cost-join').textContent, new RegExp('精力 −' + cost));
+    assert.equal(ui.element('#event-choice-join').disabled, true);
+    assert.match(ui.element('#investment-reason-join').textContent, new RegExp('需要 ' + cost));
+    ui.evaluate('state.energy = ' + cost);
+    ui.click('#dialogBody', { investmentPreset: 'join', amount: '10' });
+    assert.equal(ui.element('#event-choice-join').disabled, false);
+    ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+    assert.equal(ui.evaluate('state.energy'), 0);
+    assert.equal(ui.evaluate('state.history.at(-1).changes.energy'), -cost);
+    ui.flush();
+  }
+});
+
+test('军训回顾后直接进入汇演，室友关心等待军训完成', () => {
+  const ui = app(); ui.start();
+  ui.evaluate("state = game.executeAction(game.executeAction(state, 'study').state, 'study').state; state.mood = 20; showEvent()");
+  ui.click('#dialogBody', { eventChoice: 'join', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'military2');
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  const settled = ui.evaluate('JSON.stringify(state)');
+  ui.flush(); ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  assert.equal(ui.evaluate('dialogMode'), 'event');
+  assert.match(ui.element('#dialogTitle').textContent, /军训汇演/);
+  assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /investment-tier/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), settled);
+  ui.click('#dialogBody', { eventChoice: 'perform', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'roommateCare');
+});
+
+test('所有地点的日常行动及固定、可调事件都不展示收益预测，仅显示投入成本', () => {
+  const ui = app();
+  ui.start();
+  const original = ui.evaluate('JSON.stringify(state)');
+  for (const place of Object.keys(game.PLACES)) {
+    const sections = place === 'gate' ? ['partTime', 'internship'] : [null];
+    for (const section of sections) {
+      ui.evaluate('openPlace(' + JSON.stringify(place) + ')');
+      if (section) ui.evaluate('gateSection = ' + JSON.stringify(section) + '; renderActions()');
+      const html = ui.element('#actionList').innerHTML;
+      assert.doesNotMatch(html, /预计|预期|平均收益|常见|八成|action-gain|investment-preview|学习进度 \+|社交 \+|心情 \+|体能 \+/);
+      assert.doesNotMatch(html, /type="range"|type="number"/);
+      assert.ok(html.includes('action-cost'));
+    }
+  }
+  assert.equal(ui.evaluate('JSON.stringify(state)'), original);
+  for (const id of ['roommateCare', 'military1', 'projectOffer']) {
+    ui.evaluate('state = { ...state, phase: "eventPending", pendingEvent: { id: ' + JSON.stringify(id) + ', term: 1, instanceId: "daily:' + id + ':1" } }; showEvent()');
+    assert.doesNotMatch(ui.element('#dialogBody').innerHTML, /预计|预期|平均收益|常见|八成|action-gain|investment-preview|学习进度 \+|社交 \+|心情 \+|体能 \+/);
+  }
+});
+
+test('天佑会堂只有固定观演成本，不提供预算档位或收益预测', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('openPlace("auditorium")');
+  const html = ui.element('#actionList').innerHTML;
+  assert.match(html, /时间 −1.*精力 −2.*钱包 −40 元.*体能 −1/);
+  assert.doesNotMatch(html, /investment-tier|investment-controls|type="range"|type="number"|心情 \+|社交 \+/);
+});
+
+test('行动卡展示体能成本，体能不足时禁用并提示', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('openPlace("think")');
+  ui.evaluate('state = { ...state, fitness: 1 }');
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '15' });
+  assert.equal(ui.element('#action-choice-study').disabled, true);
+  assert.match(ui.element('#investment-reason-action-study').textContent, /身体不适，先去校医院就诊/);
+});
+
+test('锻炼结果区分体能消耗与结算后的实际变化', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('openPlace("think")');
+  assert.doesNotMatch(ui.element('#actionList').innerHTML, /运动会消耗体能/);
+  ui.evaluate('openPlace("track")');
+  const trackHtml = ui.element('#actionList').innerHTML;
+  assert.match(trackHtml, /运动会消耗体能，但锻炼结束后能恢复更多体能/);
+  for (const [title, hint] of [['健身房锻炼', '需要额外预算，但体能提升更明显'], ['多人运动', '更耗费精力，但心情和社交提升更多'], ['单人运动', '精力消耗最少，适合日常保持体能']]) {
+    assert.ok(trackHtml.includes(title), title);
+    assert.ok(trackHtml.includes(hint), hint);
+  }
+  assert.match(trackHtml, /钱包 −50 元/);
+  assert.match(trackHtml, /精力 −15/);
+  assert.match(trackHtml, /精力 −3/);
+  assert.match(trackHtml, /体能 −3（消耗）/);
+  assert.match(trackHtml, /体能 −1（消耗）/);
+  ui.click('#actionList', { actionInvestmentPreset: 'gym', amount: '100' });
+  assert.match(ui.element('#investment-cost-action-gym').textContent, /钱包 −100 元/);
+  ui.click('#actionList', { actionInvestmentPreset: 'exercise', amount: '10' });
+  assert.match(ui.element('#investment-cost-action-exercise').textContent, /体能 −2（消耗）/);
+  ui.click('#actionList', { action: 'exercise', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.match(ui.element('#dialogBody').innerHTML, /另消耗 <b>2 点体能<\/b>/);
+  assert.match(ui.element('#dialogBody').innerHTML, /实际变化<\/span><b>[^<]*体能 \+\d+(?:\.\d+)?/);
+});
+
+test('状态卡显示体能挡位与生病警告', () => {
+  const ui = app(); ui.start();
+  assert.match(ui.element('#mapStats').innerHTML, /一般（收益 ×1.00 \/ 消耗 ×1.00）/);
+  assert.equal(ui.element('#fitnessWarning').hidden, true);
+  ui.evaluate('state = { ...state, fitness: 24 }; renderState()');
+  assert.match(ui.element('#mapStats').innerHTML, /生病 · 先去校医院/);
+  assert.match(ui.element('#fitnessWarning').textContent, /先去校医院就诊/);
+});
+
+test('生病时医院只开放就诊，其他医院行动锁定', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('openPlace("hospital")');
+  assert.match(ui.element('#actionList').innerHTML, /id="action-choice-treatment"[^>]*disabled/);
+  ui.evaluate('state = { ...state, fitness: 24 }; openPlace("hospital")');
+  const html = ui.element('#actionList').innerHTML;
+  assert.doesNotMatch(html, /id="action-choice-treatment"[^>]*disabled/);
+  assert.match(html, /id="action-choice-checkup"[^>]*disabled/);
+  assert.match(html, /身体不适，先去校医院就诊/);
+});
+
+test('生病时事件对话框只保留先去校医院', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('state = { ...state, fitness: 10, phase: "eventPending", pendingEvent: { id: "fitnessTest", term: 1, instanceId: "daily:fitnessTest:1" } }; showEvent()');
+  const body = ui.element('#dialogBody').innerHTML;
+  assert.match(body, /data-event-choice="sickLeave"/);
+  assert.doesNotMatch(body, /data-event-choice="participate"|data-event-choice="later"/);
+  ui.click('#dialogBody', { eventChoice: 'sickLeave', revision: String(ui.evaluate('state.revision')), instance: 'daily:fitnessTest:1' });
+  assert.equal(ui.evaluate('state.pendingEvent'), null);
+});
+
+test('虚弱挡位的投入结果页显示实际消耗', () => {
+  const ui = app(); ui.start();
+  ui.evaluate('state = { ...state, fitness: 44 }; openPlace("think")');
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '15' });
+  assert.match(ui.element('#investment-cost-action-study').textContent, /精力 −19/);
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  if (ui.evaluate('dialogMode') === 'actionExtra') ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.match(ui.element('#dialogBody').innerHTML, /本次投入 <b>19 点精力<\/b>/);
+  assert.equal(ui.evaluate('state.history.at(-1).investment.amount'), 15);
+});
+
+test('常规课程可调成本，提交后揭晓并保存结果；下一行动的校园事件在回顾之后展示', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('openPlace("think")');
+  const before = ui.evaluate('JSON.stringify(state)');
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '15' });
+  assert.match(ui.element('#investment-options-action-study').innerHTML, /data-amount="15" aria-pressed="true"/);
+  assert.match(ui.element('#investment-cost-action-study').textContent, /精力 −15.*体能 −3/);
+  assert.equal(ui.evaluate('JSON.stringify(state)'), before);
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  if (ui.evaluate('dialogMode') === 'actionExtra') ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.equal(ui.evaluate('state.energy'), 65);
+  assert.equal(ui.evaluate('state.history.find(entry => entry.investment).investment.amount'), 15);
+  assert.match(ui.element('#dialogBody').innerHTML, /课程学习|实际变化/);
+  const settled = ui.evaluate('JSON.stringify(state)');
+  ui.flush(); ui.click('#dialogSave'); ui.click('#dialogBody', { saveSlot: '3' });
+  ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  ui.click('#loadButton'); ui.click('#dialogBody', { loadSlot: '3', saveSource: 'primary' });
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  assert.equal(ui.evaluate('JSON.stringify(state)'), settled);
+  ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  ui.evaluate('openPlace("think")');
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '5' });
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  if (ui.evaluate('dialogMode') === 'actionExtra') ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'military1');
+  assert.equal(ui.evaluate('dialogMode'), 'eventResult');
+  ui.flush(); ui.click('#dialogButtons', { dialogAction: 'eventContinue' });
+  assert.equal(ui.evaluate('dialogMode'), 'event');
+  assert.match(ui.element('#dialogTitle').textContent, /军训开训/);
+});
+
+test('界面同步展示联动时间，时间不够禁用高投入，少量投入仍能执行且不泄露收益', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('state.time = 2; openPlace("think")');
+  const original = ui.evaluate('JSON.stringify(state)');
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '30' });
+  assert.match(ui.element('#investment-cost-action-study').textContent, /时间 −3.*精力 −30/);
+  assert.equal(ui.element('#action-choice-study').disabled, true);
+  assert.match(ui.element('#investment-reason-action-study').textContent, /时间不够/);
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  if (ui.evaluate('dialogMode') === 'actionExtra') ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
+  assert.equal(ui.evaluate('JSON.stringify(state)'), original);
+  ui.click('#actionList', { actionInvestmentPreset: 'study', amount: '5' });
+  assert.match(ui.element('#investment-cost-action-study').textContent, /时间 −1.*精力 −5/);
+  assert.equal(ui.element('#action-choice-study').disabled, false);
+  assert.doesNotMatch(ui.element('#actionList').innerHTML, /预计|预期|平均收益|常见|investment-preview/);
+  ui.click('#actionList', { action: 'study', revision: String(ui.evaluate('state.revision')) });
+  if (ui.evaluate('dialogMode') === 'actionExtra') ui.click('#dialogButtons', { dialogAction: 'extraSkip' });
+  assert.equal(ui.evaluate('state.time'), 1);
+  assert.equal(ui.evaluate('state.energy'), 75);
+  assert.match(ui.element('#dialogBody').innerHTML, /时间 −1.*精力 −5/);
+});
+
+test('期末考试可取消或确认作弊，确认后直接显示道中终局', () => {
+  const ui = app();
+  ui.start();
+  ui.click('#endTermButton');
+  ui.flush();
+  assert.equal(ui.evaluate('dialogMode'), 'confirmExam');
+  ui.click('#dialogButtons', { dialogAction: 'beginExam', revision: String(ui.evaluate('state.revision')) });
+  ui.flush();
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  assert.match(ui.element('#dialogBody').innerHTML, /data-cheat-exam/);
+  ui.click('#dialogBody', { cheatExam: '1', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'confirmCheat');
+  ui.click('#dialogButtons', { dialogAction: 'backToExam' });
+  assert.equal(ui.evaluate('dialogMode'), 'exam');
+  ui.click('#dialogBody', { cheatExam: '1', revision: String(ui.evaluate('state.revision')) });
+  ui.click('#dialogButtons', { dialogAction: 'cheatExam', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.phase'), 'ended');
+  assert.equal(ui.evaluate('state.result.direction'), 'cheatNote');
+  assert.equal(ui.evaluate('dialogMode'), 'ended');
+  assert.match(ui.element('#dialogBody').innerHTML, /小抄第一行/);
+});
+
+test('校园卡追查事件先确认再进入终局，安全归还可继续游戏', () => {
+  const ui = app();
+  ui.start();
+  const card = ui.evaluate('(() => { const base = CampusGame.createGame({ nickname: "card-ui", seed: "card-ui" }); return { ...base, phase: "eventPending", pendingEvent: { id: "card", term: 1, instanceId: "daily:card:1" } }; })()');
+  ui.evaluate('state = ' + JSON.stringify(card) + '; renderState(); resumePhase()');
+  assert.equal(ui.evaluate('dialogMode'), 'event');
+  ui.click('#dialogBody', { eventChoice: 'pocket', revision: String(ui.evaluate('state.revision')), instance: 'daily:card:1' });
+  ui.flush();
+  assert.equal(ui.evaluate('state.phase'), 'playing');
+  assert.equal(ui.evaluate('state.eventFlags.cardPocketed'), true);
+  ui.evaluate('state = CampusGame.continueGame(CampusGame.endTerm(state).state).state; renderState(); resumePhase()');
+  assert.equal(ui.evaluate('state.pendingEvent.id'), 'cardTrace');
+  assert.match(ui.element('#dialogBody').innerHTML, /本局结束/);
+  ui.click('#dialogBody', { eventChoice: 'deny', revision: String(ui.evaluate('state.revision')), instance: ui.evaluate('state.pendingEvent.instanceId') });
+  ui.flush();
+  assert.equal(ui.evaluate('dialogMode'), 'confirmEnding');
+  ui.click('#dialogButtons', { dialogAction: 'confirmEventEnding', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.phase'), 'ended');
+  assert.equal(ui.evaluate('state.result.direction'), 'cardThief');
+  assert.equal(ui.evaluate('dialogMode'), 'ended');
+
+  const safe = app();
+  safe.start();
+  const safeCard = safe.evaluate('(() => { const base = CampusGame.createGame({ nickname: "card-safe", seed: "card-safe" }); return { ...base, phase: "eventPending", pendingEvent: { id: "card", term: 1, instanceId: "daily:card:1" } }; })()');
+  safe.evaluate('state = ' + JSON.stringify(safeCard) + '; renderState(); resumePhase()');
+  safe.click('#dialogBody', { eventChoice: 'pocket', revision: String(safe.evaluate('state.revision')), instance: 'daily:card:1' });
+  safe.flush();
+  safe.evaluate('state = CampusGame.continueGame(CampusGame.endTerm(state).state).state; renderState(); resumePhase()');
+  safe.click('#dialogBody', { eventChoice: 'return', revision: String(safe.evaluate('state.revision')), instance: safe.evaluate('state.pendingEvent.instanceId') });
+  assert.notEqual(safe.evaluate('state.phase'), 'ended');
+  assert.equal(safe.evaluate('state.eventFlags.cardPocketed'), undefined);
+});
+
+
+test('南门岗位库：浏览、锁定意向、带岗位申请与存档往返', () => {
+  let state = game.createGame({ nickname: '岗位测试', seed: 'positions-test' });
+  function advance(result) {
+    assert.equal(result.ok, true, result.reason);
+    state = result.state;
+  }
+  for (let term = 1; term <= 3; term++) {
+    assert.equal(state.term, term);
+    advance(game.chooseBudget(state, game.DEFAULT_BUDGET));
+    const courses = game.coursesForTerm(term, state.background.id, state.background.major).slice(0, 3);
+    advance(game.selectCourses(state, courses.map(course => course.id)));
+    if (term < 3) {
+      advance(game.beginExam(state));
+      advance(game.submitExam(state, state.exam.questions.map(question => question.answer)));
+      assert.equal(state.summary.grade, 60);
+      advance(game.continueGame(state));
+    }
+  }
+  const storage = memory();
+  assert.equal(saves.createSlotService(storage).save(state, 2).ok, true);
+  const ui = app(storage, false, false, false);
+  ui.click('#startContinue');
+  ui.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  ui.evaluate('dialog.close(); activePlace = "gate"; gateSection = "internship"; renderActions()');
+  ui.click('#actionList', { action: 'applyInternship', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'positionPicker');
+  const html = ui.element('#dialogBody').innerHTML;
+  assert.equal((html.match(/position-card/g) || []).length, 16, '十六张岗位卡');
+  assert.match(html, /音符跳动/);
+  assert.match(html, /后端开发实习生/);
+  // 锁定意向：写入存档字段，对话框出现「取消意向」
+  const lockRevision = html.match(/data-position-lock="qiandu_testdev" data-revision="(\d+)"/);
+  assert.ok(lockRevision, '意向按钮应带上渲染时的状态版本');
+  ui.click('#dialogBody', { positionLock: 'qiandu_testdev', revision: lockRevision[1] });
+  ui.flush();
+  assert.equal(ui.evaluate('state.targetPosition'), 'qiandu_testdev');
+  assert.match(ui.element('#dialogBody').innerHTML, /取消意向/);
+  // 返回南门：关闭岗位库
+  ui.click('#dialogButtons', { dialogAction: 'positionClose' });
+  assert.equal(ui.evaluate('dialog.open'), false);
+  // 再次进入岗位库继续申请
+  ui.click('#actionList', { action: 'applyInternship', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'positionPicker');
+  // 带岗位申请：链挂岗位、邀请入队、命令记录 positionId
+  const applyRevision = ui.element('#dialogBody').innerHTML.match(/data-position-apply="qiandu_testdev" data-revision="(\d+)"/);
+  assert.ok(applyRevision, '申请按钮应带上渲染时的状态版本');
+  ui.click('#dialogBody', { positionApply: 'qiandu_testdev', revision: applyRevision[1] });
+  assert.equal(ui.evaluate('state.chains.internship.positionId'), 'qiandu_testdev');
+  assert.equal(ui.evaluate('state.pendingEvent && state.pendingEvent.id'), 'internshipOffer');
+  assert.equal(ui.evaluate('state.history.at(-1).command.positionId'), 'qiandu_testdev');
+  // 存档往返：意向与链岗位字段保留
+  const saved = ui.evaluate('saveCurrent(true)');
+  assert.equal(saved.ok, true, saved.reason);
+  const restarted = app(storage, false, false, false);
+  restarted.click('#startContinue');
+  restarted.click('#dialogBody', { loadSlot: '2', saveSource: 'primary' });
+  assert.equal(restarted.evaluate('state.targetPosition'), 'qiandu_testdev');
+  assert.equal(restarted.evaluate('state.chains.internship.positionId'), 'qiandu_testdev');
+  assert.equal(restarted.evaluate('state.pendingEvent.id'), 'internshipOffer');
+});
+
+test('岗位门槛不达标时申请按钮禁用并显示原因', () => {
+  const ui = app();
+  ui.start();
+  ui.evaluate('dialog.close(); activePlace = "gate"; gateSection = "internship"; renderActions()');
+  ui.click('#actionList', { action: 'applyInternship', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('dialogMode'), 'positionPicker');
+  const html = ui.element('#dialogBody').innerHTML;
+  // 第 1 学期：全部岗位未达标（窗口未开），申请按钮全部禁用且原因可见
+  assert.equal((html.match(/disabled>申请这个岗位/g) || []).length, 16);
+  assert.match(html, /第 3 学期开始开放/);
+});
+
+test('实习投入卡显示累计进度，达标后出现「办理实习证明」', () => {
+  const ui = app();
+  ui.start();
+  // 进行中未达标：有进度行、无办证明按钮
+  ui.evaluate('state = CampusGame.createGame({ nickname: "岗位测试", seed: "positions-test", legacyEconomy: true }); state.term = 5; state.chains.internship = { status: "active", progress: 0, startedTerm: 5, deadline: 6, nextEligibleTerm: 1, reviewAfter: 5, positionId: "qiandu_testdev", workTime: 2, workEnergy: 15, milestoneSeen: false }; dialog.close(); activePlace = "gate"; gateSection = "internship"; renderActions()');
+  const incomplete = ui.element('#actionList').innerHTML;
+  assert.match(incomplete, /累计投入：时间 2 \/ 4/);
+  assert.match(incomplete, /维护回归用例集/, '三档按钮来自岗位 workPlans');
+  assert.doesNotMatch(incomplete, /办理实习证明/);
+  // 达标：出现按钮
+  ui.evaluate('state = { ...state, chains: { ...state.chains, internship: { ...state.chains.internship, workTime: 4, workEnergy: 30 } } }; renderActions()');
+  const ready = ui.element('#actionList').innerHTML;
+  assert.match(ready, /门槛已达标/);
+  assert.match(ready, /办理实习证明/);
+  // 点击结算：链转 completed、经历入档、反馈含岗位段收入
+  ui.click('#actionList', { settleInternship: '1', revision: String(ui.evaluate('state.revision')) });
+  assert.equal(ui.evaluate('state.chains.internship.status'), 'completed');
+  assert.equal(ui.evaluate('state.experiences.filter((e) => e.type === "internship").length'), 1);
+  assert.equal(ui.evaluate('state.experiences.find((e) => e.type === "internship").positionId'), 'qiandu_testdev');
+});
+
+test('启动页只展示继续、新游戏、设置和退出；无存档时继续禁用', () => {
+  const ui = app(undefined, true, false);
+  assert.equal(ui.element('#startScreen').hidden, false);
+  assert.equal(ui.evaluate('state'), null);
+  assert.equal(ui.element('#startContinue').disabled, true);
+  ui.click('#startNew');
+  assert.equal(ui.evaluate('dialogMode'), 'login');
 });

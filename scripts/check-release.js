@@ -5,9 +5,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
+const { CATS, appearance, catArchive, catPosePreview } = require('../animals.js');
 const root = path.resolve(__dirname, '..');
-const scripts = ['config.js', 'rng.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'npc.js', 'app.js'];
-const files = new Set(['index.html', 'styles.css', '.nojekyll', ...scripts]);
+const scripts = ['config.js', 'courses.js', 'rng.js', 'relationships.js', 'npc-cast.js', 'npc-support.js', 'character-agent.js', 'npc-director.js', 'npc-game.js', 'character-scene.js', 'state-validation.js', 'game.js', 'save.js', 'audio.js', 'sms.js', 'animals.js', 'season.js', 'vendor/planck.min.js', 'basketball.js', 'developer-tools.js', 'developer-panel.js', 'app.js'];
+const files = new Set(['index.html', 'styles.css', '.nojekyll', 'vendor/planck.LICENSE.txt', 'assets/characters/zhou-ning-casual-v1.png', 'assets/characters/chen-teacher-casual-v1.png', 'assets/characters/lin-xia-sports-v1.png', 'assets/scenes/campus-afternoon-v1.png', ...scripts]);
 
 function localReference(reference, from) {
   if (!reference || /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(reference)) return;
@@ -24,7 +25,15 @@ async function main() {
   const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   for (const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) localReference(match[1], 'index.html');
   for (const match of css.matchAll(/url\(\s*["']?([^\s"')]+)["']?\s*\)/g)) localReference(match[1], 'styles.css');
-  const loaded = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/g)].map(match => match[1]);
+  for (const { atlas } of [...Object.values(CATS), appearance('goose')]) localReference(atlas, 'index.html');
+  for (const catId of Object.keys(CATS)) {
+    for (const photo of catArchive(catId).photos) localReference(photo, 'index.html');
+    for (const pose of ['lying', 'standing', 'special']) {
+      const portrait = catPosePreview(catId, pose);
+      if (portrait) localReference(portrait.asset, 'index.html');
+    }
+  }
+  const loaded = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/g)].map(match => match[1].split(/[?#]/)[0]);
   if (JSON.stringify(loaded) !== JSON.stringify(scripts)) throw new Error('运行脚本的加载顺序与接口约定不一致');
   for (const file of files) {
     let directory = root;

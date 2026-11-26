@@ -35,7 +35,7 @@ test('主档读取期间另一标签更新，旧候选不能覆盖新档', () =>
   assert.deepEqual(loaded.state, initial());
   assert.equal(service.save(loaded.state).conflict, true);
   assert.equal(storage.data.get(save.KEYS.primary), newer);
-  assert.equal(service.load().state.preparation, 20);
+  assert.deepEqual(service.load().state, advanced());
   assert.equal(service.save(advanced()).ok, true);
 });
 

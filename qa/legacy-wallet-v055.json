@@ -1,0 +1,497 @@
+{
+  "saveFormatVersion": 1,
+  "rulesVersion": 3,
+  "appVersion": "0.5.5",
+  "saveSequence": 1,
+  "savedAt": "2026-10-31T12:00:00.000Z",
+  "state": {
+    "version": 3,
+    "rulesVersion": 3,
+    "saveFormatVersion": 1,
+    "appVersion": "0.5.5",
+    "nickname": "旧档测试",
+    "background": {
+      "id": "information",
+      "college": "信息类学院",
+      "major": "通信工程"
+    },
+    "rng": {
+      "algorithm": "mulberry32-v1",
+      "seed": "legacy-wallet",
+      "value": 433765766,
+      "calls": 6
+    },
+    "term": 3,
+    "phase": "playing",
+    "revision": 8,
+    "processedCommands": [
+      "rule:1:action:work",
+      "rule:2:endTerm",
+      "rule:3:continueGame",
+      "rule:4:event:later",
+      "rule:5:action:work",
+      "rule:6:endTerm",
+      "rule:7:continueGame",
+      "rule:8:event:later"
+    ],
+    "time": 12,
+    "energy": 80,
+    "money": 829,
+    "social": 24,
+    "fitness": 42,
+    "mood": 60,
+    "preparation": 0,
+    "furtherStudy": 0,
+    "jobPreparation": 0,
+    "counts": {},
+    "courses": [
+      {
+        "term": 1,
+        "name": "大一上",
+        "preparation": 0,
+        "grade": 40,
+        "passed": false,
+        "livingCost": 300,
+        "aid": 0,
+        "moneyAfter": 930,
+        "unusedTime": 10,
+        "counts": {
+          "work": 1
+        },
+        "attributes": {
+          "social": 22,
+          "fitness": 46,
+          "mood": 65
+        },
+        "notices": []
+      },
+      {
+        "term": 2,
+        "name": "大一下",
+        "preparation": 0,
+        "grade": 40,
+        "passed": false,
+        "livingCost": 300,
+        "aid": 0,
+        "moneyAfter": 829,
+        "unusedTime": 10,
+        "counts": {
+          "work": 1
+        },
+        "attributes": {
+          "social": 24,
+          "fitness": 42,
+          "mood": 60
+        },
+        "notices": []
+      }
+    ],
+    "selectedCourses": [],
+    "exam": null,
+    "history": [
+      {
+        "action": "work",
+        "title": "校内勤工助学",
+        "changes": {
+          "time": -2,
+          "energy": -20,
+          "money": 230,
+          "preparation": 0,
+          "social": 2,
+          "fitness": -4,
+          "mood": -5,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "fitnessCost": 4,
+        "investment": {
+          "amount": 20,
+          "spent": 20,
+          "resource": "energy",
+          "fitnessCost": 4,
+          "tier": "steady",
+          "level": "steady",
+          "outcome": "steady",
+          "description": "你把值班和整理任务接好，按流程逐一处理。记录和材料都对上了，负责人按完成的工作量确认了这次补助。"
+        },
+        "term": 1,
+        "revision": 1,
+        "commandId": "rule:1:action:work",
+        "command": {
+          "operation": "executeAction",
+          "id": "work",
+          "investment": 20
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 1000,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 2
+        },
+        "after": {
+          "term": 1,
+          "phase": "playing",
+          "time": 10,
+          "energy": 60,
+          "money": 1230,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 4
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 1,
+        "revision": 2,
+        "commandId": "rule:2:endTerm",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 1,
+          "phase": "playing",
+          "time": 10,
+          "energy": 60,
+          "money": 1230,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 4
+        },
+        "after": {
+          "term": 1,
+          "phase": "summary",
+          "time": 10,
+          "energy": 60,
+          "money": 930,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 4
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "进入下一学期",
+        "term": 1,
+        "revision": 3,
+        "commandId": "rule:3:continueGame",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 1,
+          "phase": "summary",
+          "time": 10,
+          "energy": 60,
+          "money": 930,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 4
+        },
+        "after": {
+          "term": 2,
+          "phase": "eventPending",
+          "time": 12,
+          "energy": 80,
+          "money": 930,
+          "preparation": 0,
+          "pendingEvent": "daily:retake:2",
+          "rngCalls": 4
+        }
+      },
+      {
+        "term": 2,
+        "event": "retake",
+        "instanceId": "daily:retake:2",
+        "choice": "later",
+        "title": "这次不考了",
+        "outcome": null,
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "fitnessCost": 0,
+        "revision": 4,
+        "commandId": "rule:4:event:later",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "later",
+          "eventInstanceId": "daily:retake:2"
+        },
+        "before": {
+          "term": 2,
+          "phase": "eventPending",
+          "time": 12,
+          "energy": 80,
+          "money": 930,
+          "preparation": 0,
+          "pendingEvent": "daily:retake:2",
+          "rngCalls": 4
+        },
+        "after": {
+          "term": 2,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 930,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 4
+        }
+      },
+      {
+        "action": "work",
+        "title": "校内勤工助学",
+        "changes": {
+          "time": -2,
+          "energy": -20,
+          "money": 199,
+          "preparation": 0,
+          "social": 2,
+          "fitness": -4,
+          "mood": -5,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "fitnessCost": 4,
+        "investment": {
+          "amount": 20,
+          "spent": 20,
+          "resource": "energy",
+          "fitnessCost": 4,
+          "tier": "steady",
+          "level": "steady",
+          "outcome": "steady",
+          "description": "你把值班和整理任务接好，按流程逐一处理。记录和材料都对上了，负责人按完成的工作量确认了这次补助。"
+        },
+        "term": 2,
+        "revision": 5,
+        "commandId": "rule:5:action:work",
+        "command": {
+          "operation": "executeAction",
+          "id": "work",
+          "investment": 20
+        },
+        "before": {
+          "term": 2,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 930,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 4
+        },
+        "after": {
+          "term": 2,
+          "phase": "playing",
+          "time": 10,
+          "energy": 60,
+          "money": 1129,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 6
+        }
+      },
+      {
+        "action": "endTerm",
+        "title": "学期结算",
+        "term": 2,
+        "revision": 6,
+        "commandId": "rule:6:endTerm",
+        "command": {
+          "operation": "endTerm"
+        },
+        "before": {
+          "term": 2,
+          "phase": "playing",
+          "time": 10,
+          "energy": 60,
+          "money": 1129,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 6
+        },
+        "after": {
+          "term": 2,
+          "phase": "summary",
+          "time": 10,
+          "energy": 60,
+          "money": 829,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 6
+        }
+      },
+      {
+        "action": "continueGame",
+        "title": "进入下一学期",
+        "term": 2,
+        "revision": 7,
+        "commandId": "rule:7:continueGame",
+        "command": {
+          "operation": "continueGame"
+        },
+        "before": {
+          "term": 2,
+          "phase": "summary",
+          "time": 10,
+          "energy": 60,
+          "money": 829,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 6
+        },
+        "after": {
+          "term": 3,
+          "phase": "eventPending",
+          "time": 12,
+          "energy": 80,
+          "money": 829,
+          "preparation": 0,
+          "pendingEvent": "daily:retake:3",
+          "rngCalls": 6
+        }
+      },
+      {
+        "term": 3,
+        "event": "retake",
+        "instanceId": "daily:retake:3",
+        "choice": "later",
+        "title": "这次不考了",
+        "outcome": null,
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "fitnessCost": 0,
+        "revision": 8,
+        "commandId": "rule:8:event:later",
+        "command": {
+          "operation": "submitEventChoice",
+          "id": "later",
+          "eventInstanceId": "daily:retake:3"
+        },
+        "before": {
+          "term": 3,
+          "phase": "eventPending",
+          "time": 12,
+          "energy": 80,
+          "money": 829,
+          "preparation": 0,
+          "pendingEvent": "daily:retake:3",
+          "rngCalls": 6
+        },
+        "after": {
+          "term": 3,
+          "phase": "playing",
+          "time": 12,
+          "energy": 80,
+          "money": 829,
+          "preparation": 0,
+          "pendingEvent": null,
+          "rngCalls": 6
+        }
+      }
+    ],
+    "summary": null,
+    "pendingEvent": null,
+    "eventQueue": [],
+    "eventFlags": {
+      "randomCampusRoll:1": true,
+      "daily:retake:2": true,
+      "randomCampusRoll:2": true,
+      "daily:retake:3": true
+    },
+    "eventHistory": [
+      {
+        "term": 2,
+        "event": "retake",
+        "instanceId": "daily:retake:2",
+        "choice": "later",
+        "title": "这次不考了",
+        "outcome": null,
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "fitnessCost": 0
+      },
+      {
+        "term": 3,
+        "event": "retake",
+        "instanceId": "daily:retake:3",
+        "choice": "later",
+        "title": "这次不考了",
+        "outcome": null,
+        "changes": {
+          "time": 0,
+          "energy": 0,
+          "money": 0,
+          "preparation": 0,
+          "social": 0,
+          "fitness": 0,
+          "mood": 0,
+          "furtherStudy": 0,
+          "jobPreparation": 0
+        },
+        "fitnessCost": 0
+      }
+    ],
+    "experiences": [],
+    "chains": {
+      "project": {
+        "status": "idle",
+        "progress": 0,
+        "startedTerm": 0,
+        "deadline": 0,
+        "nextEligibleTerm": 1,
+        "reviewAfter": 0
+      },
+      "club": {
+        "status": "idle",
+        "progress": 0,
+        "startedTerm": 0,
+        "deadline": 0,
+        "nextEligibleTerm": 1,
+        "reviewAfter": 0
+      },
+      "internship": {
+        "status": "idle",
+        "progress": 0,
+        "startedTerm": 0,
+        "deadline": 0,
+        "nextEligibleTerm": 1,
+        "reviewAfter": 0
+      }
+    },
+    "endingOptions": null,
+    "result": null,
+    "npcChats": {}
+  }
+}
