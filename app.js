@@ -84,6 +84,7 @@ let animalFrame = null;
 let animalReactionTimer = null;
 let animalReactionDueAt = 0;
 let animalReactionCallback = null;
+let animalResetTimer = null;
 let animalPortrait = null;
 let animalPose = null;
 let animalPoseFrame = null;
@@ -274,7 +275,7 @@ const EVENT_CHOICE_FLAVOR = {
   'memorial129:watch': '谢幕时全场起立。身边有人小声说：这台晚会排了三个月。',
   'memorial129:later': '你拍了张节目单。横幅上的字被风吹得猎猎响。'
 };
-const NPC_MAP_POSITIONS = { zhouNing: [70, 47], chenTeacher: [48, 37], linXia: [27, 66] };
+const NPC_MAP_POSITIONS = { zhouNing: [70, 47], chenTeacher: [86, 69], linXia: [27, 66] };
 const NPC_MAP_ICON = '<svg class="npc-svg" viewBox="0 0 40 48" aria-hidden="true">'
   + '<circle cx="20" cy="12" r="7" fill="#f2c9a0"/><path d="M13 10 A7 7 0 0 1 27 10 L27 12 A7 7 0 0 0 13 12 Z" fill="#2b2b33"/>'
   + '<g fill="#2e6fae"><rect x="9" y="21" width="3" height="11" rx="1.5"/><rect x="28" y="21" width="3" height="11" rx="1.5"/><rect x="12" y="20" width="16" height="16" rx="4"/></g>'
@@ -1115,7 +1116,7 @@ function renderState() {
   renderRecordsPanel();
   renderRelationshipsPanel();
   renderNpcLayer();
-  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(dialogMode);
+  $('#dialogSave').hidden = ['admission', 'login', 'restart', 'returnHome', 'save', 'load', 'confirmSave', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(dialogMode);
   syncBarHeight();
   if (activePlace) renderActions();
   if (debug) $('#debugSummary').textContent = '规则 ' + state.rulesVersion + ' · 阶段 ' + state.phase + ' · revision ' + state.revision + ' · 随机调用 ' + state.rng.calls;
@@ -1501,7 +1502,7 @@ async function sendZhouChat(message) {
 }
 function showNpcMeetIntro() {
   const { profile, scene, step, returned, place } = npcMeetIntro;
-  showDialog('npcMeetIntro', '操场边', CampusCharacterScene.renderMeeting({
+  showDialog('npcMeetIntro', scene.placeLabel || '操场边', CampusCharacterScene.renderMeeting({
     scene, step, profile, returned, background: PLACE_ART[place]
   }));
   dialog.classList.add('is-vn');
@@ -1560,7 +1561,7 @@ async function maybeZhouNingDirector() {
   if(developerPaused||!state||zhouRequest||uiLocked||basketballSession||animalDialog?.open||needsCourseSelection())return;
   const occasion=game.npcOpportunity(state);if(!occasion||(dialog.open&&dialogMode!=='event'))return;
   const profile = game.npcCast.profile(occasion.npcId);
-  if (occasion.kind === 'meet' && occasion.place === 'track' && profile?.meetScene) {
+  if (occasion.kind === 'meet' && profile?.meetScene) {
     if (state.pendingEvent || dialog.open) return;
     npcMeetIntro = { snapshot: state, trigger: occasion.key, place: occasion.place, profile, scene: profile.meetScene, step: 'item' };
     showNpcMeetIntro();
@@ -1823,6 +1824,55 @@ function animalName({ species, catId }) {
 }
 
 const CAT_POSE_CYCLE = ['alert', 'special', 'standing', 'lying'];
+const CAT_OPENING_POSES = Object.freeze({
+  wumei: 'special',
+  dunbu: 'lying',
+  tuoba: 'standing',
+  jupi: 'special',
+  maolv: 'alert',
+  tangyuan: 'lying'
+});
+
+function animalOpeningPose(encounter) {
+  return encounter?.species === 'cat' ? CAT_OPENING_POSES[encounter.catId] || 'alert' : 'alert';
+}
+
+const CAT_ACTIONS = Object.freeze({
+  wumei: {
+    petLabel: '轻轻顺毛', petPose: 'lying', resultPose: 'special',
+    petted: '五妹眯着眼，把脑袋往你掌心蹭了蹭。', startled: '五妹从睡梦里惊醒，晃了晃尾巴。',
+    fed: '五妹闻了闻猫零食，慢吞吞地凑过来吃。'
+  },
+  dunbu: {
+    petLabel: '保持距离伸手', petPose: 'standing', resultPose: 'special',
+    petted: '墩布犹豫了一下，还是把脑袋凑近了一点。', startled: '墩布立刻退开，躲到一边。',
+    fed: '墩布等你退后半步，才小心地吃起零食。'
+  },
+  tuoba: {
+    petLabel: '陪它玩一下', petPose: 'standing', resultPose: 'special',
+    petted: '拖把伸了个懒腰，尾巴在你手边扫来扫去。', startled: '拖把愣了一下，甩了甩长毛。',
+    fed: '拖把先绕着零食转了一圈，才低头吃起来。'
+  },
+  jupi: {
+    petLabel: '试探着摸', petPose: 'special', resultPose: 'special',
+    petted: '橘皮眯起眼睛，勉为其难地接受了这次抚摸。', startled: '橘皮抬起爪子，轻轻拍开你的手。',
+    fed: '橘皮确认是鸡胸肉味，才优雅地凑过来。'
+  },
+  maolv: {
+    petLabel: '摸摸头', petPose: 'alert', resultPose: 'special',
+    petted: '毛驴歪着头，安静地让你摸了两下。', startled: '毛驴被吓了一跳，往后退了半步。',
+    fed: '毛驴低头闻了闻，吃完还抬头看着你。'
+  },
+  tangyuan: {
+    petLabel: '接住它', petPose: 'standing', resultPose: 'special',
+    petted: '汤圆围着你转了一圈，主动把脑袋凑过来。', startled: '汤圆一溜烟跑开，又回头看你。',
+    fed: '汤圆跳下来，确认安全后才开始吃。'
+  }
+});
+
+function catAction(encounter) {
+  return encounter?.species === 'cat' ? CAT_ACTIONS[encounter.catId] : null;
+}
 
 function applyAnimalArtwork(world) {
   const { species, catId } = animalEncounter;
@@ -1895,6 +1945,30 @@ function openAnimalEncounter(id) {
 function animalButton(action, label, { primary = false, disabled = false } = {}) {
   return '<button type="button" data-animal-action="' + action + '"'
     + (primary ? ' class="animal-primary"' : '') + (disabled ? ' disabled' : '') + '>' + h(label) + '</button>';
+}
+
+function animalActionButtons() {
+  if (!animalEncounter) return '';
+  const { species } = animalEncounter;
+  const profile = game.ANIMALS[species];
+  const action = catAction(animalEncounter);
+  const feed = game.animalAvailability(state, species, 'feed');
+  return animalButton('pet', action?.petLabel || '试着摸一下', { primary: true })
+    + animalButton('feed', '买' + profile.food + ' · ' + profile.price + ' 元', { disabled: !feed.ok })
+    + (species === 'cat' ? animalButton('cyclePose', '换个姿势') : '');
+}
+
+function cancelAnimalReset() {
+  if (animalResetTimer !== null) clearTimeout(animalResetTimer);
+  animalResetTimer = null;
+}
+
+function scheduleAnimalReset(delay = 2000) {
+  cancelAnimalReset();
+  animalResetTimer = setTimeout(() => {
+    animalResetTimer = null;
+    if (animalEncounter && animalDialog?.open && $('#animalWorld').dataset.mode === 'result') showAnimalMenu();
+  }, delay);
 }
 
 const ANIMAL_POSES = {
@@ -1994,17 +2068,15 @@ function showAnimalView(mode, pose, cue = '', detail = '', buttons = '', title) 
 
 function showAnimalMenu() {
   if (!animalEncounter) return;
+  cancelAnimalReset();
   stopAnimalTiming();
   const { species } = animalEncounter;
-  const profile = game.ANIMALS[species];
   const feed = game.animalAvailability(state, species, 'feed');
-  showAnimalView('menu', 'alert', '', feed.ok ? '' : feed.reason,
-    animalButton('pet', '试着摸一下', { primary: true })
-    + animalButton('feed', '买' + profile.food + ' · ' + profile.price + ' 元', { disabled: !feed.ok })
-    + (species === 'cat' ? animalButton('cyclePose', '切换动作') : ''));
+  showAnimalView('menu', animalOpeningPose(animalEncounter), '', feed.ok ? '' : feed.reason, animalActionButtons());
 }
 
 function cycleCatPose() {
+  cancelAnimalReset();
   const world = $('#animalWorld');
   const next = (CAT_POSE_CYCLE.indexOf(world.dataset.pose) + 1) % CAT_POSE_CYCLE.length;
   const pose = CAT_POSE_CYCLE[next];
@@ -2079,6 +2151,7 @@ function stopAnimalTiming() {
 }
 
 function closeAnimalEncounter() {
+  cancelAnimalReset();
   if (catArchiveDialog?.open) catArchiveDialog.close();
   if (animalReactionTimer !== null) clearTimeout(animalReactionTimer);
   animalReactionTimer = null;
@@ -2117,6 +2190,7 @@ function updateAnimalTiming() {
 
 function startAnimalTiming() {
   if (!animalEncounter) return;
+  cancelAnimalReset();
   cancelAnimalPoseTransition();
   const { species } = animalEncounter;
   const { start, end } = game.animalCalmWindow(state, species);
@@ -2124,7 +2198,8 @@ function startAnimalTiming() {
   const { approach, retreat: preferredRetreat } = GOOSE_MOTION;
   const untilNextApproach = game.ANIMAL_CYCLE_MS - end + start - approach;
   const retreat = Math.min(preferredRetreat, untilNextApproach);
-  showAnimalView('pet', 'alert');
+  const action = catAction(animalEncounter);
+  showAnimalView('pet', action?.petPose || 'alert', '', '', animalActionButtons());
   animalTiming = { startedAt: animalClock(), elapsedMs: 0, calm: null, entry, start, end, approach, retreat,
     animate: species === 'goose' && Boolean(animalPortrait) && animalMotionEnabled() };
   updateAnimalTiming();
@@ -2132,13 +2207,15 @@ function startAnimalTiming() {
 
 function confirmAnimalFeed() {
   if (!animalEncounter) return;
+  cancelAnimalReset();
+  if ($('#animalWorld').dataset.mode === 'pet') stopAnimalTiming();
   const { species } = animalEncounter;
   const profile = game.ANIMALS[species];
   const check = game.animalAvailability(state, species, 'feed');
   if (!check.ok) { $('#animalDetail').textContent = check.reason; return; }
   const gain = game.previewChanges(state, { mood: profile.fedMood }).mood;
   showAnimalView('feed', 'calm', '把食物放到它面前', '花 ' + profile.price + ' 元购买' + profile.food + '，心情 +' + gain + '。',
-    animalButton('feedYes', '确认喂食', { primary: true }) + animalButton('back', '返回'));
+    animalButton('feedYes', '确认喂食', { primary: true }) + animalButton('back', '取消'));
 }
 
 function positionAnimalHand(event) {
@@ -2158,9 +2235,24 @@ function positionAnimalHand(event) {
 
 function trackAnimalHand(event) {
   const world = $('#animalWorld');
-  if (world.dataset.mode !== 'pet' || event.pointerType === 'touch') return;
-  if (event.target.closest('.animal-hud, .animal-controls')) world.dataset.tracking = 'false';
-  else positionAnimalHand(event);
+  if (world.dataset.mode !== 'pet') return;
+  if (event.pointerType === 'touch') {
+    world.dataset.tracking = 'false';
+    return;
+  }
+  if (event.target?.closest?.('.animal-hud, .animal-controls')) {
+    world.dataset.tracking = 'false';
+    return;
+  }
+  const target = $('#animalPetTarget');
+  const bounds = target?.getBoundingClientRect?.();
+  const inside = bounds && event.clientX >= bounds.left && event.clientX <= bounds.right
+    && event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+  if (!inside) {
+    world.dataset.tracking = 'false';
+    return;
+  }
+  positionAnimalHand(event);
 }
 
 function finishAnimalInteraction(choice, event, forcedElapsedMs) {
@@ -2182,6 +2274,7 @@ function finishAnimalInteraction(choice, event, forcedElapsedMs) {
   const { outcome } = result.entry.animal;
   const catHissed = species === 'cat' && outcome === 'startled';
   const name = animalName(animalEncounter);
+  const action = catAction(animalEncounter);
   const animate = animalMotionEnabled();
   const title = species === 'cat'
     ? (catHissed ? name + '哈气了' : outcome === 'fed' ? '已喂食' + name : '摸到' + name + '了')
@@ -2193,7 +2286,12 @@ function finishAnimalInteraction(choice, event, forcedElapsedMs) {
     animalReactionCallback = null;
     if (!animalEncounter || !animalDialog.open) return;
     world.dataset.tracking = 'false';
-    showAnimalView('result', outcome, ANIMAL_TEXT[species][outcome].replace('小猫', name), changeText(result.changes), '', title);
+    const resultPose = species === 'cat' && outcome !== 'startled' ? action?.resultPose || outcome : outcome;
+    const resultText = action?.[outcome] || ANIMAL_TEXT[species][outcome].replace('小猫', name);
+    showAnimalView('result', resultPose, resultText, changeText(result.changes), animalActionButtons(), title);
+    // 结果提示显示期间先收起底部操作栏，保留提示文字，约两秒后再恢复菜单。
+    $('#animalButtons').innerHTML = '';
+    scheduleAnimalReset(2000);
   };
   if (species === 'cat') {
     if (catHissed) audio?.play('catHiss');
@@ -2213,12 +2311,12 @@ function showDialog(mode, title, body, buttons = []) {
   dialogMode = mode;
   stopSmsCountdown();
   dialog.classList.toggle('event-dialog', mode === 'event');
-  $('.dialog-kicker').textContent = '北交人生 · ' + ({ relationship: '人物关系网', relationshipResult: '共同经历', basketballResult: '球场结算', event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', budget: '学期预算', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', positionPicker: '南门岗位库' }[mode] || '校园手账');
+  $('.dialog-kicker').textContent = '北交人生 · ' + ({ relationship: '人物关系网', relationshipResult: '共同经历', basketballResult: '球场结算', event: '校园事件', eventResult: '生活回顾', admission: '入学', enrollment: '入学', login: '登录', courseSelection: '开学选课', budget: '学期预算', exam: '期末考试', confirmCheat: '期末考试', confirmEnding: '校园事件', endingChoice: '毕业方向', finished: '四年手账', ended: '本局结束', positionPicker: '南门岗位库', returnHome: '返回主菜单' }[mode] || '校园手账');
   $('#dialogTitle').textContent = title;
   $('#dialogNotice').textContent = '';
   $('#dialogBody').innerHTML = body;
   $('#dialogButtons').innerHTML = buttons.map(({ id, text, secondary, disabled }) => '<button type="button" data-dialog-action="' + id + '" data-revision="' + (state?.revision || 0) + '" class="' + (secondary ? 'secondary' : '') + '"' + (uiLocked || disabled ? ' disabled' : '') + '>' + h(text) + '</button>').join('');
-  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'save', 'load', 'confirmSave', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(mode);
+  $('#dialogSave').hidden = !state || ['admission', 'login', 'restart', 'returnHome', 'save', 'load', 'confirmSave', 'courseSelection', 'budget', 'confirmCheat', 'confirmEnding', 'positionPicker'].includes(mode);
   if (!dialog.open) dialog.showModal();
   (dialog.querySelector('input') || $('#dialogTitle')).focus({ preventScroll: true });
   dialog.scrollTop = 0;
@@ -2386,6 +2484,31 @@ function hideStartMenu() {
   if (start) start.hidden = true;
   if (shell) shell.inert = false;
   hideCoach();
+}
+
+function returnToMainMenu() {
+  cancelZhouRequest();
+  cancelBasketball();
+  closePlace();
+  closePanel();
+  closePopovers();
+  resetAnimalSystem();
+  audio?.stopBgm();
+  hideCoach();
+  showStartMenu();
+}
+
+function requestReturnMainMenu() {
+  if (!state || !hasUnsavedProgress()) { returnToMainMenu(); return; }
+  const canSave = activeSaveSlot !== null;
+  const body = canSave
+    ? '<p>当前有未保存进度。可以先保存到栏位 ' + activeSaveSlot + '，再返回主菜单。</p>'
+    : '<p>当前进度还没有选择存档栏位。未保存的进度不会出现在主菜单的“继续游戏”中。</p>';
+  showDialog('returnHome', '返回主菜单？', body, [
+    { id: 'returnHomeSave', text: canSave ? '保存并返回主菜单' : '先去保存' },
+    { id: 'returnHomeDiscard', text: '不保存，返回主菜单', secondary: true },
+    { id: 'resume', text: '继续游戏', secondary: true }
+  ]);
 }
 
 function showStartMenu() {
@@ -3443,6 +3566,12 @@ $('#dialogButtons').addEventListener('click', (event) => {
   }
   else if (id === 'basketballContinue' && dialogMode === 'basketballResult') { acknowledgedResultRevision = state.revision; resumePhase(); }
   else if (id === 'startMenu') showStartMenu();
+  else if (id === 'returnHomeSave' && dialogMode === 'returnHome') {
+    if (activeSaveSlot === null) { showSave(); return; }
+    const saved = saveCurrent(true);
+    if (saved?.ok) returnToMainMenu();
+  }
+  else if (id === 'returnHomeDiscard' && dialogMode === 'returnHome') returnToMainMenu();
   else if (id === 'admission') showAdmission();
   else if (id === 'loginPrompt') { loginSkipped = false; try { storage?.removeItem(LOGIN_SKIP_KEY); } catch (_) {} showLogin(); }
   else if (id === 'switchAccount') {
@@ -3516,9 +3645,9 @@ function bindAnimalDialogControls() {
   $('#animalButtons').addEventListener('click', (event) => {
     const action = event.target.closest('[data-animal-action]')?.dataset.animalAction;
     const mode = $('#animalWorld').dataset.mode;
-    if (action === 'pet' && mode === 'menu') startAnimalTiming();
-    else if (action === 'feed' && mode === 'menu') confirmAnimalFeed();
-    else if (action === 'cyclePose' && mode === 'menu' && animalEncounter?.species === 'cat') cycleCatPose();
+    if (action === 'pet' && ['menu', 'pet', 'result'].includes(mode)) startAnimalTiming();
+    else if (action === 'feed' && ['menu', 'pet', 'result'].includes(mode)) confirmAnimalFeed();
+    else if (action === 'cyclePose' && ['menu', 'pet', 'result'].includes(mode) && animalEncounter?.species === 'cat') cycleCatPose();
     else if (action === 'back' && mode === 'feed') showAnimalMenu();
     else if (action === 'feedYes' && mode === 'feed') finishAnimalInteraction('feed');
   });
@@ -3566,6 +3695,7 @@ $('#dialogSave').addEventListener('click', showSave);
 $('#loadButton').addEventListener('click', showLoad);
 $('#helpButton').addEventListener('click', () => { if (state) showTutorial(); });
 $('#backgroundButton').addEventListener('click', () => { if (state) showBackground(); });
+$('#homeButton').addEventListener('click', () => { if (state) requestReturnMainMenu(); });
 $('#restartButton').addEventListener('click', () => { if (state) askRestart(); });
 $('#historyButton').addEventListener('click', () => { if (state) showDialog('history', '成长记录', growthRecord(true, true), [{ id: 'resume', text: '继续安排' }]); });
 for (const selector of ['#mapStats', '#placeStats']) $(selector).addEventListener('click', event => {

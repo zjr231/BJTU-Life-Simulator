@@ -267,10 +267,15 @@
       : [];
     let current = null;
     let sequence = 0;
-    let nextAt = now + 2500;
+    let nextAt = keepCatsOnMap ? now : now + 2500;
 
     function finish(now, encounterId) {
       if (residentCats.some(cat => cat.id === encounterId)) return;
+      // 常驻猫模式下，明湖鹅是湖泊的常驻动物，不因一次互动离开地图。
+      if (keepCatsOnMap && current?.species === 'goose') {
+        current.expiresAt = now + 22000;
+        return;
+      }
       current = null;
       nextAt = now + 18000 + Math.floor(random() * 14000);
     }

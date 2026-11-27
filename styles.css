@@ -1722,6 +1722,7 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
 .animal-dialog::backdrop { background: #141e17; }
 .animal-dialog:not([open]) { display: none; }
 .animal-world {
+  cursor: default;
   --edge: clamp(13px, 3vw, 50px);
   --actor-size: min(58dvh, 68vw, 610px);
   --floor: 77%;
@@ -1965,7 +1966,7 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
 }
 .animal-cue-block { min-width: 0; }
 .animal-controls[hidden], .animal-cue-block:has(> .animal-cue:empty + .animal-detail:empty) { display: none; }
-.animal-world[data-mode="result"] .animal-controls { width: fit-content; max-width: calc(100% - var(--edge) * 2); }
+.animal-world[data-mode="result"] .animal-controls { max-width: calc(100% - var(--edge) * 2); }
 .animal-cue { margin: 0; color: #fff3d3; font-size: 20px; font-weight: 720; line-height: 1.2; }
 .animal-detail { margin: 5px 0 0; color: #e9dfc5; font-size: 14px; line-height: 1.45; }
 .animal-cue:empty, .animal-detail:empty, .animal-buttons:empty { display: none; }
@@ -1975,6 +1976,7 @@ body.hide-hotspot-rings .map-hotspot::before { display: none; }
 .animal-buttons .animal-primary { background: #e9ce91; border-color: #f3dba4; color: #222719; font-weight: 700; }
 .animal-buttons .animal-primary:hover { background: #f6deaa; }
 .animal-buttons button:disabled { opacity: .5; cursor: not-allowed; }
+.animal-pet-target, .animal-buttons button, .animal-exit { touch-action: manipulation; }
 
 .cat-archive-actions { display: none; gap: 8px; margin-top: 12px; }
 .animal-world[data-species="cat"][data-mode="menu"] .cat-archive-actions { display: flex; }

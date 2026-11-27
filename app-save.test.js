@@ -1105,13 +1105,13 @@ test('含路人聊天历史的旧存档仍可加载，地图不显示路人', ()
   assert.equal(ui.element('#npcLayer').innerHTML, '');
 });
 
-test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返回地图', () => {
+test('摸猫和摸鹅时底部选项保持可用，结算后可继续互动', () => {
   const cases = [
-    { species: 'cat', catId: 'wumei', name: '五妹', atlas: 'cat-wumei-v4.webp', pose: 'alert', title: '五妹哈气了', result: /五妹愣了一下/, mood: '心情 −2' },
-    { species: 'cat', catId: 'maolv', name: '毛驴', atlas: 'cat-maolv-v3.webp', pose: 'alert', title: '毛驴哈气了', result: /毛驴愣了一下/, mood: '心情 −2' },
-    { species: 'goose', name: '明湖的鹅', atlas: 'goose-atlas.webp', pose: 'calm', title: '摸到了', result: /它轻轻抖了抖羽毛/, mood: '心情 +7' }
+    { species: 'cat', catId: 'wumei', name: '五妹', petLabel: '轻轻顺毛', atlas: 'cat-wumei-v4.webp', pose: 'alert', title: '五妹哈气了', result: /五妹从睡梦里惊醒/, mood: '心情 −2' },
+    { species: 'cat', catId: 'maolv', name: '毛驴', petLabel: '摸摸头', atlas: 'cat-maolv-v3.webp', pose: 'alert', title: '毛驴哈气了', result: /毛驴被吓了一跳/, mood: '心情 −2' },
+    { species: 'goose', name: '明湖的鹅', petLabel: '试着摸一下', atlas: 'goose-atlas.webp', pose: 'calm', title: '摸到了', result: /它轻轻抖了抖羽毛/, mood: '心情 +7' }
   ];
-  for (const { species, catId, name, atlas, pose, title, result, mood } of cases) {
+  for (const { species, catId, name, petLabel, atlas, pose, title, result, mood } of cases) {
     const ui = app(memory(), false, true, true);
     ui.start();
     ui.window.animal = { id: 1, species, catId, x: 25, y: 50 };
@@ -1122,7 +1122,7 @@ test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返�
     assert.equal(ui.element('#animalDialog').open, true);
     assert.equal(ui.element('#animalTitle').textContent, name);
     assert.equal(ui.element('#animalDetail').textContent, '');
-    assert.match(ui.element('#animalButtons').innerHTML, /试着摸一下/);
+    assert.ok(ui.element('#animalButtons').innerHTML.includes(petLabel));
     ui.click('#animalButtons', { animalAction: 'pet' });
 
     const world = ui.element('#animalWorld');
@@ -1130,20 +1130,22 @@ test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返�
     for (const currentPose of ['calm', 'alert']) {
       ui.evaluate('animalTiming.startedAt = animalClock() - ' + (currentPose === 'calm' ? 'animalTiming.start' : '0') + '; updateAnimalTiming()');
       assert.equal(world.dataset.pose, currentPose);
-      assert.equal(controls.hidden, true);
+      assert.equal(controls.hidden, false);
       assert.equal(ui.element('#animalCue').textContent, '');
       assert.equal(ui.element('#animalDetail').textContent, '');
-      assert.equal(ui.element('#animalButtons').innerHTML, '');
+      assert.ok(ui.element('#animalButtons').innerHTML.includes(petLabel));
     }
     if (pose === 'calm') ui.evaluate('animalTiming.startedAt = animalClock() - animalTiming.start; updateAnimalTiming()');
     ui.click('#animalPetTarget');
     if (species === 'cat') {
       assert.equal(world.dataset.mode, 'result');
       assert.equal(world.dataset.pose, 'startled');
+      ui.evaluate('clearTimeout(animalResetTimer); animalResetTimer = null');
     } else {
       assert.equal(controls.hidden, true);
     }
     ui.flush();
+    if (ui.evaluate('animalResetTimer !== null')) ui.evaluate('clearTimeout(animalResetTimer); animalResetTimer = null');
 
     assert.equal(world.dataset.mode, 'result');
     assert.equal(world.style['--animal-atlas'], 'url("assets/animals/' + atlas + '")');
@@ -1156,6 +1158,55 @@ test('摸猫和摸鹅的过程没有时机提示，结算只展示结果和返�
     ui.click('#animalExit');
     assert.equal(ui.element('#animalDialog').open, false);
   }
+});
+
+test('不同猫咪使用不同的初始姿态', () => {
+  const ui = app();
+  const poses = ui.evaluate('Object.values(CAT_OPENING_POSES)');
+  assert.equal(new Set(poses).size, 4);
+  assert.equal(ui.evaluate('CAT_OPENING_POSES.wumei'), 'special');
+  assert.equal(ui.evaluate('CAT_OPENING_POSES.dunbu'), 'lying');
+  assert.equal(ui.evaluate('CAT_OPENING_POSES.tuoba'), 'standing');
+});
+
+test('动物互动通过底部菜单切换，结算后自动回到菜单', () => {
+  const ui = app(memory(), false, true, true);
+  ui.start();
+  ui.window.animal = { id: 1, species: 'cat', catId: 'wumei', x: 25, y: 50 };
+  ui.evaluate('animalSystem = { tick: () => window.animal, finish() {} }; renderAnimalLayer(window.animal, true)');
+  ui.click('#animalLayer', { animalId: '1' });
+  ui.click('#animalButtons', { animalAction: 'pet' });
+  assert.equal(ui.element('#animalControls').hidden, false);
+  assert.ok(ui.element('#animalButtons').innerHTML.includes('轻轻顺毛'));
+  ui.click('#animalButtons', { animalAction: 'feed' });
+  assert.equal(ui.element('#animalWorld').dataset.mode, 'feed');
+  assert.match(ui.element('#animalButtons').innerHTML, /取消/);
+  ui.click('#animalButtons', { animalAction: 'back' });
+  assert.equal(ui.element('#animalWorld').dataset.mode, 'menu');
+  ui.click('#animalButtons', { animalAction: 'pet' });
+  ui.evaluate('animalTiming.startedAt = animalClock() - 0; updateAnimalTiming()');
+  ui.click('#animalPetTarget');
+  assert.equal(ui.element('#animalWorld').dataset.mode, 'result');
+  assert.equal(ui.element('#animalButtons').innerHTML, '');
+  assert.equal(ui.element('#animalControls').hidden, false);
+  ui.evaluate('scheduleAnimalReset(1)');
+  ui.flush();
+  assert.equal(ui.element('#animalWorld').dataset.mode, 'menu');
+  assert.ok(ui.element('#animalButtons').innerHTML.includes('轻轻顺毛'));
+  ui.click('#animalExit');
+  assert.equal(ui.element('#animalDialog').open, false);
+});
+
+test('设置可以返回主菜单，并保护未保存进度', () => {
+  const ui = app();
+  ui.start();
+  ui.click('#homeButton');
+  assert.equal(ui.evaluate('dialogMode'), 'returnHome');
+  assert.match(ui.element('#dialogBody').innerHTML, /未保存/);
+  assert.match(ui.element('#dialogButtons').innerHTML, /不保存，返回主菜单/);
+  ui.click('#dialogButtons', { dialogAction: 'returnHomeDiscard' });
+  assert.equal(ui.element('#startScreen').hidden, false);
+  assert.equal(ui.element('#gameShell').inert, true);
 });
 
 test('开学选课、结束学期开考与期末总结界面可依次渲染', () => {

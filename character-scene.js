@@ -30,14 +30,17 @@
     const item = step === 'item';
     const foundOwner = step === 'return';
     const reunion = step === 'reunion';
-    const displayName = item ? '操场边' : reunion ? scene.reunion.alias : '女生';
+    const displayName = item ? (scene.itemTitle || '操场边') : reunion ? scene.reunion.alias : (scene.arrivalTitle || '女生');
     const line = item ? scene.narration : foundOwner ? scene.ask : reunion ? scene.reunion.line : returned.say;
     const choices = item ? '' : reunion ? action(scene.reunion.response, 'greet')
       : (foundOwner ? scene.returnOptions : scene.introOptions).map(option => action(option.text, option.id)).join('');
+    const itemArt = scene.itemArt === 'none' ? ''
+      : '<span class="npc-meet-case" aria-hidden="true"></span>';
+    const foundArt = foundOwner && scene.returnArt !== 'none'
+      ? '<div class="npc-meet-case is-revealed" role="img" aria-label="浅灰色耳机盒，盒盖贴着小橘子"><span aria-hidden="true"></span></div>' : '';
     const subject = item
-      ? '<button type="button" class="npc-meet-pick" data-meet-step="item" data-meet-option="inspect"><span class="npc-meet-case" aria-hidden="true"></span><span>捡起来看看</span></button>'
-      : '<div class="npc-meet-arrival"><img class="npc-meet-portrait" src="' + h(profile.portrait) + '" alt="' + h(displayName) + '">'
-        + (foundOwner ? '<div class="npc-meet-case is-revealed" role="img" aria-label="浅灰色耳机盒，盒盖贴着小橘子"><span aria-hidden="true"></span></div>' : '') + '</div>';
+      ? '<button type="button" class="npc-meet-pick" data-meet-step="item" data-meet-option="inspect">' + itemArt + '<span>' + h(scene.pickLabel || '捡起来看看') + '</span></button>'
+      : '<div class="npc-meet-arrival"><img class="npc-meet-portrait" src="' + h(profile.portrait) + '" alt="' + h(displayName) + '">' + foundArt + '</div>';
     const detail = foundOwner ? scene.arrival : step === 'farewell' ? scene.returned : '';
     return '<section class="npc-meet-scene" data-meet-view="' + h(step) + '">'
       + '<img class="vn-background npc-meet-background" src="' + h(background) + '" alt="">'

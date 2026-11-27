@@ -175,12 +175,13 @@ test('林夏按相识阶段调整聊天与决定，关系指引保留原有话�
   const fresh = game.createGame({ seed: 'before-meeting' });
   assert.match(withGuidance(agent.messages(fresh, '你好啊。', [], null, npcId)).content,
     /关系：初次见面.*\n本阶段的相处分寸：你把对方当刚认识的同学/);
-  for (const id of ['zhouNing', 'chenTeacher']) {
-    const known = cast.set(fresh, id, { familiarity: 80 });
-    const rows = agent.messages(known, '你好啊。', [], null, id);
-    assert.ok(rows.some(row => row.content.includes('关系：深入了解。')));
-    assert.equal(withGuidance(rows), undefined);
-  }
+  const zhouKnown = cast.set(fresh, 'zhouNing', { familiarity: 80 });
+  const zhouRows = agent.messages(zhouKnown, '你好啊。', [], null, 'zhouNing');
+  assert.ok(zhouRows.some(row => row.content.includes('关系：深入了解。')));
+  assert.equal(withGuidance(zhouRows), undefined);
+  const chenKnown = cast.set(fresh, 'chenTeacher', { familiarity: 80 });
+  const chenRows = agent.messages(chenKnown, '你好啊。', [], null, 'chenTeacher');
+  assert.match(withGuidance(chenRows).content, /长期带的年轻学生/);
 });
 
 test('散步后聊暗恋依亲疏逐步展开，打趣和认真追问能接续，转题后停止', () => {
@@ -924,6 +925,48 @@ test('林夏自由聊天判断主次情绪，保存重放后只把上一轮反�
   advance(game.recordNpcDialogue(state, { npcId, kind: 'chat', text: reply, say: '好，知道了。', intent: 'none', source: 'local', emotion }));
   assert.equal(state.history.at(-1).dialogue.emotion, undefined);
   assert.doesNotMatch(agent.messages(state, '现在呢？', [], null, npcId).map(row => row.content).join('\n'), /上一轮的反应/);
+});
+
+test('陈老师有独立的逸夫楼初遇和重逢场景', () => {
+  const scene = cast.profile('chenTeacher').meetScene;
+  assert.equal(scene.id, 'chenTeacherYifuOfficeV1');
+  assert.equal(scene.placeLabel, '逸夫楼');
+  assert.match(scene.narration, /逸夫楼/);
+  assert.match(scene.ask, /今天想让我看的是哪一部分/);
+  assert.equal(cast.meetingScene('chenTeacher', scene.id), scene);
+  const exchange = cast.meetingDialogue('chenTeacher', scene.id, ['summary', 'askNext']);
+  assert.equal(exchange.returned.id, 'summary');
+  assert.equal(exchange.introduced.id, 'askNext');
+  assert.match(scene.memory, /第一次/);
+  assert.match(scene.reunion.line, /上次/);
+});
+
+test('陈老师按清单提供人设、阶段指引、记忆和情绪字段', async () => {
+  const npcId = 'chenTeacher';
+  const state = cast.meet(game.createGame({ seed: 'chen-persona-prompt' }), npcId);
+  const prompt = text => agent.messages(state, text, game.npcCandidates(state, npcId), null, npcId);
+  const joined = text => prompt(text).map(row => row.content).join('\n');
+  assert.match(joined('最近项目准备得怎么样？'), /北京交通大学教师[\s\S]*唐山/);
+  assert.match(joined('最近项目准备得怎么样？'), /本阶段的相处分寸：你把玩家当刚来请教的同学/);
+  assert.match(joined('最近项目准备得怎么样？'), /近期目标：陪学生把/);
+  assert.match(joined('最近项目准备得怎么样？'), /先写 emotion/);
+  assert.match(joined('你研究什么方向？'), /研究方向与交通数据/);
+  assert.match(joined('你老家在哪？'), /唐山/);
+  assert.doesNotMatch(joined('你好啊。'), /近期目标：/);
+  const text = '老师，这个项目我有点慌。';
+  const decision = await agent.request({
+    state, text, npcId, candidates: [], relay: '/test',
+    fetchFn: async (_, request) => {
+      const rows = JSON.parse(request.body).messages;
+      assert.ok(rows.length <= 14 && rows.every(row => row.content.length <= 600));
+      assert.ok(rows.some(row => row.content.includes('emotion') && row.content.includes('担忧')));
+      return { ok: true, json: async () => ({ reply: JSON.stringify({ emotion: [['担忧', 2]], say: '先说最卡住的一步。', intent: 'none' }) }) };
+    }
+  });
+  assert.deepEqual(decision, { emotion: [['担忧', 2]], say: '先说最卡住的一步。', intent: 'none', source: 'online' });
+  const saved = game.recordNpcDialogue(state, { ...decision, npcId, kind: 'chat', text });
+  assert.ok(saved.ok, saved.reason);
+  assert.deepEqual(saved.state.history.at(-1).dialogue.emotion, [['担忧', 2]]);
 });
 
 test('情绪省略或不合词表时保留有效台词，内部字段不会作为纯文本显示', async () => {

@@ -93,7 +93,7 @@
         const exchange = cast.meetingDialogue(npcId, sceneId, sceneChoices);
         const expectedSay = scene?.reunion ? exchange?.returned.say
           : scene?.returnOptions ? exchange?.introduced.say : sceneChoices === undefined ? scene?.say : undefined;
-        if (payload.kind !== 'meet' || get(state, npcId) || state.pendingEvent || occasion?.place !== 'track'
+        if (payload.kind !== 'meet' || get(state, npcId) || state.pendingEvent || occasion?.place !== (scene?.place || 'track')
             || !expectedSay || payload.say !== expectedSay || payload.intent !== 'none' || payload.source !== 'local') {
           return bad(state, '这次相遇过场与当前场景不符');
         }
@@ -123,7 +123,7 @@
         next = director.consume(next, occasion);
         if (state.pendingEvent && eventAvailability(next, npcId).ok) next = { ...next, relationships: { ...next.relationships, eventCompanion: { npcId, instanceId: state.pendingEvent.instanceId, say: payload.say } } };
       }
-      const emotion = npcId === 'linXia' && payload.kind === 'chat' && payload.source === 'online' ? agent.parseEmotion(payload.emotion) : null;
+      const emotion = cast.profile(npcId)?.persona?.emotion && payload.kind === 'chat' && payload.source === 'online' ? agent.parseEmotion(payload.emotion) : null;
       const data = { npcId, kind: payload.kind, text: payload.text, say: payload.say, intent: payload.intent, source: payload.source, ...(emotion ? { emotion } : {}), ...(payload.trigger ? { trigger: payload.trigger } : {}), ...(sceneId !== undefined ? { sceneId } : {}), ...(sceneChoices !== undefined ? { sceneChoices: [...sceneChoices] } : {}) };
       const title = payload.kind === 'meet' ? scene?.title || '你认识了' + p.name
         : introducing ? '你认识了' + p.name : '与' + p.name + '交谈';

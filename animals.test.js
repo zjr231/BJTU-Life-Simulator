@@ -43,7 +43,7 @@ test('每个猫偶遇可取得对应个体的图集，过期后才重选', () =>
   }
 });
 
-test('六只猫各有常驻位置，互动后继续留在地图，鹅仍会出现和离开', () => {
+test('六只猫各有常驻位置，互动后继续留在地图，明湖鹅常驻不离开', () => {
   const encounters = animals.createSystem(0, () => 0, { keepCatsOnMap: true });
   const cats = encounters.residentCats;
   assert.deepEqual(cats.map(cat => cat.catId), Object.keys(animals.CATS));
@@ -51,15 +51,17 @@ test('六只猫各有常驻位置，互动后继续留在地图，鹅仍会出�
   assert.equal(new Set(cats.map(cat => [cat.x, cat.y].join(','))).size, cats.length);
   const jupi = cats.find(cat => cat.catId === 'jupi');
   assert.deepEqual([jupi.x, jupi.y], [23, 66]);
-  assert.equal(encounters.tick(0, true, false), null);
-  const goose = encounters.tick(2500, true, false);
+  const goose = encounters.tick(0, true, false);
   assert.equal(goose.species, 'goose');
+  assert.deepEqual([goose.x, goose.y], [61.2, 48.7]);
   for (const cat of cats) {
     assert.equal(cat.expiresAt, undefined);
     encounters.finish(3000, cat.id);
     assert.equal(encounters.tick(3000, true, false), goose);
   }
-  assert.equal(encounters.tick(goose.expiresAt, true, false), null);
+  encounters.finish(3000, goose.id);
+  assert.equal(encounters.tick(3000, true, false), goose);
+  assert.equal(encounters.tick(goose.expiresAt, true, false), goose);
   assert.deepEqual(encounters.residentCats, cats);
 });
 
